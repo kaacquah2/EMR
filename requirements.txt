@@ -1,0 +1,2 @@
+# Monorepo root: delegate to Django backend so Railpack/Nixpacks detect Python.
+-r medsync-backend/requirements.txt
