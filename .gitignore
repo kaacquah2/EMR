@@ -1,0 +1,18 @@
+# EMR root .gitignore (when this directory is the repo root)
+# Prevents committing artifacts that may appear at root level.
+
+.env
+.env.*
+!.env.example
+*.sqlite3
+.venv/
+venv/
+media/
+__pycache__/
+*.pyc
+node_modules/
+.next/
+out/
+build/
+dist/
+*.egg-info/

@@ -1,0 +1,2 @@
+# Serialized ML models (.joblib) are written here by train_models.py
+# Add *.joblib to .gitignore if models are large or environment-specific

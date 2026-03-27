@@ -1,0 +1,107 @@
+@import "tailwindcss";
+
+:root {
+  --background: #F5F3EE;
+  --foreground: #0F172A;
+  --navy-900: #0C1F3D;
+  --navy-700: #1A3A5C;
+  --blue-500: #1D6FA4;
+  --teal-500: #0B8A96;
+  --teal-400: #0EAFBE;
+  --cream-bg: #F5F3EE;
+  --red-600: #DC2626;
+  --amber-600: #D97706;
+  --green-600: #059669;
+  --gray-900: #0F172A;
+  --gray-700: #334155;
+  --gray-500: #64748B;
+  --gray-300: #CBD5E1;
+  --gray-100: #F1F5F9;
+  --purple-700: #6D28D9;
+}
+
+@theme inline {
+  --color-background: var(--cream-bg);
+  --color-foreground: var(--gray-900);
+  --color-navy-900: var(--navy-900);
+  --color-navy-700: var(--navy-700);
+  --color-teal-500: var(--teal-500);
+  --color-teal-400: var(--teal-400);
+  --color-cream-bg: var(--cream-bg);
+  --color-red-600: var(--red-600);
+  --color-amber-600: var(--amber-600);
+  --color-green-600: var(--green-600);
+  --font-sans: 'DM Sans', system-ui, sans-serif;
+  --font-mono: 'DM Mono', monospace;
+  --font-display: 'Sora', system-ui, sans-serif;
+}
+
+body {
+  background: var(--cream-bg);
+  color: var(--gray-900);
+  font-family: 'DM Sans', system-ui, sans-serif;
+}
+
+/* Dashboard app: main content area background (subtle gradient, not flat cream) */
+.dashboard-main {
+  background: linear-gradient(165deg, #F5F3EE 0%, #F0F4F8 50%, #EDF2F7 100%);
+}
+
+/* Page header: title + optional description with accent line. Use on any dashboard page. */
+.page-header {
+  padding-bottom: 0.75rem;
+  border-bottom: 2px solid transparent;
+  border-image: linear-gradient(90deg, var(--teal-500) 0%, var(--navy-900) 100%) 1;
+}
+.page-header-title {
+  font-family: var(--font-display), 'Sora', system-ui, sans-serif;
+  font-size: 1.875rem;
+  font-weight: 700;
+  color: var(--gray-900);
+}
+.page-header-desc {
+  margin-top: 0.25rem;
+  font-size: 0.875rem;
+  color: var(--gray-500);
+}
+
+/* Card accents: use <Card accent="teal"|"navy"|"green"|"amber"> for a left border. */
+
+/* Login page: form enter and step transition */
+@keyframes login-form-enter {
+  from {
+    opacity: 0;
+    transform: translateX(1rem);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+@keyframes login-panel-shine {
+  0%, 100% { opacity: 0.4; }
+  50% { opacity: 0.7; }
+}
+
+@keyframes float {
+  0%, 100% { transform: translateY(0) scale(1); }
+  50% { transform: translateY(-8px) scale(1.02); }
+}
+
+.login-form-enter {
+  animation: login-form-enter 0.5s ease-out forwards;
+}
+
+.login-panel-shine {
+  animation: login-panel-shine 8s ease-in-out infinite;
+}
+
+.login-float {
+  animation: float 6s ease-in-out infinite;
+}
+
+.login-float-delay {
+  animation: float 6s ease-in-out infinite;
+  animation-delay: 2s;
+}

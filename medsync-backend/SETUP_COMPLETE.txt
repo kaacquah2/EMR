@@ -1,0 +1,126 @@
+================================================================================
+                CELERY BEAT CONFIGURATION - SUMMARY
+================================================================================
+
+TASK COMPLETED: Configure Celery Beat to run mark_no_shows_task every 15 minutes
+
+✅ CONFIGURATION APPLIED
+================================================================================
+
+1. FILES MODIFIED:
+   - medsync_backend/settings.py
+     Line 5: Added import from celery.schedules import crontab
+     Lines 368-375: Configured CELERY_BEAT_SCHEDULE with:
+       • Task: 'mark-no-shows-every-15-minutes'
+       • Schedule: crontab(minute='*/15') - runs at 0, 15, 30, 45 minutes
+       • Expiry: 600 seconds (10 minutes)
+
+2. FILES CREATED:
+   - api/tests/test_celery_beat_schedule.py
+     • 12 comprehensive tests
+     • All tests PASSING ✅
+   
+   - CELERY_BEAT_CONFIG.md
+     • Complete documentation of configuration
+
+✅ TEST RESULTS
+================================================================================
+
+NEW TESTS (Celery Beat Schedule): 12/12 PASSED
+  ✓ test_celery_beat_schedule_configured
+  ✓ test_celery_beat_scheduler_available
+  ✓ test_crontab_schedule_pattern_validity
+  ✓ test_mark_no_shows_schedule_is_every_15_minutes
+  ✓ test_mark_no_shows_task_can_be_imported
+  ✓ test_mark_no_shows_task_expiry_is_set
+  ✓ test_mark_no_shows_task_in_beat_schedule
+  ✓ test_mark_no_shows_task_is_discoverable
+  ✓ test_mark_no_shows_task_name_is_correct
+  ✓ test_no_show_grace_period_setting_exists
+  ✓ test_schedule_documentation_comment_exists
+  ✓ test_schedule_options_are_valid
+
+EXISTING NO-SHOW TESTS: 10/10 PASSED (no tests broken)
+  ✓ test_already_marked_appointments_excluded
+  ✓ test_appointment_has_no_show_status
+  ✓ test_appointment_index_for_performance
+  ✓ test_appointment_past_grace_period
+  ✓ test_audit_log_no_show_action
+  ✓ test_completed_appointments_excluded
+  ✓ test_grace_period_boundary
+  ✓ test_multi_hospital_scoping
+  ✓ test_no_show_marked_at_field_exists
+  ✓ test_no_show_override_reason_field
+
+TOTAL: 22/22 TESTS PASSED ✅
+
+✅ SCHEDULE DETAILS
+================================================================================
+
+Task Name:              mark-no-shows-every-15-minutes
+Task Path:              api.tasks.appointment_tasks.mark_no_shows_task
+Schedule:               Every 15 minutes (crontab minute='*/15')
+Execution Minutes:      0, 15, 30, 45 (of each hour)
+Task Expiry:            600 seconds (10 minutes)
+Grace Period:           15 minutes (configurable)
+Audit Logging:          YES (action: NO_SHOW_AUTO_MARKED)
+
+✅ WHAT THE TASK DOES
+================================================================================
+
+The mark_no_shows_task automatically marks appointments as "no-show" when:
+  1. Appointment status is "SCHEDULED"
+  2. Appointment scheduled_at time has passed the grace period
+  3. Not yet marked as no-show (no_show_marked_at is NULL)
+
+For each marked appointment:
+  • Status changed: SCHEDULED → NO_SHOW
+  • Timestamp recorded: no_show_marked_at = now()
+  • Audit log entry created with action: NO_SHOW_AUTO_MARKED
+  • Multi-hospital scoping respected
+
+✅ ARCHITECTURE
+================================================================================
+
+Broker:                 Redis (CELERY_BROKER_URL)
+Result Backend:         Redis (CELERY_RESULT_BACKEND)
+Timezone:               UTC
+Serialization:          JSON
+Task Tracking:          Enabled
+Task Time Limit:        30 minutes (hard limit)
+Soft Time Limit:        5 minutes
+Acks:                   Late (after completion)
+Worker Prefetch:        1 (process one task at a time)
+Max Retries:            3
+Retry Delay:            5 seconds (exponential backoff)
+
+✅ ENVIRONMENT SETTINGS
+================================================================================
+
+NO_SHOW_GRACE_PERIOD_MINUTES = 15   (configurable via .env)
+NO_SHOW_OVERRIDE_DAYS = 7           (configurable via .env)
+
+✅ HOW TO RUN
+================================================================================
+
+1. Start Celery Worker:
+   cd medsync-backend
+   celery -A medsync_backend worker --loglevel=info
+
+2. Start Celery Beat Scheduler:
+   cd medsync-backend
+   celery -A medsync_backend beat --loglevel=info
+
+3. Run Tests to Verify:
+   python -m pytest api/tests/test_celery_beat_schedule.py -v
+
+4. Watch Logs:
+   You will see every 15 minutes:
+   "[tasks] Scheduler: Sending due task mark-no-shows-every-15-minutes"
+
+✅ STATUS: CONFIGURATION COMPLETE AND VERIFIED
+================================================================================
+
+The Celery Beat schedule is configured, tested, and production-ready.
+
+Start the Celery Beat scheduler to begin automatic no-show marking.

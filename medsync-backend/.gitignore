@@ -1,0 +1,13 @@
+# Never commit secrets. .env contains DATABASE_URL, SECRET_KEY, etc.
+.env
+.env.*
+!.env.example
+*.pyc
+__pycache__/
+*.sqlite3
+.venv/
+venv/
+*.egg-info/
+dist/
+build/
+media/

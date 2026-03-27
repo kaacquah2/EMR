@@ -1,0 +1,241 @@
+"use client";
+
+import React, { useState, useEffect } from "react";
+import { useParams, useRouter } from "next/navigation";
+import Link from "next/link";
+import { useAuth } from "@/lib/auth-context";
+import { usePatient } from "@/hooks/use-patients";
+import { useCreateEncounter } from "@/hooks/use-encounters";
+import { useDepartments, useDoctors } from "@/hooks/use-admin";
+import { Button } from "@/components/ui/button";
+import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
+import { Breadcrumbs } from "@/components/ui/breadcrumbs";
+
+const ENCOUNTER_TYPES = [
+  { value: "outpatient", label: "Outpatient" },
+  { value: "inpatient", label: "Inpatient" },
+  { value: "emergency", label: "Emergency" },
+  { value: "follow_up", label: "Follow-up" },
+  { value: "consultation", label: "Consultation" },
+  { value: "other", label: "Other" },
+];
+
+const ENCOUNTER_STATUS = [
+  { value: "waiting", label: "Waiting" },
+  { value: "in_consultation", label: "In consultation" },
+  { value: "completed", label: "Completed" },
+];
+
+export default function NewEncounterPage() {
+  const params = useParams();
+  const router = useRouter();
+  const id = params.id as string;
+  const { user } = useAuth();
+  const { patient, loading: patientLoading, error: patientError } = usePatient(id);
+  const { create, loading: submitting } = useCreateEncounter(id);
+  const [encounterType, setEncounterType] = useState("outpatient");
+  const [notes, setNotes] = useState("");
+  const [chiefComplaint, setChiefComplaint] = useState("");
+  const [hpi, setHpi] = useState("");
+  const [examFindings, setExamFindings] = useState("");
+  const [assessmentPlan, setAssessmentPlan] = useState("");
+  const [assignedDepartmentId, setAssignedDepartmentId] = useState("");
+  const [assignedDoctorId, setAssignedDoctorId] = useState("");
+  const [status, setStatus] = useState<"waiting" | "in_consultation" | "completed">("waiting");
+
+  const { departments, fetch: fetchDepartments } = useDepartments();
+  const { doctors, fetch: fetchDoctors } = useDoctors(assignedDepartmentId || undefined);
+
+  const canAdd = user?.role === "doctor" || user?.role === "nurse" || user?.role === "hospital_admin" || user?.role === "super_admin";
+
+  useEffect(() => {
+    if (!canAdd && user) {
+      router.replace("/unauthorized");
+    }
+  }, [canAdd, user, router]);
+
+  useEffect(() => {
+    if (canAdd) {
+      fetchDepartments();
+    }
+  }, [canAdd, fetchDepartments]);
+
+  useEffect(() => {
+    if (canAdd) fetchDoctors();
+  }, [canAdd, fetchDoctors, assignedDepartmentId]);
+
+  if (patientLoading || !patient) {
+    return (
+      <div className="flex items-center justify-center py-12">
+        <p className="text-[#64748B]">{patientError || "Loading..."}</p>
+      </div>
+    );
+  }
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    try {
+      await create({
+        encounter_type: encounterType,
+        notes: notes.trim() || undefined,
+        chief_complaint: chiefComplaint.trim() || undefined,
+        hpi: hpi.trim() || undefined,
+        examination_findings: examFindings.trim() || undefined,
+        assessment_plan: assessmentPlan.trim() || undefined,
+        assigned_department_id: assignedDepartmentId || undefined,
+        assigned_doctor_id: assignedDoctorId || undefined,
+        status,
+      });
+      router.push(`/patients/${id}`);
+    } catch {
+      //
+    }
+  };
+
+  return (
+    <div className="mx-auto max-w-2xl space-y-6">
+      <Breadcrumbs
+        items={[
+          { label: "Patients", href: "/patients/search" },
+          { label: patient.full_name ?? "Patient", href: `/patients/${id}` },
+          { label: "New encounter" },
+        ]}
+      />
+      <div>
+        <Link href={`/patients/${id}`} className="text-sm text-[#0EAFBE] hover:underline">
+          Back to patient
+        </Link>
+        <h1 className="mt-2 font-sora text-2xl font-bold text-[#0F172A]">Add Encounter</h1>
+        <p className="text-[#64748B]">
+          Patient: {patient.full_name} ({patient.ghana_health_id})
+        </p>
+      </div>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Encounter details</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <form onSubmit={handleSubmit} className="space-y-4">
+            <div>
+              <label className="block text-sm font-medium text-[#0F172A]">Encounter type</label>
+              <select
+                className="mt-1 w-full rounded-lg border border-[#E2E8F0] bg-white px-3 py-2 text-[#0F172A]"
+                value={encounterType}
+                onChange={(e) => setEncounterType(e.target.value)}
+              >
+                {ENCOUNTER_TYPES.map((t) => (
+                  <option key={t.value} value={t.value}>
+                    {t.label}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-[#0F172A]">Department (routing)</label>
+              <select
+                className="mt-1 w-full rounded-lg border border-[#E2E8F0] bg-white px-3 py-2 text-[#0F172A]"
+                value={assignedDepartmentId}
+                onChange={(e) => {
+                  setAssignedDepartmentId(e.target.value);
+                  setAssignedDoctorId("");
+                }}
+              >
+                <option value="">Select department</option>
+                {departments.map((d) => (
+                  <option key={d.department_id} value={d.department_id}>{d.name}</option>
+                ))}
+              </select>
+              <p className="mt-1 text-xs text-[#64748B]">Route patient to this department for consultation.</p>
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-[#0F172A]">Assigned doctor (optional)</label>
+              <select
+                className="mt-1 w-full rounded-lg border border-[#E2E8F0] bg-white px-3 py-2 text-[#0F172A]"
+                value={assignedDoctorId}
+                onChange={(e) => setAssignedDoctorId(e.target.value)}
+              >
+                <option value="">Any doctor in department</option>
+                {doctors.map((d) => (
+                  <option key={d.user_id} value={d.user_id}>{d.full_name}</option>
+                ))}
+              </select>
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-[#0F172A]">Status</label>
+              <select
+                className="mt-1 w-full rounded-lg border border-[#E2E8F0] bg-white px-3 py-2 text-[#0F172A]"
+                value={status}
+                onChange={(e) => setStatus(e.target.value as "waiting" | "in_consultation" | "completed")}
+              >
+                {ENCOUNTER_STATUS.map((s) => (
+                  <option key={s.value} value={s.value}>{s.label}</option>
+                ))}
+              </select>
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-[#0F172A]">Subjective: Chief complaint</label>
+              <textarea
+                className="mt-1 w-full rounded-lg border border-[#E2E8F0] bg-white px-3 py-2 text-[#0F172A]"
+                rows={2}
+                value={chiefComplaint}
+                onChange={(e) => setChiefComplaint(e.target.value)}
+                placeholder="Main complaint in patient words"
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-[#0F172A]">Subjective: History of present illness (HPI)</label>
+              <textarea
+                className="mt-1 w-full rounded-lg border border-[#E2E8F0] bg-white px-3 py-2 text-[#0F172A]"
+                rows={3}
+                value={hpi}
+                onChange={(e) => setHpi(e.target.value)}
+                placeholder="Duration, progression, associated symptoms"
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-[#0F172A]">Objective: Examination findings</label>
+              <textarea
+                className="mt-1 w-full rounded-lg border border-[#E2E8F0] bg-white px-3 py-2 text-[#0F172A]"
+                rows={3}
+                value={examFindings}
+                onChange={(e) => setExamFindings(e.target.value)}
+                placeholder="Physical exam and objective findings"
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-[#0F172A]">Assessment and plan</label>
+              <textarea
+                className="mt-1 w-full rounded-lg border border-[#E2E8F0] bg-white px-3 py-2 text-[#0F172A]"
+                rows={3}
+                value={assessmentPlan}
+                onChange={(e) => setAssessmentPlan(e.target.value)}
+                placeholder="Differential, treatment plan, follow-up"
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-[#0F172A]">Additional notes</label>
+              <textarea
+                className="mt-1 w-full rounded-lg border border-[#E2E8F0] bg-white px-3 py-2 text-[#0F172A]"
+                rows={4}
+                value={notes}
+                onChange={(e) => setNotes(e.target.value)}
+                placeholder="Reason for visit, complaint, etc."
+              />
+            </div>
+            <div className="flex gap-2">
+              <Button type="submit" disabled={submitting}>
+                Save encounter
+              </Button>
+              <Link href={`/patients/${id}`}>
+                <Button type="button" variant="secondary">
+                  Cancel
+                </Button>
+              </Link>
+            </div>
+          </form>
+        </CardContent>
+      </Card>
+    </div>
+  );
+}
