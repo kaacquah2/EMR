@@ -7,6 +7,15 @@ cold start. On VERCEL=1 we expose plain Django HTTP ASGI only; use Railway for
 WebSockets / full Channels.
 """
 import os
+import sys
+from pathlib import Path
+
+# Vercel may use this file as the entrypoint (e.g. medsync-backend/medsync_backend/asgi.py).
+# Without the backend root on sys.path, Python cannot resolve the package name
+# `medsync_backend` (parent dir of this package must be importable).
+_backend_root = Path(__file__).resolve().parent.parent
+if str(_backend_root) not in sys.path:
+    sys.path.insert(0, str(_backend_root))
 
 from django.core.asgi import get_asgi_application
 
