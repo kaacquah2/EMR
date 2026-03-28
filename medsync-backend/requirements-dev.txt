@@ -1,0 +1,7 @@
+# Keep in sync with ../requirements-dev.txt (not installed on Railway by default).
+
+django-debug-toolbar>=4.2
+pytest>=7.4
+pytest-django>=4.5
+# Heavy transitive deps (chromadb, onnx, etc.); code uses placeholders without importing crewai.
+crewai>=0.1.0

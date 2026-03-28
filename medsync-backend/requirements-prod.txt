@@ -1,6 +1,4 @@
-# Production / Railway: self-contained (Railpack pip stage has only this file).
-# Dev, tests, and heavy optional AI tooling: requirements-dev.txt
-# medsync-backend/requirements.txt includes both via requirements-prod.txt / requirements-dev.txt (keep those in sync with this file and requirements-dev.txt).
+# Keep in sync with ../requirements.txt (Railway / root production install).
 
 Django>=4.2,<5
 djangorestframework>=3.14
