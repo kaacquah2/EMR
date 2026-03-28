@@ -1,5 +1,9 @@
 # Railpack / Docker: shrink context and final image copy (backend service only).
 
+# Never bake local secrets into the image
+.env
+**/.env
+
 # Next.js app — deploy separately (e.g. Vercel); not used by start.sh / Daphne
 medsync-frontend/
 

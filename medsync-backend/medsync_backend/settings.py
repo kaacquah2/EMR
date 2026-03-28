@@ -9,9 +9,22 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 # Default False so production is safe if env is unset. Set DEBUG=True for local dev only.
 DEBUG = config("DEBUG", default=False, cast=bool)
 
-# SECRET_KEY must be set via environment variable. No default fallback.
-# Production will fail if SECRET_KEY is not explicitly configured.
-_SECRET_KEY = config("SECRET_KEY", default=None)
+# SECRET_KEY: no insecure default when DEBUG=False. Accept SECRET_KEY or DJANGO_SECRET_KEY
+# (os.environ first so Railway/Render-style names work; empty/whitespace counts as unset).
+
+
+def _resolve_secret_key():
+    for env_name in ("SECRET_KEY", "DJANGO_SECRET_KEY"):
+        raw = os.environ.get(env_name)
+        if raw is not None and str(raw).strip():
+            return str(raw).strip()
+    cfg = config("SECRET_KEY", default=None)
+    if cfg is not None and str(cfg).strip():
+        return str(cfg).strip()
+    return None
+
+
+_SECRET_KEY = _resolve_secret_key()
 if _SECRET_KEY is None:
     if DEBUG:
         # Local development: generate a temporary key (not for production)
@@ -27,8 +40,9 @@ if _SECRET_KEY is None:
     else:
         from django.core.exceptions import ImproperlyConfigured
         raise ImproperlyConfigured(
-            "SECRET_KEY environment variable is required. "
-            "Set SECRET_KEY=<strong-random-string> before starting the application."
+            "SECRET_KEY is required when DEBUG=False. "
+            "On Railway: Service → Variables → add SECRET_KEY (or DJANGO_SECRET_KEY) "
+            "with a long random value (e.g. openssl rand -hex 32). Redeploy after saving."
         )
 SECRET_KEY = _SECRET_KEY
 
