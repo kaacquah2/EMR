@@ -6,6 +6,12 @@
 #   DATABASE_URL          — Postgres (Railway plugin or Neon)
 #   ALLOWED_HOSTS         — comma-separated, include your *.up.railway.app host and any custom domain
 #   CORS_ALLOWED_ORIGINS  — comma-separated frontend origins (e.g. https://your-app.vercel.app)
+#
+# Email (required for MFA email OTP, password reset, break-glass notices — default is console = logs only):
+#   EMAIL_HOST, EMAIL_PORT, EMAIL_USE_TLS (or EMAIL_USE_SSL for 465), EMAIL_HOST_USER, EMAIL_HOST_PASSWORD
+#   DEFAULT_FROM_EMAIL    — sender shown to recipients
+#   PASSWORD_RESET_FRONTEND_URL — https://your-frontend/reset-password
+# If SMTP user+password+host are set, EMAIL_BACKEND can be omitted (auto-selects SMTP). See medsync-backend/.env.example
 
 [deploy]
 startCommand = "bash start.sh"

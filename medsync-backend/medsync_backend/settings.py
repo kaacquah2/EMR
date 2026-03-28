@@ -355,17 +355,50 @@ MEDIA_URL = "media/"
 MEDIA_ROOT = BASE_DIR / "media"
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 
-# Email (console backend for dev; set in production for break-glass and password reset)
-EMAIL_BACKEND = config(
+# Email (console backend for dev). Production (Railway, etc.): set SMTP env vars — see .env.example.
+_email_backend_requested = config(
     "EMAIL_BACKEND",
     default="django.core.mail.backends.console.EmailBackend",
 )
 EMAIL_HOST = config("EMAIL_HOST", default="localhost")
 EMAIL_PORT = config("EMAIL_PORT", default=25, cast=int)
 EMAIL_USE_TLS = config("EMAIL_USE_TLS", default=False, cast=bool)
+EMAIL_USE_SSL = config("EMAIL_USE_SSL", default=False, cast=bool)
 EMAIL_HOST_USER = config("EMAIL_HOST_USER", default="")
 EMAIL_HOST_PASSWORD = config("EMAIL_HOST_PASSWORD", default="")
 DEFAULT_FROM_EMAIL = config("DEFAULT_FROM_EMAIL", default="medsync@localhost")
+
+_local_mail_hosts = frozenset(("", "localhost", "127.0.0.1"))
+_smtp_configured = bool(
+    EMAIL_HOST_USER
+    and EMAIL_HOST_PASSWORD
+    and (EMAIL_HOST or "").strip() not in _local_mail_hosts
+)
+if (
+    _email_backend_requested == "django.core.mail.backends.console.EmailBackend"
+    and _smtp_configured
+):
+    # Common deploy mistake: SMTP env set but EMAIL_BACKEND left at default (console).
+    EMAIL_BACKEND = "django.core.mail.backends.smtp.EmailBackend"
+else:
+    EMAIL_BACKEND = _email_backend_requested
+
+# Only nag on known PaaS / explicit production — avoids noise in local pytest with DEBUG=False.
+_email_deploy_context = bool(
+    os.environ.get("RAILWAY_PROJECT_ID")
+    or os.environ.get("VERCEL") == "1"
+    or config("ENV", default="").lower() == "production"
+)
+if _email_deploy_context and "console.EmailBackend" in EMAIL_BACKEND:
+    import warnings
+
+    warnings.warn(
+        "EMAIL_BACKEND is console: outbound email is not sent (only logged). "
+        "Set EMAIL_HOST, EMAIL_PORT, EMAIL_USE_TLS (or EMAIL_USE_SSL for port 465), "
+        "EMAIL_HOST_USER, EMAIL_HOST_PASSWORD, DEFAULT_FROM_EMAIL (Railway Variables / host env).",
+        RuntimeWarning,
+        stacklevel=2,
+    )
 # Break-glass: notify these emails (comma-separated); if empty, notifies hospital admins for the facility
 BREAK_GLASS_NOTIFY_EMAILS = [e.strip() for e in config("BREAK_GLASS_NOTIFY_EMAILS", default="").split(",") if e.strip()]
 # Break-glass time window in minutes (15 minutes is the standard)
