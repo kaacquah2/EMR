@@ -73,7 +73,10 @@ if config("ENV", default="").lower() == "production" and DEBUG:
     from django.core.exceptions import ImproperlyConfigured
     raise ImproperlyConfigured("Production must not run with DEBUG=True. Set DEBUG=False.")
 
-ALLOWED_HOSTS = config("ALLOWED_HOSTS", default="localhost,127.0.0.1").split(",")
+ALLOWED_HOSTS = [h.strip() for h in config("ALLOWED_HOSTS", default="localhost,127.0.0.1").split(",") if h.strip()]
+if _VERCEL:
+    # Vercel deployment hostnames (*.vercel.app); override via ALLOWED_HOSTS if using a custom domain.
+    ALLOWED_HOSTS = list({*ALLOWED_HOSTS, ".vercel.app"})
 
 def _has_pkg(name):
     try:
@@ -192,12 +195,21 @@ else:
             }
         }
 # Database cache so MFA token survives runserver restarts (login -> mfa-verify). Run once: python manage.py createcachetable
-CACHES = {
-    "default": {
-        "BACKEND": "django.core.cache.backends.db.DatabaseCache",
-        "LOCATION": "medsync_mfa_cache",
+# Vercel: no stable DB + no migrate for cache table — use in-memory cache (MFA may not survive cold starts).
+if _VERCEL:
+    CACHES = {
+        "default": {
+            "BACKEND": "django.core.cache.backends.locmem.LocMemCache",
+            "LOCATION": "vercel-locmem",
+        }
     }
-}
+else:
+    CACHES = {
+        "default": {
+            "BACKEND": "django.core.cache.backends.db.DatabaseCache",
+            "LOCATION": "medsync_mfa_cache",
+        }
+    }
 
 AUTH_USER_MODEL = "core.User"
 
