@@ -37,6 +37,17 @@ This repo is a full-stack deliverable. In addition to `medsync-frontend/` and `m
 - **Helper scripts**: `scripts/setup_ai.sh` (train AI models), `medsync-backend/scripts/pip-audit.sh` (dependency vuln scan)
 - **Repo guidance**: `.github/copilot-instructions.md` (contributor/assistant conventions)
 
+## Deploying on Vercel
+
+This repo’s **root** is configured for the **Django API** (`vercel.json` + `asgi.py`). The Next app **must** be a **separate Vercel project** with:
+
+1. **Settings → General → Root Directory:** `medsync-frontend` (not `.`).
+2. **Environment variables:** at least `NEXT_PUBLIC_API_URL` pointing to your deployed API (e.g. `https://your-api.vercel.app/api/v1`).
+
+Vercel will then use `medsync-frontend/vercel.json` and `npm ci` / `npm run build` inside that folder only.
+
+---
+
 ## Tech Stack
 
 - **Framework:** Next.js 16 (App Router), React 19

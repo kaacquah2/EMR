@@ -83,6 +83,17 @@ npm run lint   # ESLint check
 
 **Config:** Environment file sets `NEXT_PUBLIC_API_URL` (public API endpoint). Frontend expects backend at `http://localhost:8000/api/v1` by default.
 
+### Vercel (frontend vs API)
+
+Use **two Vercel projects** linked to the same Git repository:
+
+| Project | Root Directory | Purpose |
+|--------|----------------|---------|
+| API | `.` (repository root) | Django: root `vercel.json` runs `pip install -r requirements-vercel.txt` and `asgi.py`. |
+| UI | `medsync-frontend` | Next.js: install/build run only inside `medsync-frontend/` (`medsync-frontend/vercel.json`). |
+
+If Root Directory is left at `.` for the UI, Vercel applies the **Python** install from the root `vercel.json` and the Next app never builds correctly. In the Vercel dashboard: **Project → Settings → General → Root Directory** → `medsync-frontend`.
+
 ---
 
 ## High-Level Architecture
