@@ -15,7 +15,8 @@ Features engineered:
 from typing import Dict, List, Tuple, Any, Optional
 from datetime import datetime, timedelta
 import logging
-import numpy as np
+import math
+import statistics
 
 logger = logging.getLogger(__name__)
 
@@ -291,13 +292,13 @@ class FeatureEngineer:
                 bp_trend = 1   # Increasing
         
         return {
-            'bp_systolic_mean': np.mean(systolic) if systolic else None,
-            'bp_diastolic_mean': np.mean(diastolic) if diastolic else None,
-            'pulse_mean': np.mean(pulse) if pulse else None,
-            'spo2_mean': np.mean(spo2) if spo2 else None,
-            'temp_mean': np.mean(temp) if temp else None,
-            'weight_mean': np.mean(weight) if weight else None,
-            'bmi_mean': np.mean(bmi) if bmi else None,
+            'bp_systolic_mean': statistics.mean(systolic) if systolic else None,
+            'bp_diastolic_mean': statistics.mean(diastolic) if diastolic else None,
+            'pulse_mean': statistics.mean(pulse) if pulse else None,
+            'spo2_mean': statistics.mean(spo2) if spo2 else None,
+            'temp_mean': statistics.mean(temp) if temp else None,
+            'weight_mean': statistics.mean(weight) if weight else None,
+            'bmi_mean': statistics.mean(bmi) if bmi else None,
             'bp_trend': bp_trend,
         }
 
@@ -435,8 +436,12 @@ class FeatureEngineer:
             
             # Admission history
             features['recent_admission_count'] = len([a for a in admissions if a['discharged_at'] is None])
-            avg_los = np.mean([a['length_of_stay_days'] for a in admissions if a['length_of_stay_days']])
-            features['avg_los_days'] = avg_los if not np.isnan(avg_los) else None
+            los_vals = [a['length_of_stay_days'] for a in admissions if a.get('length_of_stay_days')]
+            if los_vals:
+                avg_los = statistics.mean(los_vals)
+                features['avg_los_days'] = avg_los if not math.isnan(avg_los) else None
+            else:
+                features['avg_los_days'] = None
             
             # Encounter history
             features['recent_encounter_count'] = len(encounters)

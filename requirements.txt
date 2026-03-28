@@ -1,4 +1,5 @@
 # Production / Railway: self-contained (Railpack pip stage has only this file).
+# Vercel: use requirements-vercel.txt (installCommand in vercel.json) — ML wheels exceed Lambda size limits.
 # Dev, tests, and heavy optional AI tooling: requirements-dev.txt
 # medsync-backend/requirements-local.txt merges this file + requirements-dev.txt for local/CI (flat file; keep in sync).
 

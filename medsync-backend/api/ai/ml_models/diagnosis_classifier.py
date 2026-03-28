@@ -9,7 +9,6 @@ Uses Random Forest for multi-class classification and interpretability.
 import logging
 from typing import Dict, List, Tuple, Optional, Any
 from datetime import datetime
-import numpy as np
 
 logger = logging.getLogger(__name__)
 

@@ -13,13 +13,7 @@ Uses XGBoost for high accuracy and interpretability.
 
 import logging
 from typing import Dict, List, Tuple, Optional, Any
-import numpy as np
 from datetime import datetime
-
-try:
-    import xgboost as xgb
-except ImportError:
-    xgb = None
 
 logger = logging.getLogger(__name__)
 
@@ -84,8 +78,12 @@ class RiskPredictorModel:
     def _load_models_from_disk(self) -> bool:
         """Load trained models from api/ai/models/risk_predictor.joblib. Returns True if loaded."""
         try:
-            from api.ai.model_config import get_models_dir
             import joblib
+        except ImportError:
+            logger.warning("joblib not installed; cannot load risk predictor from disk")
+            return False
+        try:
+            from api.ai.model_config import get_models_dir
             path = get_models_dir() / 'risk_predictor.joblib'
             if not path.exists():
                 return False
@@ -185,13 +183,13 @@ class RiskPredictorModel:
             logger.error(f"Error predicting risk for patient {features.get('patient_id')}: {e}")
             raise
 
-    def _prepare_feature_vector(self, features: Dict[str, Any]) -> np.ndarray:
+    def _prepare_feature_vector(self, features: Dict[str, Any]) -> List[List[float]]:
         """
         Extract and order features for the model.
         
-        Returns: numpy array in model's expected feature order
+        Returns: 2D row vector (sklearn/xgboost accept nested lists; avoids numpy import at module load).
         """
-        feature_vector = []
+        feature_vector: List[float] = []
         
         for feature_name in self._feature_order:
             value = features.get(feature_name)
@@ -206,12 +204,12 @@ class RiskPredictorModel:
             
             feature_vector.append(value)
         
-        return np.array(feature_vector).reshape(1, -1)
+        return [feature_vector]
 
     def _predict_disease_risk(
         self,
         disease: str,
-        feature_vector: np.ndarray,
+        feature_vector: List[List[float]],
         features: Dict[str, Any],
     ) -> Tuple[float, float]:
         """
@@ -219,7 +217,7 @@ class RiskPredictorModel:
         
         Args:
             disease: Disease name
-            feature_vector: Prepared numpy array
+            feature_vector: Prepared 2D feature row (one sample)
             features: Raw features (for rule-based fallback)
         
         Returns:
