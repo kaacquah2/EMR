@@ -46,6 +46,15 @@ This repo’s **root** is configured for the **Django API** (`vercel.json` + `as
 
 Vercel will then use `medsync-frontend/vercel.json` and `npm ci` / `npm run build` inside that folder only.
 
+**If the app loads but sign-in fails:**
+
+| Symptom | What to fix |
+|--------|-------------|
+| Message about **JSON** / **NEXT_PUBLIC_API_URL** | The browser is not reaching the Django API (wrong URL, missing `/api/v1`, or HTML error page). Set `NEXT_PUBLIC_API_URL` to your API base, e.g. `https://your-api.vercel.app/api/v1`, on the **frontend** Vercel project and **redeploy** (Next bakes this in at build time). |
+| **Sign-in is temporarily unavailable** | Network/CORS: browser blocked the request. On the **API** host, set `CORS_ALLOWED_ORIGINS` to your frontend origin, e.g. `https://your-app.vercel.app` (comma-separated if multiple). No trailing slash. |
+| **Invalid email or password** | Credentials, or account locked/inactive (backend returns generic message). |
+| **Account locked** | Too many failed attempts; wait or clear lock on the backend. |
+
 ---
 
 ## Tech Stack

@@ -54,7 +54,10 @@ export default function LoginPage() {
       try {
         data = await res.json();
       } catch {
-        setError("Login failed");
+        setError(
+          `The server did not return JSON (HTTP ${res.status}). ` +
+            `Confirm NEXT_PUBLIC_API_URL in your deploy points to the Django API base ending in /api/v1, then redeploy the frontend.`,
+        );
         return;
       }
       if (res.status === 503 || res.status === 502) {
@@ -62,7 +65,10 @@ export default function LoginPage() {
         return;
       }
       if (!res.ok) {
-        setError("Invalid credentials");
+        setError(
+          data.message ||
+            (res.status === 401 ? "Invalid credentials" : `Sign-in failed (HTTP ${res.status})`),
+        );
         return;
       }
       if (data.mfa_required) {

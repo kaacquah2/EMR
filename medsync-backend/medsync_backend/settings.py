@@ -77,6 +77,13 @@ ALLOWED_HOSTS = [h.strip() for h in config("ALLOWED_HOSTS", default="localhost,1
 if _VERCEL:
     # Vercel deployment hostnames (*.vercel.app); override via ALLOWED_HOSTS if using a custom domain.
     ALLOWED_HOSTS = list({*ALLOWED_HOSTS, ".vercel.app"})
+# Railway injects RAILWAY_PROJECT_ID (and often RAILWAY_PUBLIC_DOMAIN) on deploy. Without a matching
+# host, requests to *.up.railway.app return HTTP 400 (DisallowedHost) before any view runs.
+if os.environ.get("RAILWAY_PROJECT_ID") or os.environ.get("RAILWAY_PUBLIC_DOMAIN"):
+    ALLOWED_HOSTS = list({*ALLOWED_HOSTS, ".up.railway.app"})
+    _railway_pub = (os.environ.get("RAILWAY_PUBLIC_DOMAIN") or "").strip()
+    if _railway_pub:
+        ALLOWED_HOSTS = list({*ALLOWED_HOSTS, _railway_pub})
 
 def _has_pkg(name):
     try:
