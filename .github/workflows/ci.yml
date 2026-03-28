@@ -21,7 +21,7 @@ jobs:
           cache: pip
           cache-dependency-path: "**/requirements*.txt"
       - name: Install dependencies
-        run: pip install -r requirements.txt
+        run: pip install -r requirements-local.txt
       - name: Pytest
         run: python -m pytest api/tests/ -q --tb=short
       - name: Check RBAC coverage parity
@@ -33,7 +33,7 @@ jobs:
       - name: pip-audit
         run: |
           pip install pip-audit
-          pip-audit -r requirements.txt
+          pip-audit -r requirements-local.txt
 
   frontend:
     runs-on: ubuntu-latest

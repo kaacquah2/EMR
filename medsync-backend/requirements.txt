@@ -1,4 +1,0 @@
-# Local + CI: prod + dev. Same-directory -r only (parent .. breaks some parsers, e.g. Vercel).
-# Sync: requirements-prod.txt with ../requirements.txt; requirements-dev.txt with ../requirements-dev.txt.
--r requirements-prod.txt
--r requirements-dev.txt

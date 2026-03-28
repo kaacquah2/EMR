@@ -26,7 +26,7 @@ EMR/
 │   ├── patients/                  # Patient & admission models
 │   ├── records/                   # Clinical records (encounters, diagnoses, etc.)
 │   ├── interop/                   # Cross-facility interop (referrals, consent, break-glass)
-│   ├── requirements.txt           # Python dependencies
+│   ├── requirements-local.txt     # Python deps (local/CI; prod-only: ../requirements.txt)
 │   └── manage.py                  # Django CLI
 │
 ├── medsync-frontend/              # Next.js 16 + React 19 frontend
@@ -175,7 +175,7 @@ python -m venv .venv
 source .venv/bin/activate  # On Windows: .venv\Scripts\activate
 
 # Install dependencies
-pip install -r requirements.txt
+pip install -r requirements-local.txt
 
 # Setup database
 python manage.py migrate

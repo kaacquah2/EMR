@@ -19,7 +19,7 @@ From `medsync-backend/` directory:
 python -m venv .venv
 # On Windows: .venv\Scripts\activate
 # On macOS/Linux: source .venv/bin/activate
-pip install -r requirements.txt
+pip install -r requirements-local.txt
 cp .env.example .env
 python manage.py migrate
 python manage.py setup_dev  # Load seed data

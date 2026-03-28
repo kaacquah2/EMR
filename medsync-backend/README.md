@@ -9,7 +9,7 @@ Django REST API for MedSync EMR (Ghana Inter-Hospital Electronic Medical Records
 ### For reviewers
 
 - **What this is:** Django REST API for a centralized, multi-hospital EMR (Ghana). Auth (JWT + TOTP MFA), patients/records/encounters, admissions, lab orders, admin, audit, FHIR/HL7, and inter-hospital interoperability (global patient registry, referrals, consent, break-glass).
-- **Quick verify:** From repo root `medsync-backend/`: `python -m venv .venv` → activate → `pip install -r requirements.txt` → `cp .env.example .env` (optional for dev; SQLite used if `DEBUG=True` and no `DATABASE_URL`) → `python manage.py migrate` → `python manage.py setup_dev` → `python dev_server.py` (or `python manage.py runserver`). Run tests: `python -m pytest api/tests/ -v`. Health: `GET http://localhost:8000/api/v1/health`.
+- **Quick verify:** From repo root `medsync-backend/`: `python -m venv .venv` → activate → `pip install -r requirements-local.txt` → `cp .env.example .env` (optional for dev; SQLite used if `DEBUG=True` and no `DATABASE_URL`) → `python manage.py migrate` → `python manage.py setup_dev` → `python dev_server.py` (or `python manage.py runserver`). Run tests: `python -m pytest api/tests/ -v`. Health: `GET http://localhost:8000/api/v1/health`.
 - **Key topics:** Security and structure (Codebase Audit), Governance, Multi-Tenancy, full API route table and role matrix — all in this README below.
 - **Dev credentials:** [docs/DEV_CREDENTIALS.md](../docs/DEV_CREDENTIALS.md)
 - **Daphne timeout fix:** See [DAPHNE_FIX.md](../DAPHNE_FIX.md) — eliminates "took too long to shut down" warnings during file reloads.
@@ -377,7 +377,7 @@ For production-style deployment the backend supports a **centralized PostgreSQL*
    ```
    Neon provides this in the dashboard. The backend uses `dj-database-url`; if `DATABASE_URL` is set, it uses Postgres and **forces `sslmode=require`** for all connections.
 
-3. **Install deps** (already in `requirements.txt`): `psycopg[binary]`, `dj-database-url`.
+3. **Install deps** (already in `requirements-local.txt`): `psycopg[binary]`, `dj-database-url`.
 
 4. **Run migrations on Neon:**
    ```bash
@@ -606,7 +606,7 @@ Or from `medsync-backend/`:
 python -c "import os; os.environ.setdefault('DJANGO_SETTINGS_MODULE','medsync_backend.settings'); import django; django.setup(); from api.ai.train_models import run_training; run_training()"
 ```
 
-**Deployment checklist (AI):** Dependencies in requirements.txt (scikit-learn, xgboost, numpy, pandas, joblib); migrate; optional model files or rule-based placeholders; `MEDSYNC_AI_MODELS_DIR` if needed; cache (e.g. Redis) for risk prediction; permissions in `api/permissions.py` for ai/* routes; audit all AI actions; HTTPS and hospital scope; smoke test `POST /api/v1/ai/analyze-patient/<patient_uuid>`.
+**Deployment checklist (AI):** Dependencies in requirements-local.txt (scikit-learn, xgboost, numpy, pandas, joblib); migrate; optional model files or rule-based placeholders; `MEDSYNC_AI_MODELS_DIR` if needed; cache (e.g. Redis) for risk prediction; permissions in `api/permissions.py` for ai/* routes; audit all AI actions; HTTPS and hospital scope; smoke test `POST /api/v1/ai/analyze-patient/<patient_uuid>`.
 
 ---
 
@@ -615,7 +615,7 @@ python -c "import os; os.environ.setdefault('DJANGO_SETTINGS_MODULE','medsync_ba
 ```
 medsync-backend/
 ├── manage.py
-├── requirements.txt
+├── requirements-local.txt
 ├── pyrightconfig.json
 ├── .env                       # Optional: DATABASE_URL, SECRET_KEY, CORS, JWT, etc.
 ├── db.sqlite3                 # Default SQLite DB (dev only)
@@ -1153,7 +1153,7 @@ Permission matrix source of truth: `api/permissions.py` (PERMISSION_MATRIX); tes
 python -m venv .venv
 .venv\Scripts\activate   # Windows
 # source .venv/bin/activate  # Linux/macOS
-pip install -r requirements.txt
+pip install -r requirements-local.txt
 python manage.py migrate
 python manage.py setup_dev
 python manage.py runserver
@@ -1187,7 +1187,7 @@ Seeded users (after `setup_dev`) and shared TOTP: **[docs/DEV_CREDENTIALS.md](..
 - `PASSWORD_RESET_FRONTEND_URL`, `PASSWORD_RESET_TOKEN_EXPIRY_HOURS` — Password reset flow configuration (see `.env.example`).
 - `AUDIT_LOG_SIGNING_KEY` — **Must be overridden in production** for tamper-evident audit chain signatures.
 
-**Security / dependency audit:** `bash scripts/pip-audit.sh` or `pip-audit -r requirements.txt`. **CI:** `.github/workflows/ci.yml` runs pip-audit on every push/PR.
+**Security / dependency audit:** `bash scripts/pip-audit.sh` or `pip-audit -r requirements-local.txt`. **CI:** `.github/workflows/ci.yml` runs pip-audit on every push/PR.
 
 - `EMAIL_BACKEND` — Default: `django.core.mail.backends.console.EmailBackend` (logs to console). Set to `django.core.mail.backends.smtp.EmailBackend` and configure `EMAIL_*` for production.
 - `DEFAULT_FROM_EMAIL`, `EMAIL_HOST`, `EMAIL_PORT`, `EMAIL_USE_TLS`, `EMAIL_HOST_USER`, `EMAIL_HOST_PASSWORD` — SMTP settings when not using console backend.
@@ -1199,7 +1199,7 @@ Seeded users (after `setup_dev`) and shared TOTP: **[docs/DEV_CREDENTIALS.md](..
 python manage.py createcachetable
 ```
 
-Optional: Redis, Pillow (see `requirements.txt`).
+Optional: Redis, Pillow (see `requirements-local.txt`).
 
 ---
 

@@ -46,7 +46,7 @@ echo ""
 
 # Install Python dependencies
 echo "Installing Python dependencies..."
-pip install -q -r "${BACKEND_DIR}/requirements.txt"
+pip install -q -r "${BACKEND_DIR}/requirements-local.txt"
 echo "Dependencies OK."
 echo ""
 
