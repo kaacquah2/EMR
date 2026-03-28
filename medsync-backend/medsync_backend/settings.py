@@ -6,6 +6,10 @@ from celery.schedules import crontab
 
 BASE_DIR = Path(__file__).resolve().parent.parent
 
+# Vercel sets VERCEL=1 during build and at runtime. Settings are imported during `vercel build`
+# before Neon/Secrets may be wired; relax only enough for that import and collectstatic.
+_VERCEL = os.environ.get("VERCEL") == "1"
+
 # Default False so production is safe if env is unset. Set DEBUG=True for local dev only.
 DEBUG = config("DEBUG", default=False, cast=bool)
 
@@ -34,6 +38,16 @@ if _SECRET_KEY is None:
         warnings.warn(
             "⚠️  Using generated development SECRET_KEY. "
             "For production, set SECRET_KEY environment variable to a strong value.",
+            RuntimeWarning,
+            stacklevel=2,
+        )
+    elif _VERCEL:
+        import warnings
+
+        _SECRET_KEY = "vercel-bootstrap-insecure-set-secret-key-in-dashboard"
+        warnings.warn(
+            "SECRET_KEY unset on Vercel; using bootstrap placeholder. "
+            "Set SECRET_KEY or DJANGO_SECRET_KEY in the Vercel project environment.",
             RuntimeWarning,
             stacklevel=2,
         )
@@ -150,16 +164,33 @@ if _db_url:
     DATABASES = {"default": _db_config}
 else:
     if not DEBUG:
-        from django.core.exceptions import ImproperlyConfigured
-        raise ImproperlyConfigured(
-            "DATABASE_URL is required in production. SQLite does not support pgcrypto, RLS, or safe concurrent writes. Use Neon (PostgreSQL) and set DATABASE_URL."
-        )
-    DATABASES = {
-        "default": {
-            "ENGINE": "django.db.backends.sqlite3",
-            "NAME": BASE_DIR / "db.sqlite3",
+        if _VERCEL:
+            import warnings
+
+            DATABASES = {
+                "default": {
+                    "ENGINE": "django.db.backends.sqlite3",
+                    "NAME": ":memory:",
+                }
+            }
+            warnings.warn(
+                "DATABASE_URL unset on Vercel; using in-memory SQLite for build/bootstrap only. "
+                "Set DATABASE_URL (e.g. Neon) for a real deployment.",
+                RuntimeWarning,
+                stacklevel=2,
+            )
+        else:
+            from django.core.exceptions import ImproperlyConfigured
+            raise ImproperlyConfigured(
+                "DATABASE_URL is required in production. SQLite does not support pgcrypto, RLS, or safe concurrent writes. Use Neon (PostgreSQL) and set DATABASE_URL."
+            )
+    else:
+        DATABASES = {
+            "default": {
+                "ENGINE": "django.db.backends.sqlite3",
+                "NAME": BASE_DIR / "db.sqlite3",
+            }
         }
-    }
 # Database cache so MFA token survives runserver restarts (login -> mfa-verify). Run once: python manage.py createcachetable
 CACHES = {
     "default": {
@@ -254,9 +285,14 @@ MODEL_PATHS = {
     ),
 }
 
+_cors_default = (
+    "https://configure-cors-in-vercel.invalid"
+    if _VERCEL
+    else "http://localhost:3000,http://127.0.0.1:3000"
+)
 CORS_ALLOWED_ORIGINS = [o.strip() for o in config(
     "CORS_ALLOWED_ORIGINS",
-    default="http://localhost:3000,http://127.0.0.1:3000"
+    default=_cors_default,
 ).split(",") if o.strip()]
 # Production: use explicit origins only. Wildcard (*) with credentials is insecure.
 # HIGH PRIORITY FIX #1: Prevent internal network exposure (192.168.x.x, 10.0.x.x, etc.)
