@@ -1,2 +1,3 @@
-# Canonical list lives at repo root (Railpack install stage has only root requirements.txt).
+# Repo root: prod (Railpack) + dev (local/CI). See ../requirements-dev.txt.
 -r ../requirements.txt
+-r ../requirements-dev.txt

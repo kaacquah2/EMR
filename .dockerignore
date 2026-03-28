@@ -1,0 +1,19 @@
+# Railpack / Docker: shrink context and final image copy (backend service only).
+
+# Next.js app — deploy separately (e.g. Vercel); not used by start.sh / Daphne
+medsync-frontend/
+
+.git/
+.github/
+
+**/.venv/
+**/venv/
+**/__pycache__/
+**/*.pyc
+.pytest_cache/
+**/.pytest_cache/
+node_modules/
+**/.next/
+**/out/
+**/dist/
+*.egg-info/
