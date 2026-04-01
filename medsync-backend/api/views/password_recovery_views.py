@@ -646,6 +646,7 @@ def force_password_reset(request, user_id):
             logger.error(f"Failed to send hospital admin notification: {e}")
     
     # Also send notification email to the user themselves
+    _email_sent = False
     try:
         send_force_password_reset_email(
             target_user,
@@ -654,16 +655,17 @@ def force_password_reset(request, user_id):
             hospital_name=hospital.name,
             reason=request.data.get("reason", "Super admin override")
         )
+        _email_sent = True
     except Exception as e:
         import logging
         logger = logging.getLogger(__name__)
         logger.warning(f"Failed to send force reset email to {target_user.email}: {e}")
-    
+
     return Response({
         "message": "Force password reset initiated. Email sent to user.",
         "user_email": target_user.email,
         "expires_in_hours": expiry_hours,
-        "notification_sent": True,  # TODO: implement in-app notification
+        "notification_sent": _email_sent,
     })
 
 
@@ -904,8 +906,22 @@ def get_suspicious_resets(request):
             risk_score += 0.2
             risk_factors.append('Super admin forced reset')
         
-        # Factor 4: Unusual IP pattern (if we have history)
-        # TODO: Compare with user's typical IPs
+        # Factor 4: Unusual IP pattern – compare against user's prior successful resets
+        # (within the past 90 days) to flag logins from new locations.
+        if reset.ip_address:
+            known_ips = set(
+                PasswordResetAudit.objects.filter(
+                    user=reset.user,
+                    status='completed',
+                    ip_address__isnull=False,
+                    token_issued_at__gte=timezone.now() - timedelta(days=90),
+                )
+                .exclude(id=reset.id)
+                .values_list('ip_address', flat=True)[:50]
+            )
+            if known_ips and reset.ip_address not in known_ips:
+                risk_score += 0.2
+                risk_factors.append('Unusual IP address (not seen in prior successful resets)')
         
         # Only include if risk score > 0
         if risk_score > 0:

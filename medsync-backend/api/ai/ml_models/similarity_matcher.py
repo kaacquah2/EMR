@@ -198,15 +198,11 @@ class SimilarityMatcher:
 
     def _get_treatment_outcome(self, patient_data: Dict[str, Any]) -> Optional[str]:
         """Get treatment outcome for similar patient (if available)."""
-        # TODO: Link to actual treatment outcomes from EMR
-        # For now, return None
-        return None
+        return patient_data.get('treatment_outcome')
 
     def _estimate_success_rate(self, patient_data: Dict[str, Any]) -> Optional[float]:
         """Estimate treatment success rate for similar patient."""
-        # TODO: Calculate from actual outcomes
-        # For now, return None
-        return None
+        return patient_data.get('outcome_success_rate')
 
     def compare_patients(
         self,
