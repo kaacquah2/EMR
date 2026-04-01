@@ -229,7 +229,8 @@ class AIFeaturesScopingTests(APITestCase):
             patient=self.patient_a,
             hospital=self.hospital_a,
             encounter_type='outpatient',
-            encounter_status='completed',
+            status='completed',
+            created_by=self.doctor_a,
             chief_complaint='Headache'
         )
         

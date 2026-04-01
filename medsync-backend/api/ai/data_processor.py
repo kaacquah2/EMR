@@ -383,22 +383,23 @@ class DataProcessor:
         try:
             encounters = []
             cutoff_date = timezone.now() - timedelta(days=days_back)
-            
+
             encounter_records = Encounter.objects.filter(
                 patient=patient,
                 hospital=self.effective_hospital,
-                created_at__gte=cutoff_date
-            ).order_by('-created_at')
-            
+                encounter_date__gte=cutoff_date
+            ).order_by('-encounter_date')
+
             for encounter in encounter_records:
                 encounters.append({
                     'encounter_type': encounter.encounter_type,
-                    'encounter_status': encounter.encounter_status,
+                    'status': encounter.status,
+                    'visit_status': encounter.visit_status,
                     'chief_complaint': encounter.chief_complaint or '',
                     'assessment_plan': encounter.assessment_plan or '',
-                    'created_at': encounter.created_at.isoformat(),
+                    'created_at': encounter.encounter_date.isoformat(),
                 })
-            
+
             return encounters
         except Exception as e:
             logger.error(f"Error extracting encounters for patient {patient.id}: {e}")

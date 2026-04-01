@@ -390,9 +390,13 @@ class FeatureEngineer:
                 # Admission history
                 'recent_admission_count': int,
                 'avg_los_days': float,
-                
+
                 # Encounter history
                 'recent_encounter_count': int,
+
+                # Treatment outcome (derived from most recent completed encounter)
+                'treatment_outcome': str or None,
+                'outcome_success_rate': float or None,
             }
         """
         try:
@@ -445,7 +449,29 @@ class FeatureEngineer:
             
             # Encounter history
             features['recent_encounter_count'] = len(encounters)
-            
+
+            # Treatment outcome: derived from encounter status/visit_status in the EMR.
+            # An encounter is considered successfully completed when its status is
+            # 'completed' or visit_status is 'discharged'.
+            _completed = {'completed'}
+            _discharged = {'discharged'}
+            completed_encounters = [
+                e for e in encounters
+                if e.get('status') in _completed
+                or e.get('visit_status') in _discharged
+            ]
+            if completed_encounters:
+                features['treatment_outcome'] = 'Completed Treatment'
+                features['outcome_success_rate'] = (
+                    len(completed_encounters) / len(encounters)
+                )
+            elif encounters:
+                features['treatment_outcome'] = 'Treatment Ongoing'
+                features['outcome_success_rate'] = 0.0
+            else:
+                features['treatment_outcome'] = None
+                features['outcome_success_rate'] = None
+
             return features
         
         except Exception as e:
