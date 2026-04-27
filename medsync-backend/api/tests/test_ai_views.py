@@ -71,7 +71,7 @@ class TestAIAnalyzePatient:
         assert res.status_code in (401, 403)
 
     def test_analyze_patient_doctor_success(self, api_client, doctor_user, patient):
-        _login(api_client, doctor_user.email, DOCTOR_AI_VIEWS_PASSWORD)
+        api_client.force_authenticate(user=doctor_user)
         res = api_client.post(f"/api/v1/ai/analyze-patient/{patient.id}", {}, format="json")
         assert res.status_code == 200
         data = res.json()
@@ -82,7 +82,7 @@ class TestAIAnalyzePatient:
         assert "agents_executed" in data
 
     def test_analyze_patient_404_for_unknown(self, api_client, doctor_user):
-        _login(api_client, doctor_user.email, DOCTOR_AI_VIEWS_PASSWORD)
+        api_client.force_authenticate(user=doctor_user)
         res = api_client.post(
             "/api/v1/ai/analyze-patient/00000000-0000-0000-0000-000000000000",
             {},
@@ -94,7 +94,7 @@ class TestAIAnalyzePatient:
 @pytest.mark.django_db
 class TestAIRiskPrediction:
     def test_risk_prediction_returns_structure(self, api_client, doctor_user, patient):
-        _login(api_client, doctor_user.email, DOCTOR_AI_VIEWS_PASSWORD)
+        api_client.force_authenticate(user=doctor_user)
         res = api_client.post(f"/api/v1/ai/risk-prediction/{patient.id}", {}, format="json")
         assert res.status_code == 200
         data = res.json()
@@ -106,7 +106,7 @@ class TestAIRiskPrediction:
 @pytest.mark.django_db
 class TestAITriage:
     def test_triage_returns_structure(self, api_client, nurse_user, patient):
-        _login(api_client, nurse_user.email, NURSE_AI_VIEWS_PASSWORD)
+        api_client.force_authenticate(user=nurse_user)
         res = api_client.post(
             f"/api/v1/ai/triage/{patient.id}",
             {"chief_complaint": "headache"},
@@ -122,7 +122,7 @@ class TestAITriage:
 @pytest.mark.django_db
 class TestAIAnalysisHistory:
     def test_analysis_history_returns_paginated(self, api_client, doctor_user, patient):
-        _login(api_client, doctor_user.email, DOCTOR_AI_VIEWS_PASSWORD)
+        api_client.force_authenticate(user=doctor_user)
         res = api_client.get(f"/api/v1/ai/analysis-history/{patient.id}?limit=5&offset=0")
         assert res.status_code == 200
         data = res.json()
@@ -133,8 +133,10 @@ class TestAIAnalysisHistory:
         assert isinstance(data["analyses"], list)
 
     def test_analysis_history_404_for_unknown_patient(self, api_client, doctor_user):
-        _login(api_client, doctor_user.email, DOCTOR_AI_VIEWS_PASSWORD)
+        api_client.force_authenticate(user=doctor_user)
         res = api_client.get(
             "/api/v1/ai/analysis-history/00000000-0000-0000-0000-000000000000"
         )
         assert res.status_code == 404
+
+

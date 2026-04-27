@@ -1,5 +1,6 @@
 from io import BytesIO
 from rest_framework import status
+from django.conf import settings
 from rest_framework.decorators import api_view, permission_classes
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
@@ -8,12 +9,21 @@ from django.db.models import Q
 from reportlab.lib.pagesizes import letter
 from reportlab.lib.units import inch
 from reportlab.pdfgen import canvas as pdf_canvas
-
+from django.views.decorators.cache import cache_control
 from patients.models import Patient, Allergy
-from records.models import MedicalRecord, Diagnosis, Prescription, LabResult, Vital
-from api.utils import get_patient_queryset, get_medical_record_queryset, get_effective_hospital, get_request_hospital, audit_log, sanitize_audit_resource_id
+from records.models import Diagnosis, Prescription, LabResult, Vital
+from api.utils import (
+    get_patient_queryset,
+    get_medical_record_queryset,
+    get_effective_hospital,
+    get_request_hospital,
+    audit_log,
+    sanitize_audit_resource_id
+)
+from api.pagination import paginate_queryset
 from api.serializers import (
     PatientSerializer,
+    PatientCreateSerializer,
     PatientDemographicsOnlySerializer,
     AllergySerializer,
     DiagnosisSerializer,
@@ -24,10 +34,13 @@ from api.serializers import (
 )
 
 
+
+
 def _paginated(data, request):
     return {"data": data, "next_cursor": None, "has_more": False}
 
 
+@cache_control(max_age=30, private=True)
 @api_view(["GET"])
 @permission_classes([IsAuthenticated])
 def patient_search(request):
@@ -49,10 +62,19 @@ def patient_search(request):
         )
     else:
         return Response({"data": [], "next_cursor": None, "has_more": False})
-    qs = qs[:50]
-    if user.role == "receptionist":
-        return Response(_paginated(PatientDemographicsOnlySerializer(qs, many=True).data, request))
-    return Response(_paginated(PatientSerializer(qs, many=True).data, request))
+
+    # N+1 Fix: prefetch allergies for PatientSerializer
+    if user.role not in settings.NON_CLINICAL_PII_MASK_ROLES:
+        qs = qs.prefetch_related("allergy_set")
+
+    items, next_cursor, has_more = paginate_queryset(qs, request)
+    
+    if user.role in settings.NON_CLINICAL_PII_MASK_ROLES:
+        data = PatientDemographicsOnlySerializer(items, many=True).data
+    else:
+        data = PatientSerializer(items, many=True).data
+        
+    return Response({"data": data, "next_cursor": next_cursor, "has_more": has_more})
 
 
 @api_view(["POST"])
@@ -98,43 +120,41 @@ def patient_create(request):
             {"message": "No hospital assigned"},
             status=status.HTTP_400_BAD_REQUEST,
         )
-    data = request.data
-    ghana_id = (data.get("ghana_health_id") or "").strip()
-    if not ghana_id:
-        return Response(
-            {"message": "Ghana Health ID required"},
-            status=status.HTTP_400_BAD_REQUEST,
-        )
-    if Patient.objects.filter(ghana_health_id=ghana_id).exists():
-        return Response(
-            {"message": "Patient with this Ghana Health ID already exists"},
-            status=status.HTTP_400_BAD_REQUEST,
-        )
-    patient = Patient.objects.create(
-        ghana_health_id=ghana_id,
-        full_name=(data.get("full_name") or "").strip(),
-        date_of_birth=data.get("date_of_birth"),
-        gender=data.get("gender", "unknown"),
-        phone=data.get("phone") or None,
-        national_id=data.get("national_id") or None,
-        nhis_number=data.get("nhis_number") or None,
-        passport_number=data.get("passport_number") or None,
-        blood_group=data.get("blood_group") or "unknown",
-        registered_at=hospital,
-        created_by=request.user,
-    )
-    for a in data.get("allergies", []) or []:
-        if a.get("allergen"):
-            Allergy.objects.create(
-                patient=patient,
-                allergen=a["allergen"],
-                reaction_type=a.get("reaction_type", ""),
-                severity=a.get("severity", "moderate"),
-                recorded_by=request.user,
-            )
-    return Response(PatientSerializer(patient).data, status=status.HTTP_201_CREATED)
+
+    # Use Serializer for robust validation and creation
+    data = request.data.copy()
+    data["registered_at"] = str(hospital.id)
+    
+    serializer = PatientCreateSerializer(data=data, context={"request": request})
+    if not serializer.is_valid():
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+    
+    from django.db import transaction
+    try:
+        with transaction.atomic():
+            patient = serializer.save()
+            
+            # Handle allergies if provided (Legacy support for clinical creation)
+            allergies_data = request.data.get("allergies", [])
+            for a in allergies_data or []:
+                if a.get("allergen"):
+                    Allergy.objects.create(
+                        patient=patient,
+                        allergen=a["allergen"],
+                        reaction_type=a.get("reaction_type", ""),
+                        severity=a.get("severity", "moderate"),
+                        recorded_by=request.user,
+                    )
+            
+            audit_log(request.user, "CREATE_PATIENT", resource_type="patient", resource_id=patient.id, hospital=hospital, request=request)
+            return Response(PatientSerializer(patient).data, status=status.HTTP_201_CREATED)
+    except Exception as e:
+        import logging
+        logging.getLogger(__name__).error(f"Patient creation failed: {str(e)}")
+        return Response({"message": "Failed to create patient record."}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 
+@cache_control(max_age=60, private=True)
 @api_view(["GET", "PATCH"])
 @permission_classes([IsAuthenticated])
 def patient_detail(request, pk):
@@ -153,14 +173,7 @@ def patient_detail(request, pk):
             hospital=patient.registered_at,
             request=request,
         )
-    if request.method == "GET" and request.user.role in (
-        "receptionist",
-        "lab_technician",
-        "radiology_technician",
-        "billing_staff",
-        "ward_clerk",
-        "pharmacist",
-    ):
+    if request.method == "GET" and request.user.role in settings.NON_CLINICAL_PII_MASK_ROLES:
         return Response(PatientDemographicsOnlySerializer(patient).data)
     if request.method == "PATCH":
         if request.user.role not in ("doctor", "hospital_admin", "super_admin"):
@@ -185,7 +198,16 @@ def patient_detail(request, pk):
             patient.passport_number = data["passport_number"] or None
         if "blood_group" in data and data["blood_group"] is not None:
             patient.blood_group = data["blood_group"]
-        patient.save(update_fields=["full_name", "date_of_birth", "gender", "phone", "national_id", "nhis_number", "passport_number", "blood_group"])
+        patient.save(
+            update_fields=[
+                "full_name",
+                "date_of_birth",
+                "gender",
+                "phone",
+                "national_id",
+                "nhis_number",
+                "passport_number",
+                "blood_group"])
     return Response(PatientSerializer(patient).data)
 
 
@@ -196,6 +218,7 @@ def _block_non_clinical_roles(request):
     return False
 
 
+@cache_control(max_age=15, private=True)
 @api_view(["GET"])
 @permission_classes([IsAuthenticated])
 def patient_records(request, pk):
@@ -219,15 +242,22 @@ def patient_records(request, pk):
         request=request,
         extra_data={"scope": "FULL_RECORD"},
     )
-    records = get_medical_record_queryset(request.user, patient=patient, effective_hospital=get_effective_hospital(request)).select_related(
-        "diagnosis", "prescription", "labresult", "vital"
-    ).order_by("-created_at")[:100]
+    
+    qs = get_medical_record_queryset(
+        request.user, 
+        patient=patient, 
+        effective_hospital=get_effective_hospital(request)
+    ).select_related("diagnosis", "prescription", "labresult", "vital").order_by("-created_at")
+    
     if request.user.role == "nurse":
-        records = [r for r in records if r.record_type != "diagnosis"]
+        qs = qs.exclude(record_type="diagnosis")
+        
+    items, next_cursor, has_more = paginate_queryset(qs, request, use_cursor=True)
+    
     return Response({
-        "data": MedicalRecordSerializer(records, many=True).data,
-        "next_cursor": None,
-        "has_more": False,
+        "data": MedicalRecordSerializer(items, many=True).data,
+        "next_cursor": next_cursor,
+        "has_more": has_more,
     })
 
 
@@ -245,7 +275,12 @@ def patient_diagnoses(request, pk):
             {"message": "Patient not found"},
             status=status.HTTP_404_NOT_FOUND,
         )
-    record_ids = get_medical_record_queryset(request.user, patient=patient, effective_hospital=get_effective_hospital(request)).values_list("id", flat=True)
+    record_ids = get_medical_record_queryset(
+        request.user,
+        patient=patient,
+        effective_hospital=get_effective_hospital(request)).values_list(
+        "id",
+        flat=True)
     diagnoses = Diagnosis.objects.filter(
         record_id__in=record_ids
     ).select_related("record").order_by("-record__created_at")
@@ -266,7 +301,12 @@ def patient_prescriptions(request, pk):
             {"message": "Patient not found"},
             status=status.HTTP_404_NOT_FOUND,
         )
-    record_ids = get_medical_record_queryset(request.user, patient=patient, effective_hospital=get_effective_hospital(request)).values_list("id", flat=True)
+    record_ids = get_medical_record_queryset(
+        request.user,
+        patient=patient,
+        effective_hospital=get_effective_hospital(request)).values_list(
+        "id",
+        flat=True)
     prescriptions = Prescription.objects.filter(
         record_id__in=record_ids
     ).select_related("record").order_by("-record__created_at")
@@ -287,7 +327,12 @@ def patient_labs(request, pk):
             {"message": "Patient not found"},
             status=status.HTTP_404_NOT_FOUND,
         )
-    record_ids = get_medical_record_queryset(request.user, patient=patient, effective_hospital=get_effective_hospital(request)).values_list("id", flat=True)
+    record_ids = get_medical_record_queryset(
+        request.user,
+        patient=patient,
+        effective_hospital=get_effective_hospital(request)).values_list(
+        "id",
+        flat=True)
     results = LabResult.objects.filter(
         record_id__in=record_ids
     ).select_related("record").order_by("-result_date")
@@ -308,7 +353,12 @@ def patient_vitals(request, pk):
             {"message": "Patient not found"},
             status=status.HTTP_404_NOT_FOUND,
         )
-    record_ids = get_medical_record_queryset(request.user, patient=patient, effective_hospital=get_effective_hospital(request)).values_list("id", flat=True)
+    record_ids = get_medical_record_queryset(
+        request.user,
+        patient=patient,
+        effective_hospital=get_effective_hospital(request)).values_list(
+        "id",
+        flat=True)
     vitals = Vital.objects.filter(
         record_id__in=record_ids
     ).select_related("record").order_by("-record__created_at")

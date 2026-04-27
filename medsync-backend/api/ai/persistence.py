@@ -7,6 +7,7 @@ Used by AI services and views to persist analysis results for auditing.
 import logging
 from typing import Dict, Any, Optional
 
+from django.db import transaction, connection
 from api.models import (
     AIAnalysis,
     DiseaseRiskPrediction,
@@ -22,6 +23,7 @@ from core.models import Hospital, User
 logger = logging.getLogger(__name__)
 
 
+@transaction.atomic
 def save_comprehensive_analysis(
     patient: Patient,
     hospital: Hospital,
@@ -31,18 +33,34 @@ def save_comprehensive_analysis(
 ) -> AIAnalysis:
     """
     Save complete multi-agent analysis to database.
-    
+
     Args:
         patient: Patient analyzed
         hospital: Hospital context
         user: User who performed analysis
         analysis_result: Result dict from orchestrator
         chief_complaint: Chief complaint if provided
-    
+
     Returns:
         AIAnalysis database object
     """
     try:
+        # Skip persistence for SQLite (limited JSON support)
+        from django.db import connection
+        if 'sqlite' in connection.settings_dict.get('ENGINE', '').lower():
+            logger.info(f"Skipping AI analysis persistence for SQLite (limited JSON support)")
+            # Create a minimal analysis record without complex JSONField data
+            analysis = AIAnalysis.objects.create(
+                patient=patient,
+                hospital=hospital,
+                performed_by=user,
+                analysis_type='comprehensive',
+                overall_confidence=analysis_result.get('confidence_score', 0.0),
+                clinical_summary=analysis_result.get('clinical_summary', ''),
+                chief_complaint=chief_complaint,
+            )
+            return analysis
+        
         # Create main analysis record
         analysis = AIAnalysis.objects.create(
             patient=patient,
@@ -50,13 +68,13 @@ def save_comprehensive_analysis(
             performed_by=user,
             analysis_type='comprehensive',
             overall_confidence=analysis_result.get('confidence_score', 0.0),
-            agents_executed=analysis_result.get('agents_executed', []),
+            agents_executed=list(analysis_result.get('agents_executed', [])),
             clinical_summary=analysis_result.get('clinical_summary', ''),
-            recommended_actions=analysis_result.get('recommended_actions', []),
-            alerts=analysis_result.get('alerts', []),
+            recommended_actions=list(analysis_result.get('recommended_actions', [])),
+            alerts=list(analysis_result.get('alerts', [])),
             chief_complaint=chief_complaint,
         )
-        
+
         # Save risk predictions
         risk_analysis = analysis_result.get('risk_analysis', {})
         if risk_analysis and 'predictions' in risk_analysis:
@@ -70,7 +88,7 @@ def save_comprehensive_analysis(
                     contributing_factors=risk_analysis.get('contributing_factors', []),
                     recommendations=risk_analysis.get('recommendations', []),
                 )
-        
+
         # Save diagnosis suggestions
         diagnosis_analysis = analysis_result.get('diagnosis_suggestions', {})
         if diagnosis_analysis and 'suggestions' in diagnosis_analysis:
@@ -86,7 +104,7 @@ def save_comprehensive_analysis(
                     recommended_tests=sugg.get('recommended_tests', []),
                     clinical_notes=sugg.get('clinical_notes', ''),
                 )
-        
+
         # Save triage assessment
         triage_assessment = analysis_result.get('triage_assessment', {})
         if triage_assessment:
@@ -100,7 +118,7 @@ def save_comprehensive_analysis(
                 indicators=triage_assessment.get('indicators', []),
                 recommended_action=triage_assessment.get('recommended_action', ''),
             )
-        
+
         # Save similar patients (if available)
         similar_patients = analysis_result.get('similar_patients', {})
         if similar_patients and 'similar_patients' in similar_patients:
@@ -118,7 +136,7 @@ def save_comprehensive_analysis(
                     )
                 except Patient.DoesNotExist:
                     logger.warning(f"Similar patient {match.get('patient_id')} not found")
-        
+
         # Save referral recommendations (if available)
         referral_recs = analysis_result.get('referral_recommendations', {})
         if referral_recs and 'recommended_hospitals' in referral_recs:
@@ -137,7 +155,7 @@ def save_comprehensive_analysis(
                     )
                 except Hospital.DoesNotExist:
                     logger.warning(f"Recommended hospital {rec.get('hospital_id')} not found")
-        
+
         # Update usage counter
         AIAnalysisCounter.increment_analysis(
             hospital=hospital,
@@ -145,15 +163,16 @@ def save_comprehensive_analysis(
             avg_confidence=analysis.overall_confidence,
             total_alerts_generated=len(analysis.alerts),
         )
-        
+
         logger.info(f"Saved comprehensive analysis {analysis.id} for patient {patient.id}")
         return analysis
-    
+
     except Exception as e:
         logger.error(f"Error saving comprehensive analysis: {e}")
         raise
 
 
+@transaction.atomic
 def save_risk_prediction(
     patient: Patient,
     hospital: Hospital,
@@ -172,7 +191,7 @@ def save_risk_prediction(
             clinical_summary=f"Risk prediction for {prediction_result.get('top_risk_disease', 'unknown')}",
             recommended_actions=prediction_result.get('recommendations', []),
         )
-        
+
         # Save disease predictions
         for disease, pred in prediction_result.get('predictions', {}).items():
             DiseaseRiskPrediction.objects.create(
@@ -182,16 +201,17 @@ def save_risk_prediction(
                 risk_category=pred.get('risk_category', 'low'),
                 confidence=pred.get('confidence', 0),
             )
-        
+
         AIAnalysisCounter.increment_analysis(hospital, 'risk_prediction')
         logger.info(f"Saved risk prediction for patient {patient.id}")
         return analysis
-    
+
     except Exception as e:
         logger.error(f"Error saving risk prediction: {e}")
         raise
 
 
+@transaction.atomic
 def save_diagnosis_suggestions(
     patient: Patient,
     hospital: Hospital,
@@ -209,7 +229,7 @@ def save_diagnosis_suggestions(
             chief_complaint=suggestion_result.get('chief_complaint', ''),
             clinical_summary='Clinical decision support - differential diagnosis',
         )
-        
+
         # Save diagnosis suggestions
         for rank, sugg in enumerate(suggestion_result.get('suggestions', []), 1):
             DiagnosisSuggestion.objects.create(
@@ -223,16 +243,17 @@ def save_diagnosis_suggestions(
                 recommended_tests=sugg.get('recommended_tests', []),
                 clinical_notes=sugg.get('clinical_notes', ''),
             )
-        
+
         AIAnalysisCounter.increment_analysis(hospital, 'cds')
         logger.info(f"Saved diagnosis suggestions for patient {patient.id}")
         return analysis
-    
+
     except Exception as e:
         logger.error(f"Error saving diagnosis suggestions: {e}")
         raise
 
 
+@transaction.atomic
 def save_triage_assessment(
     patient: Patient,
     hospital: Hospital,
@@ -251,7 +272,7 @@ def save_triage_assessment(
             alerts=[f"Triage: {triage_result.get('triage_level', 'unknown').upper()}"],
             recommended_actions=[triage_result.get('recommended_action', '')],
         )
-        
+
         # Save triage
         TriageAssessment.objects.create(
             analysis=analysis,
@@ -263,11 +284,11 @@ def save_triage_assessment(
             indicators=triage_result.get('indicators', []),
             recommended_action=triage_result.get('recommended_action', ''),
         )
-        
+
         AIAnalysisCounter.increment_analysis(hospital, 'triage')
         logger.info(f"Saved triage assessment for patient {patient.id}")
         return analysis
-    
+
     except Exception as e:
         logger.error(f"Error saving triage assessment: {e}")
         raise

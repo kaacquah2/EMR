@@ -11,18 +11,17 @@ Responsible for:
 7. Ensuring compliance with HIPAA and hospital scoping
 """
 
-from datetime import datetime, timedelta
-from typing import Dict, List, Optional, Tuple, Any
-from decimal import Decimal
+from datetime import timedelta
+from typing import Dict, List, Optional, Any
 import logging
 
-from django.db.models import Q, QuerySet, Avg, Count, Max, Min, F
+from django.db.models import QuerySet
 from django.utils import timezone
 
-from patients.models import Patient, Allergy, PatientAdmission
-from records.models import MedicalRecord, Diagnosis, Prescription, Vital, LabResult, Encounter, LabOrder
-from core.models import Hospital, User
-from api.utils import get_patient_queryset, get_medical_record_queryset, get_effective_hospital
+from patients.models import Patient, PatientAdmission
+from records.models import MedicalRecord, Encounter
+from core.models import User
+from api.utils import get_patient_queryset, get_effective_hospital
 
 logger = logging.getLogger(__name__)
 
@@ -30,7 +29,7 @@ logger = logging.getLogger(__name__)
 class DataProcessor:
     """
     Extracts and preprocesses patient data for AI models.
-    
+
     Enforces:
     - Role-based access control (RBAC)
     - Hospital multi-tenancy scoping
@@ -41,7 +40,7 @@ class DataProcessor:
     def __init__(self, user: User):
         """
         Initialize data processor with user context.
-        
+
         Args:
             user: Django User object with role and hospital context
         """
@@ -52,7 +51,7 @@ class DataProcessor:
     def extract_patient_demographics(self, patient: Patient) -> Dict[str, Any]:
         """
         Extract demographic data from patient record.
-        
+
         Returns:
             {
                 'patient_id': str,
@@ -68,7 +67,7 @@ class DataProcessor:
         try:
             dob = patient.date_of_birth
             age = (timezone.now().date() - dob).days // 365
-            
+
             return {
                 'patient_id': str(patient.id),
                 'age': age,
@@ -87,7 +86,7 @@ class DataProcessor:
     def extract_patient_diagnoses(self, patient: Patient) -> List[Dict[str, Any]]:
         """
         Extract diagnosis records for patient.
-        
+
         Returns:
             [
                 {
@@ -109,15 +108,15 @@ class DataProcessor:
                 record_type='diagnosis',
                 hospital=self.effective_hospital
             ).select_related('diagnosis').order_by('-created_at')
-            
+
             for record in records:
                 diagnosis = record.diagnosis
                 onset_date = diagnosis.onset_date
                 days_since_onset = None
-                
+
                 if onset_date:
                     days_since_onset = (timezone.now().date() - onset_date).days
-                
+
                 diagnoses.append({
                     'icd10_code': diagnosis.icd10_code,
                     'icd10_description': diagnosis.icd10_description,
@@ -127,7 +126,7 @@ class DataProcessor:
                     'days_since_onset': days_since_onset,
                     'created_at': record.created_at.isoformat(),
                 })
-            
+
             return diagnoses
         except Exception as e:
             logger.error(f"Error extracting diagnoses for patient {patient.id}: {e}")
@@ -136,7 +135,7 @@ class DataProcessor:
     def extract_patient_medications(self, patient: Patient) -> List[Dict[str, Any]]:
         """
         Extract prescription/medication records.
-        
+
         Returns:
             [
                 {
@@ -159,7 +158,7 @@ class DataProcessor:
                 record_type='prescription',
                 hospital=self.effective_hospital
             ).select_related('prescription').order_by('-created_at')
-            
+
             for record in records:
                 prescription = record.prescription
                 medications.append({
@@ -172,7 +171,7 @@ class DataProcessor:
                     'allergy_conflict': prescription.allergy_conflict,
                     'created_at': record.created_at.isoformat(),
                 })
-            
+
             return medications
         except Exception as e:
             logger.error(f"Error extracting medications for patient {patient.id}: {e}")
@@ -181,7 +180,7 @@ class DataProcessor:
     def extract_patient_allergies(self, patient: Patient) -> List[Dict[str, Any]]:
         """
         Extract active allergies.
-        
+
         Returns:
             [
                 {
@@ -196,7 +195,7 @@ class DataProcessor:
         try:
             allergies = []
             allergy_records = patient.allergy_set.filter(is_active=True)
-            
+
             for allergy in allergy_records:
                 allergies.append({
                     'allergen': allergy.allergen,
@@ -204,7 +203,7 @@ class DataProcessor:
                     'reaction_type': allergy.reaction_type,
                     'is_active': allergy.is_active,
                 })
-            
+
             return allergies
         except Exception as e:
             logger.error(f"Error extracting allergies for patient {patient.id}: {e}")
@@ -213,11 +212,11 @@ class DataProcessor:
     def extract_patient_vitals(self, patient: Patient, days_back: int = 90) -> List[Dict[str, Any]]:
         """
         Extract vital signs time-series (last N days).
-        
+
         Args:
             patient: Patient object
             days_back: Number of days to retrieve (default 90)
-        
+
         Returns:
             [
                 {
@@ -238,14 +237,14 @@ class DataProcessor:
         try:
             vitals = []
             cutoff_date = timezone.now() - timedelta(days=days_back)
-            
+
             records = MedicalRecord.objects.filter(
                 patient=patient,
                 record_type='vital_signs',
                 hospital=self.effective_hospital,
                 created_at__gte=cutoff_date
             ).select_related('vital').order_by('-created_at')
-            
+
             for record in records:
                 vital = record.vital
                 vitals.append({
@@ -260,7 +259,7 @@ class DataProcessor:
                     'bmi': float(vital.bmi) if vital.bmi else None,
                     'created_at': record.created_at.isoformat(),
                 })
-            
+
             return vitals
         except Exception as e:
             logger.error(f"Error extracting vitals for patient {patient.id}: {e}")
@@ -269,11 +268,11 @@ class DataProcessor:
     def extract_patient_labs(self, patient: Patient, days_back: int = 90) -> List[Dict[str, Any]]:
         """
         Extract lab results time-series.
-        
+
         Args:
             patient: Patient object
             days_back: Number of days to retrieve (default 90)
-        
+
         Returns:
             [
                 {
@@ -290,14 +289,14 @@ class DataProcessor:
         try:
             labs = []
             cutoff_date = timezone.now() - timedelta(days=days_back)
-            
+
             records = MedicalRecord.objects.filter(
                 patient=patient,
                 record_type='lab_result',
                 hospital=self.effective_hospital,
                 created_at__gte=cutoff_date
-            ).select_related('lab_result').order_by('-created_at')
-            
+            ).select_related('labresult').order_by('-created_at')
+
             for record in records:
                 lab = record.lab_result
                 labs.append({
@@ -308,7 +307,7 @@ class DataProcessor:
                     'result_date': lab.result_date.isoformat(),
                     'created_at': record.created_at.isoformat(),
                 })
-            
+
             return labs
         except Exception as e:
             logger.error(f"Error extracting labs for patient {patient.id}: {e}")
@@ -317,11 +316,11 @@ class DataProcessor:
     def extract_patient_admissions(self, patient: Patient, days_back: int = 365) -> List[Dict[str, Any]]:
         """
         Extract hospital admission history.
-        
+
         Args:
             patient: Patient object
             days_back: Number of days to retrieve (default 365)
-        
+
         Returns:
             [
                 {
@@ -337,20 +336,20 @@ class DataProcessor:
         try:
             admissions = []
             cutoff_date = timezone.now() - timedelta(days=days_back)
-            
+
             admission_records = PatientAdmission.objects.filter(
                 patient=patient,
                 admitted_at__gte=cutoff_date
             ).select_related('ward__hospital').order_by('-admitted_at')
-            
+
             for admission in admission_records:
                 length_of_stay = None
                 discharged_at = None
-                
+
                 if admission.discharged_at:
                     discharged_at = admission.discharged_at.isoformat()
                     length_of_stay = (admission.discharged_at - admission.admitted_at).days
-                
+
                 admissions.append({
                     'ward_name': admission.ward.name if admission.ward else 'Unknown',
                     'admitted_at': admission.admitted_at.isoformat(),
@@ -358,7 +357,7 @@ class DataProcessor:
                     'length_of_stay_days': length_of_stay,
                     'hospital_name': admission.ward.hospital.name if admission.ward else 'Unknown',
                 })
-            
+
             return admissions
         except Exception as e:
             logger.error(f"Error extracting admissions for patient {patient.id}: {e}")
@@ -367,7 +366,7 @@ class DataProcessor:
     def extract_patient_encounters(self, patient: Patient, days_back: int = 90) -> List[Dict[str, Any]]:
         """
         Extract clinical encounter records.
-        
+
         Returns:
             [
                 {
@@ -383,22 +382,22 @@ class DataProcessor:
         try:
             encounters = []
             cutoff_date = timezone.now() - timedelta(days=days_back)
-            
+
             encounter_records = Encounter.objects.filter(
                 patient=patient,
                 hospital=self.effective_hospital,
-                created_at__gte=cutoff_date
-            ).order_by('-created_at')
-            
+                encounter_date__gte=cutoff_date
+            ).order_by('-encounter_date')
+
             for encounter in encounter_records:
                 encounters.append({
                     'encounter_type': encounter.encounter_type,
-                    'encounter_status': encounter.encounter_status,
+                    'encounter_status': encounter.status,
                     'chief_complaint': encounter.chief_complaint or '',
                     'assessment_plan': encounter.assessment_plan or '',
-                    'created_at': encounter.created_at.isoformat(),
+                    'created_at': encounter.encounter_date.isoformat(),
                 })
-            
+
             return encounters
         except Exception as e:
             logger.error(f"Error extracting encounters for patient {patient.id}: {e}")
@@ -407,7 +406,7 @@ class DataProcessor:
     def extract_complete_patient_data(self, patient: Patient) -> Dict[str, Any]:
         """
         Extract complete patient profile for ML analysis.
-        
+
         Returns unified patient data object:
             {
                 'demographics': {...},
@@ -422,7 +421,7 @@ class DataProcessor:
             }
         """
         logger.info(f"Extracting complete patient data for {patient.id}")
-        
+
         return {
             'demographics': self.extract_patient_demographics(patient),
             'diagnoses': self.extract_patient_diagnoses(patient),
@@ -438,24 +437,24 @@ class DataProcessor:
     def _get_patient_or_raise(self, patient_id: str) -> Patient:
         """
         Get patient by ID, verifying user has access via hospital scoping.
-        
+
         Enforces:
         - Patient exists
         - User's hospital can access this patient's data
         - User's role allows patient access
-        
+
         Args:
             patient_id: UUID of patient to access
-            
+
         Returns:
             Patient object if authorized
-            
+
         Raises:
             Patient.DoesNotExist: If patient not found or user lacks access
         """
         queryset = get_patient_queryset(self.user, self.effective_hospital)
         patient = queryset.filter(id=patient_id).first()
-        
+
         if not patient:
             logger.warning(
                 f"Access denied: User {self.user.id} attempted to access patient {patient_id} "
@@ -464,16 +463,16 @@ class DataProcessor:
             raise Patient.DoesNotExist(
                 f"Patient {patient_id} not found or access denied"
             )
-        
+
         return patient
 
     def get_accessible_patients(self, limit: Optional[int] = None) -> QuerySet:
         """
         Get all patients accessible to the user (respects RBAC).
-        
+
         Args:
             limit: Maximum number of patients (for sampling)
-        
+
         Returns:
             QuerySet of Patient objects accessible to user
         """
@@ -485,16 +484,16 @@ class DataProcessor:
     def extract_batch_patient_data(self, limit: Optional[int] = None) -> List[Dict[str, Any]]:
         """
         Extract data for multiple patients (for training/analysis).
-        
+
         Args:
             limit: Maximum patients to process (default: all accessible)
-        
+
         Returns:
             List of complete patient data dictionaries
         """
         patients = self.get_accessible_patients(limit)
         batch_data = []
-        
+
         for patient in patients:
             try:
                 data = self.extract_complete_patient_data(patient)
@@ -502,6 +501,6 @@ class DataProcessor:
             except Exception as e:
                 logger.error(f"Failed to extract data for patient {patient.id}: {e}")
                 continue
-        
+
         logger.info(f"Extracted data for {len(batch_data)} patients")
         return batch_data

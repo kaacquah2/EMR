@@ -44,7 +44,8 @@ export function usePatientRecords(patientId: string | null) {
         `/patients/${patientId}/diagnoses`
       );
       setDiagnoses(data.data || []);
-    } catch {
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to load diagnoses");
       setDiagnoses([]);
     }
   }, [api, patientId]);
@@ -56,7 +57,8 @@ export function usePatientRecords(patientId: string | null) {
         `/patients/${patientId}/prescriptions`
       );
       setPrescriptions(data.data || []);
-    } catch {
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to load prescriptions");
       setPrescriptions([]);
     }
   }, [api, patientId]);
@@ -68,7 +70,8 @@ export function usePatientRecords(patientId: string | null) {
         `/patients/${patientId}/labs`
       );
       setLabs(data.data || []);
-    } catch {
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to load labs");
       setLabs([]);
     }
   }, [api, patientId]);
@@ -80,7 +83,8 @@ export function usePatientRecords(patientId: string | null) {
         `/patients/${patientId}/vitals`
       );
       setVitals(data.data || []);
-    } catch {
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to load vitals");
       setVitals([]);
     }
   }, [api, patientId]);

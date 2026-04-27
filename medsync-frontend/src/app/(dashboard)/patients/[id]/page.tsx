@@ -9,14 +9,16 @@ import { usePatientRecords } from "@/hooks/use-patient-records";
 import { useEncounters } from "@/hooks/use-encounters";
 import { useApi } from "@/hooks/use-api";
 import { useConsents, useBreakGlassList, useFacilities, useReferrals } from "@/hooks/use-interop";
-import { DischargeSummaryForm } from "@/components/features/DischargeSummaryForm";
-import { AllergyBanner } from "@/components/features/AllergyBanner";
+import dynamic from 'next/dynamic';
+const DischargeSummaryForm = dynamic(() => import("@/components/features/DischargeSummaryForm").then(mod => mod.DischargeSummaryForm), { ssr: false });
+const AllergyBanner = dynamic(() => import("@/components/features/AllergyBanner").then(mod => mod.AllergyBanner), { ssr: false });
 import { Button } from "@/components/ui/button";
 import { SlideOver } from "@/components/features/SlideOver";
-import { RecordTimelineCard } from "@/components/features/RecordTimelineCard";
-import { AddRecordForm } from "@/components/features/AddRecordForm";
-import { AmendmentForm } from "@/components/features/AmendmentForm";
+const RecordTimelineCard = dynamic(() => import("@/components/features/RecordTimelineCard").then(mod => mod.RecordTimelineCard), { ssr: false });
+const AddRecordForm = dynamic(() => import("@/components/features/AddRecordForm").then(mod => mod.AddRecordForm), { ssr: false });
+const AmendmentForm = dynamic(() => import("@/components/features/AmendmentForm").then(mod => mod.AmendmentForm), { ssr: false });
 import type { MedicalRecord } from "@/lib/types";
+import { ROLES, Role, RECORD_CREATE_ROLES, RECORD_AMEND_ROLES, ENCOUNTER_CREATE_ROLES, hasRole } from "@/lib/permissions";
 import {
   Dialog,
   DialogPortal,
@@ -32,13 +34,22 @@ import type { Patient, Consent } from "@/lib/types";
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
 import { Breadcrumbs } from "@/components/ui/breadcrumbs";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
+import { useAsyncAIAnalysis } from "@/hooks/use-async-ai-analysis";
+import { AIAnalysisProgress } from "@/components/features/ai/ai-analysis-progress";
 
 const PATIENT_LABS_POLL_MS = 45_000;
 
-type Tab = "overview" | "encounters" | "diagnoses" | "prescriptions" | "labs" | "vitals" | "amendments" | "ai_history";
+type Tab = "overview" | "encounters" | "diagnoses" | "prescriptions" | "labs" | "vitals" | "amendments" | "ai_history" | "ai_analysis";
 
 /** Roles that see only demographics + appointments (no clinical records). */
-const RESTRICTED_PATIENT_VIEW_ROLES = ["receptionist", "hospital_admin"];
+const RESTRICTED_PATIENT_VIEW_ROLES: Role[] = [
+  ROLES.RECEPTIONIST,
+  ROLES.RADIOLOGY_TECHNICIAN,
+  ROLES.BILLING_STAFF,
+  ROLES.WARD_CLERK,
+  ROLES.PHARMACY_TECHNICIAN,
+  ROLES.HOSPITAL_ADMIN,
+];
 
 function ReceptionistPatientView({ patient, patientId }: { patient: Patient; patientId: string }) {
   const { appointments, loading } = useAppointments(undefined, patientId);
@@ -144,7 +155,7 @@ function HospitalAdminPatientView({ patient, patientId }: { patient: Patient; pa
 export default function PatientPage() {
   const params = useParams();
   const id = params.id as string;
-  const { user, getAccessToken } = useAuth();
+  const { user } = useAuth();
   const router = useRouter();
   const { patient, loading, error, fetch } = usePatient(id);
   const {
@@ -161,6 +172,7 @@ export default function PatientPage() {
   const { list: consents, fetchList: fetchConsents, grant: grantConsent, revoke: revokeConsent } = useConsents();
   const { list: breakGlassList, fetchList: fetchBreakGlass } = useBreakGlassList();
   const { create: createReferral } = useReferrals();
+  const aiAnalysis = useAsyncAIAnalysis(id);
 
   const [tab, setTab] = useState<Tab>("overview");
   const [addOpen, setAddOpen] = useState(false);
@@ -184,24 +196,21 @@ export default function PatientPage() {
   const [closeEncounterLoading, setCloseEncounterLoading] = useState(false);
 
   const handleExportPdf = async () => {
-    const token = getAccessToken();
-    if (!token || !id) return;
+    if (!id) return;
     setExportPdfLoading(true);
     try {
-      const base = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000/api/v1";
-      const res = await window.fetch(`${base}/patients/${id}/export-pdf`, {
-        headers: { Authorization: `Bearer ${token}` },
-      });
-      if (!res.ok) throw new Error("Export failed");
-      const blob = await res.blob();
+      const blob = await api.getBlob(`/patients/${id}/export-pdf`);
       const url = URL.createObjectURL(blob);
       const a = document.createElement("a");
       a.href = url;
       a.download = `patient_${patient?.ghana_health_id ?? id}_record.pdf`;
       a.click();
       URL.revokeObjectURL(url);
-    } catch {
-      // silent fail or could toast
+    } catch (error) {
+      // Error is logged; could show toast
+      if (process.env.NODE_ENV === "development") {
+        console.error("PDF export failed:", error);
+      }
     } finally {
       setExportPdfLoading(false);
     }
@@ -298,18 +307,21 @@ export default function PatientPage() {
     { id: "labs", label: "Labs" },
     { id: "vitals", label: "Vitals" },
     { id: "amendments", label: "Amendments" },
+    { id: "ai_analysis", label: "AI Analysis" },
     { id: "ai_history", label: "AI History" },
   ];
   if (user?.role !== "nurse") {
     tabs.splice(2, 0, { id: "diagnoses", label: "Diagnoses" });
   }
 
-  const isDoctor = user?.role === "doctor";
-  const isNurse = user?.role === "nurse";
-  const canAddRecord = isDoctor || isNurse;
-  const showFullAddRecordFAB = isDoctor;
-  const canAddEncounter = user?.role === "doctor" || user?.role === "hospital_admin" || user?.role === "super_admin";
-  const canExportPdf = user?.role === "doctor" || user?.role === "super_admin";
+  const isDoctor = user?.role === ROLES.DOCTOR;
+  const isNurse = user?.role === ROLES.NURSE;
+  const canAddRecord = hasRole(user?.role, RECORD_CREATE_ROLES);
+  const showFullAddRecordFAB = isDoctor || (user?.role === ROLES.SUPER_ADMIN);
+  const canAddEncounter = hasRole(user?.role, ENCOUNTER_CREATE_ROLES);
+  const canExportPdf = user?.role === ROLES.DOCTOR || user?.role === ROLES.SUPER_ADMIN;
+  // RBAC-06: only doctors and super_admin can amend records
+  const canAmendRecords = hasRole(user?.role, RECORD_AMEND_ROLES);
 
   if (user?.role === "receptionist") {
     return <ReceptionistPatientView patient={patient} patientId={id} />;
@@ -462,7 +474,7 @@ export default function PatientPage() {
                   key={r.record_id}
                   record={r}
                   hospitalName={r.hospital_id ? undefined : undefined}
-                  canAmend={user?.role === "doctor"}
+                  canAmend={canAmendRecords}  // RBAC-06: server-aligned
                   onAmend={(rec) => setAmendRecord(rec)}
                 />
               ))
@@ -634,6 +646,32 @@ export default function PatientPage() {
             ) : (
               <p className="text-[#64748B]">No AI history.</p>
             )}
+          </div>
+        )}
+        {tab === "ai_analysis" && (
+          <div className="space-y-4">
+            <AIAnalysisProgress
+              jobId={aiAnalysis.jobId}
+              status={aiAnalysis.status}
+              progressPercent={aiAnalysis.progressPercent}
+              currentStep={aiAnalysis.currentStep}
+              analysis={aiAnalysis.analysis}
+              error={aiAnalysis.error}
+              onStart={async () => {
+                await aiAnalysis.startAnalysis();
+              }}
+              onCancel={aiAnalysis.cancelJob}
+              onRetry={async () => {
+                await aiAnalysis.startAnalysis();
+              }}
+              onClose={() => setTab("overview")}
+              onStartNew={() => {
+                aiAnalysis.cancelJob();
+                setTimeout(() => {
+                  aiAnalysis.startAnalysis();
+                }, 500);
+              }}
+            />
           </div>
         )}
         {tab === "ai_history" && canInterop && globalPatientId && false && (

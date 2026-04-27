@@ -98,3 +98,47 @@ export function useUpdateAppointment(id: string | null) {
 
   return { update, loading };
 }
+
+export interface BulkAppointmentItem {
+  patient_id: string;
+  scheduled_at: string;
+  department_id?: string;
+  doctor_id?: string;
+  appointment_type?: string;
+  notes?: string;
+}
+
+export interface BulkImportResponse {
+  created: number;
+  failed: number;
+  details: Array<{
+    row_num?: number;
+    status: string;
+    message: string;
+    appointment_id?: string;
+    patient_id?: string;
+  }>;
+}
+
+export function useBulkImportAppointments() {
+  const api = useApi();
+  const [loading, setLoading] = useState(false);
+
+  const submit = useCallback(
+    async (appointments: BulkAppointmentItem[]): Promise<BulkImportResponse> => {
+      setLoading(true);
+      try {
+        const response = await api.post<BulkImportResponse>(
+          "/appointments/bulk-import",
+          { appointments }
+        );
+        return response;
+      } finally {
+        setLoading(false);
+      }
+    },
+    [api]
+  );
+
+  return { submit, loading };
+}

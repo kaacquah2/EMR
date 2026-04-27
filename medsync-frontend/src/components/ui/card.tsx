@@ -1,10 +1,10 @@
 import * as React from "react";
 
 const accentClasses: Record<string, string> = {
-  teal: "border-l-4 border-l-[#0B8A96]",
-  navy: "border-l-4 border-l-[#0C1F3D]",
-  green: "border-l-4 border-l-[#059669]",
-  amber: "border-l-4 border-l-[#D97706]",
+  teal: "border-l-4 border-l-[var(--teal-500)]",
+  navy: "border-l-4 border-l-[var(--navy-900)]",
+  green: "border-l-4 border-l-[var(--green-600)]",
+  amber: "border-l-4 border-l-[var(--amber-600)]",
 };
 
 export interface CardProps extends React.HTMLAttributes<HTMLDivElement> {
@@ -16,7 +16,7 @@ const Card = React.forwardRef<HTMLDivElement, CardProps>(
   ({ className = "", accent, ...props }, ref) => (
     <div
       ref={ref}
-      className={`rounded-xl border border-[#E2E8F0]/80 bg-white p-6 shadow-[0_1px_3px_rgba(0,0,0,0.06),0_2px_8px_rgba(11,138,150,0.04)] ${accent ? accentClasses[accent] : ""} ${className}`}
+      className={`rounded-xl border border-[var(--gray-300)]/80 bg-white dark:bg-[#1E293B] dark:border-[#334155] p-6 shadow-[0_1px_3px_rgba(0,0,0,0.06),0_2px_8px_rgba(11,138,150,0.04)] ${accent ? accentClasses[accent] : ""} ${className}`}
       {...props}
     />
   )
@@ -37,7 +37,7 @@ const CardTitle = React.forwardRef<
 >(({ className = "", ...props }, ref) => (
   <h2
     ref={ref as React.Ref<HTMLParagraphElement>}
-    className={`font-sora text-xl font-bold text-[#0F172A] ${className}`}
+    className={`font-sora text-xl font-bold text-[var(--gray-900)] ${className}`}
     {...props}
   />
 ));

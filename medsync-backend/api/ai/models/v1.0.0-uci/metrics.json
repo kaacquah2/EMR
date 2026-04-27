@@ -1,0 +1,54 @@
+{
+  "overall_auc_roc": 0.4845,
+  "overall_sensitivity": 0.7649,
+  "overall_specificity": 0.2884,
+  "diseases": {
+    "readmission_risk": {
+      "auc_roc": 0.4845,
+      "sensitivity": 0.7649,
+      "specificity": 0.2884,
+      "samples": 5000,
+      "positive_rate": 0.3576,
+      "optimal_threshold": 0.4275,
+      "data_source": "uci"
+    }
+  },
+  "metadata": {
+    "test_data_size": 750,
+    "test_data_source": "UCI Dataset",
+    "training_date": "2026-04-20",
+    "cross_validation_folds": 5,
+    "model_names": [
+      "LogisticRegression",
+      "RandomForest",
+      "XGBoost"
+    ],
+    "ensemble_weights": [
+      0.2,
+      0.3,
+      0.5
+    ],
+    "data_size": 5000,
+    "readmission_rate": 0.3576
+  },
+  "individual_models": {
+    "logistic_regression": {
+      "auc_roc": 0.5229,
+      "sensitivity": 0.4478,
+      "specificity": 0.6328,
+      "optimal_threshold": 0.5077
+    },
+    "random_forest": {
+      "auc_roc": 0.5298,
+      "sensitivity": 0.7761,
+      "specificity": 0.2988,
+      "optimal_threshold": 0.442
+    },
+    "xgboost": {
+      "auc_roc": 0.4749,
+      "sensitivity": 0.806,
+      "specificity": 0.2075,
+      "optimal_threshold": 0.36
+    }
+  }
+}

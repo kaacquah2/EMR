@@ -24,7 +24,27 @@ import { isBenignApiNetworkFailure } from '@/lib/api-client';
 export function AIInsightsContent() {
   const params = useParams();
   const patientId = params.id as string;
-  useAuth();
+  const { user } = useAuth();
+
+  // Role guard: AI Insights only for doctors
+  if (user && user.role !== 'doctor') {
+    return (
+      <div className="space-y-6 p-6">
+        <div className="bg-red-50 border border-red-200 rounded-lg p-6">
+          <AlertCircle className="w-5 h-5 text-red-600 mb-2" />
+          <h3 className="font-semibold text-red-900">Access Denied</h3>
+          <p className="text-sm text-red-800 mt-1">
+            AI Clinical Insights are only available to doctors.
+          </p>
+        </div>
+      </div>
+    );
+  }
+
+  return <AIInsightsContentAuthorized patientId={patientId} />;
+}
+
+function AIInsightsContentAuthorized({ patientId }: { patientId: string }) {
   const { analyzePatient, getAnalysisHistory, error } = useAIAnalysis();
 
   const [analysis, setAnalysis] = useState<ComprehensiveAnalysis | null>(null);
@@ -58,12 +78,16 @@ export function AIInsightsContent() {
             offset: res.offset,
           });
         } catch (err) {
-          if (!isBenignApiNetworkFailure(err)) console.error('History load failed:', err);
+          if (!isBenignApiNetworkFailure(err) && process.env.NODE_ENV === 'development') {
+            console.error('History load failed:', err);
+          }
         } finally {
           setHistoryLoading(false);
         }
       } catch (err) {
-        if (!isBenignApiNetworkFailure(err)) console.error('Analysis failed:', err);
+        if (!isBenignApiNetworkFailure(err) && process.env.NODE_ENV === 'development') {
+          console.error('Analysis failed:', err);
+        }
       } finally {
         setIsAnalyzing(false);
       }
@@ -81,7 +105,7 @@ export function AIInsightsContent() {
       });
       setAnalysis(result);
     } catch (err) {
-      if (!isBenignApiNetworkFailure(err)) console.error('Analysis refresh failed:', err);
+      if (!isBenignApiNetworkFailure(err) && process.env.NODE_ENV === 'development') console.error('Analysis refresh failed:', err);
     } finally {
       setIsAnalyzing(false);
     }

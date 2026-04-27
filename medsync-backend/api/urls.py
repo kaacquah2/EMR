@@ -7,6 +7,7 @@ from api.views import (
     encounter_views,
     appointment_views,
     admin_views,
+    admin_ai_views,
     alert_views,
     lab_views,
     admission_views,
@@ -23,7 +24,16 @@ from api.views import (
     nurse_views,
     password_recovery_views,
     ai_views,
+    ai_admin_views,
     task_views,
+    shift_views,
+    batch_operations_views,
+    push_views,
+    emergency_views,
+    pharmacy_views,
+    billing_views,
+    mar_views,
+    vitals_monitoring_views,
 )
 
 urlpatterns = [
@@ -39,6 +49,18 @@ urlpatterns = [
     path("auth/refresh", auth_views.refresh),
     path("auth/logout", auth_views.logout),
     path("auth/me", auth_views.me),
+    # WebAuthn/Passkey endpoints
+    path("auth/passkey/check", auth_views.passkey_check),
+    path("auth/passkey/register/begin", auth_views.passkey_register_begin),
+    path("auth/passkey/register/complete", auth_views.passkey_register_complete),
+    path("auth/passkey/auth/begin", auth_views.passkey_auth_begin),
+    path("auth/passkey/auth/complete", auth_views.passkey_auth_complete),
+    path("auth/passkeys", auth_views.list_passkeys),
+    path("auth/passkeys/<uuid:pk>", auth_views.delete_passkey),
+    path("auth/passkeys/<uuid:pk>/rename", auth_views.rename_passkey),
+    # Admin passkey management
+    path("admin/users/<uuid:user_id>/passkeys", auth_views.admin_list_user_passkeys),
+    path("admin/users/<uuid:user_id>/passkeys/reset", auth_views.admin_reset_user_passkeys),
     path("patients/search", patient_views.patient_search),
     path("patients/duplicate-check", patient_views.patient_duplicate_check),
     path("patients", patient_views.patient_create),
@@ -46,11 +68,22 @@ urlpatterns = [
     path("patients/<uuid:pk>/encounters", encounter_views.encounter_list),
     path("patients/<uuid:pk>/encounters/<uuid:encounter_id>", encounter_views.encounter_detail),
     path("patients/<uuid:pk>/encounters/<uuid:encounter_id>/close", encounter_views.close_encounter),
+    path("patients/<uuid:pk>/encounters/<uuid:encounter_id>/draft", encounter_views.encounter_draft_handler),
+    path(
+        "patients/<uuid:pk>/draft",
+        encounter_views.encounter_draft_handler
+    ),  # Patient-scoped draft (no encounter yet)
+    # PHASE 7.1: Encounter Templates
+    path("encounter-templates", encounter_views.encounter_template_list),
+    path("encounter-templates/<uuid:template_id>", encounter_views.encounter_template_detail),
+    path("patients/<uuid:patient_pk>/encounters/<uuid:encounter_id>/apply-template/<uuid:template_id>", 
+         encounter_views.apply_encounter_template),
     path("patients/<uuid:pk>/records", patient_views.patient_records),
     path("patients/<uuid:pk>/diagnoses", patient_views.patient_diagnoses),
     path("patients/<uuid:pk>/prescriptions", patient_views.patient_prescriptions),
     path("patients/<uuid:pk>/labs", patient_views.patient_labs),
     path("patients/<uuid:pk>/vitals", patient_views.patient_vitals),
+    path("patients/<uuid:pk>/obs-chart", record_views.patient_observation_chart),
     path("patients/<uuid:pk>/allergies", patient_views.patient_allergies),
     path("patients/<uuid:pk>/export-pdf", patient_views.patient_export_pdf),
     path("records/diagnosis", record_views.create_diagnosis),
@@ -60,6 +93,7 @@ urlpatterns = [
     path("records/drug-autocomplete", record_views.drug_autocomplete),
     path("records/prescription/<uuid:record_id>/dispense", record_views.prescription_dispense),
     path("records/prescription/<uuid:record_id>/dispense-by-nurse", record_views.prescription_dispense_by_nurse),
+    path("records/prescriptions/pending-by-ward", record_views.prescriptions_pending_by_ward),
     path("records/lab-order", record_views.create_lab_order),
     path("records/vitals", record_views.create_vitals),
     path("records/vitals/batch", record_views.create_vitals_batch),
@@ -69,6 +103,10 @@ urlpatterns = [
     path("records/radiology-order/<uuid:order_id>/attachment", record_views.radiology_order_attachment),
     path("records/<uuid:record_id>/amend", record_views.amend_record),
     
+    # PHASE 7.2: Incident Reporting
+    path("incidents", record_views.create_incident),
+    path("incidents/list", record_views.list_incidents),
+
     # PHASE 6: Doctor Clinical Features
     path("doctor/favorites/prescriptions", record_views.doctor_favorite_prescriptions),
     path("doctor/prescriptions/<uuid:record_id>/refill", record_views.doctor_prescription_refill),
@@ -84,7 +122,14 @@ urlpatterns = [
     path("admin/rbac-review", admin_views.rbac_review_list),
     path("admin/audit-logs", admin_views.audit_logs),
     path("admin/staff-onboarding", admin_views.staff_onboarding_dashboard),
+    path("admin/analytics/staff-performance", admin_views.staff_performance_analytics),
+    # PHASE 7.6: Super Admin Analytics
+    path("superadmin/analytics/network-overview", admin_views.network_overview),
+    path("superadmin/analytics/disease-burden", admin_views.disease_burden),
+    path("superadmin/analytics/referral-network", admin_views.referral_network),
+    path("superadmin/gpid-registry/duplicates", admin_views.gpid_duplicates),
     path("alerts", alert_views.alert_list),
+    path("alerts/active-by-ward", alert_views.alerts_active_by_ward),
     path("alerts/<uuid:pk>/resolve", alert_views.alert_resolve),
     path("admin/wards/occupancy", admin_views.ward_occupancy),
     path("admin/wards/create", admin_views.ward_create),
@@ -99,7 +144,7 @@ urlpatterns = [
     path("admin/lab-test-types/create", admin_views.lab_test_type_create),
     path("admin/doctors", admin_views.doctor_list),
     path("admin/duplicates", admin_views.duplicate_list),
-    path("admin/duplicates/create", admin_views.duplicate_create),
+    path("admin/duplicates/create", admin_views.duplicate_submit),
     path("admin/duplicates/<uuid:duplicate_id>", admin_views.duplicate_detail),
     path("worklist/encounters", encounter_views.worklist_encounters),
     path("worklist", encounter_views.worklist_encounters),
@@ -110,6 +155,7 @@ urlpatterns = [
     path("admissions", admission_views.admissions_list),
     path("admissions/create", admission_views.admission_create),
     path("admissions/ward/<uuid:ward_id>", admission_views.admissions_by_ward),
+    path("admissions/ward/<uuid:ward_id>/dashboard", admission_views.admissions_by_ward_dashboard),
     path("admissions/<uuid:admission_id>/discharge", admission_views.admission_discharge),
     path("admin/wards/<uuid:ward_id>/beds", bed_views.bed_list_by_ward),
     path("admin/beds", bed_views.bed_create),
@@ -120,7 +166,12 @@ urlpatterns = [
     path("appointments", appointment_views.appointment_list),
     path("appointments/check-availability", appointment_views.appointment_check_availability),
     path("appointments/create", appointment_views.appointment_create),
+    path("appointments/bulk-import", appointment_views.appointment_bulk_import),
     path("appointments/no-show-statistics", appointment_views.appointment_no_show_statistics),
+    path("appointments/walk-in", appointment_views.create_walk_in),
+    path("appointments/walk-in-queue", appointment_views.walk_in_queue),
+    path("doctors/<uuid:doctor_id>/availability", appointment_views.doctor_availability),
+    path("departments/<uuid:department_id>/doctors", appointment_views.department_doctors),
     path("appointments/<uuid:pk>/delete", appointment_views.appointment_delete),
     path("appointments/<uuid:pk>/check-in", appointment_views.appointment_check_in),
     path("appointments/<uuid:pk>/reschedule", appointment_views.appointment_reschedule),
@@ -162,6 +213,7 @@ urlpatterns = [
     path("superadmin/audit-chain-integrity/validate", superadmin_views.audit_chain_integrity_validate),
     path("superadmin/hospital-onboarding", superadmin_views.hospital_onboarding_status),
     path("superadmin/compliance-alerts", superadmin_views.compliance_alerts),
+    path("superadmin/security/alerts", admin_views.security_alerts),
     path("superadmin/pending-hospital-admin-assignments", superadmin_views.pending_hospital_admin_assignments),
     path("superadmin/pending-admin-grants", superadmin_views.pending_admin_grants),
     # Interop: global patient registry, referrals, consent, break-glass
@@ -178,17 +230,18 @@ urlpatterns = [
     path("consents/<uuid:pk>", consent_views.consent_revoke),
     path("break-glass", break_glass_views.break_glass_create),
     path("break-glass/list", break_glass_views.break_glass_list),
-    
+
     # PHASE 6: Hospital Onboarding & Interop
     path("superadmin/onboarding-dashboard", superadmin_views.hospital_onboarding_dashboard),
     path("superadmin/hospitals/<uuid:hospital_id>/bulk-import-staff", superadmin_views.bulk_import_staff),
     path("superadmin/hospitals/<uuid:hospital_id>/connectivity", superadmin_views.hospital_interop_connectivity),
     path("superadmin/cross-facility-activity", superadmin_views.cross_facility_activity_log),
-    
+
     # PHASE 6: Lab Technician Advanced Features
     path("lab/results/bulk-submit", lab_views.lab_results_bulk_submit),
+    path("lab/results", lab_views.lab_results_list),
     path("lab/analytics/trends", lab_views.lab_analytics_trends),
-    
+
     # PHASE 6: Nurse Advanced Features
     path("nurse/dashboard", nurse_views.nurse_dashboard),
     path("nurse/worklist", nurse_views.nurse_worklist),
@@ -196,20 +249,54 @@ urlpatterns = [
     path("nurse/shift/break-toggle", nurse_views.nurse_shift_break_toggle),
     path("nurse/shift/end", nurse_views.nurse_shift_end),
     path("nurse/shift/<uuid:shift_id>/handover", nurse_views.nurse_shift_handover),
+    path("nurse/shift-handover/<uuid:handover_id>/acknowledge", nurse_views.nurse_shift_handover_acknowledge),
     path("nurse/handover/<uuid:note_id>/acknowledge", nurse_views.nurse_handover_acknowledge),
     path("nurse/overdue-vitals", nurse_views.nurse_overdue_vitals),
     
+    # PHASE 7.2: Nurse Medication Schedule
+    path("ward/medication-schedule", record_views.medication_schedule),
+    path("prescriptions/<uuid:prescription_id>/administer", record_views.record_medication_administration),
+
+    # PHASE 3: Shift Management (generic for all clinical roles)
+    path("shifts/start", shift_views.shift_start),
+    path("shifts/<uuid:shift_id>/end", shift_views.shift_end),
+    path("shifts/current", shift_views.shift_current),
+    path("shifts/<uuid:shift_id>/break/start", shift_views.shift_break_start),
+    path("shifts/<uuid:shift_id>/break/end", shift_views.shift_break_end),
+    path("shifts/<uuid:shift_id>/handover", shift_views.shift_handover_submit),
+    path("shifts/handover-history", shift_views.shift_handover_history),
+    path("shifts/<uuid:shift_id>/statistics", shift_views.shift_statistics),
+    path("shifts/roster", shift_views.shift_roster_list),
+    path("shifts/roster/create", shift_views.shift_schedule_create),
+    path("shifts/schedule/<uuid:schedule_id>", shift_views.shift_schedule_update),
+    path("shifts/schedule/<uuid:schedule_id>/delete", shift_views.shift_schedule_delete),
+    path("shifts/check-conflict", shift_views.shift_check_conflict),
+    path("shifts/overtime-report", shift_views.shift_overtime_report),
+
+    # PHASE 4: Batch Operations
+    path("batch-import", batch_operations_views.batch_import_create),
+    path("batch-operations/summary", batch_operations_views.batch_operations_summary),
+    path("batch-import/<uuid:job_id>", batch_operations_views.batch_import_detail),
+    path("batch-import/<uuid:job_id>/items", batch_operations_views.batch_import_items_list),
+    path("batch-import/<uuid:job_id>/export", batch_operations_views.batch_import_export),
+    path("bulk-invitations", batch_operations_views.bulk_invitation_create),
+    path("bulk-invitations/<uuid:campaign_id>", batch_operations_views.bulk_invitation_detail),
+    path("bulk-invitations/expiration-check", batch_operations_views.bulk_invitation_expiration_check),
+    path("bulk-invitations/send-reminders", batch_operations_views.bulk_invitation_send_reminders),
+    path("bulk-invitations/reminder-schedule", batch_operations_views.bulk_invitation_reminder_schedule),
+
     # PHASE 7: 3-Tier Password Recovery
     # Tier 2: Hospital Admin password reset
     path("admin/users/<uuid:user_id>/generate-reset-link", password_recovery_views.generate_reset_link),
     path("admin/users/<uuid:user_id>/generate-temp-password", password_recovery_views.generate_temp_password),
     path("admin/password-resets", password_recovery_views.get_password_reset_history),
-    
+
     # Tier 3: Super Admin password reset
     path("superadmin/users/<uuid:user_id>/force-password-reset", password_recovery_views.force_password_reset),
-    path("superadmin/users/<uuid:user_id>/force-password-reset-initiate", password_recovery_views.force_password_reset_initiate),
+    path("superadmin/users/<uuid:user_id>/force-password-reset-initiate",
+         password_recovery_views.force_password_reset_initiate),
     path("superadmin/password-resets/suspicious", password_recovery_views.get_suspicious_resets),
-    
+
     # PHASE 8: AI Intelligence Module
     path("ai/status", ai_views.ai_status),
     path("ai/analyze-patient/<uuid:patient_id>", ai_views.analyze_patient_comprehensive),
@@ -219,9 +306,47 @@ urlpatterns = [
     path("ai/find-similar-patients/<uuid:patient_id>", ai_views.find_similar_patients),
     path("ai/referral-recommendation/<uuid:patient_id>", ai_views.recommend_referral_hospital),
     path("ai/analysis-history/<uuid:patient_id>", ai_views.get_analysis_history),
+    # Async AI analysis endpoints
+    path("ai/async-analysis/<uuid:patient_id>", ai_views.start_async_analysis),
+    path("ai/async-analysis/status/<uuid:job_id>", ai_views.get_async_analysis_status),
+    # PHASE 8.2: New synchronous AI endpoints
+    path("ai/antibiotic-guidance", ai_views.antibiotic_guidance),
+    path("ai/no-show-risk", ai_views.no_show_risk),
     
+    # PHASE 8.3: AI Clinical Deployment Management
+    path("admin/ai/enable", admin_ai_views.enable_clinical_ai),
+    path("admin/ai/status", admin_ai_views.get_ai_deployment_status),
+    path("admin/ai/history", admin_ai_views.get_ai_deployment_history),
+    path("admin/ai/disable", admin_ai_views.disable_clinical_ai),
+    # WEEK 1: New AI Admin Management Endpoints
+    path("admin/ai/deployment/status", ai_admin_views.ai_deployment_status),
+    path("admin/ai/deployment/approve", ai_admin_views.approve_ai_deployment),
+    path("admin/ai/deployment/<uuid:approval_id>/revoke", ai_admin_views.revoke_ai_deployment),
+    path("admin/ai/recommendations/<uuid:patient_id>/audit-trail", ai_admin_views.ai_recommendation_audit_trail),
+    path("admin/ai/performance-metrics", ai_admin_views.ai_performance_metrics),
+
     # PHASE 9: Celery Task Status Endpoints
     path("tasks", task_views.task_list),
     path("tasks/<str:task_id>", task_views.task_status),
     path("tasks/<str:task_id>/result", task_views.task_result),
+    
+    # PHASE 5.1: Push Notifications Backend
+    path("admin/bed-management", admin_views.bed_management_dashboard),
+    path("admissions/<uuid:admission_id>/transfer", admin_views.patient_transfer),
+    
+    # EMERGENCY DEPARTMENT: Triage & Queue Management
+    path("emergency/triage/<uuid:appointment_id>", emergency_views.assign_triage_color),
+    path("emergency/queue", emergency_views.ed_queue_realtime),
+    path("emergency/room/<uuid:appointment_id>", emergency_views.assign_ed_room),
+    
+    # PHARMACY: Dispensing & Drug Interactions
+    path("pharmacy/worklist", pharmacy_views.pharmacy_worklist),
+    path("pharmacy/dispense/<uuid:prescription_id>", pharmacy_views.dispense_medication),
+    path("pharmacy/statistics", pharmacy_views.pharmacy_statistics),
+    
+    # MAR: Medication Administration Record
+    path("mar/ward/<uuid:ward_id>/due", mar_views.ward_medications_due),
+    path("mar/administer/<uuid:schedule_id>", mar_views.administer_medication),
+    path("mar/hold/<uuid:schedule_id>", mar_views.hold_medication),
+    path("mar/patient/<uuid:patient_id>/schedule", mar_views.patient_medication_schedule),
 ]

@@ -7,7 +7,7 @@ Uses k-NN with cosine similarity for finding comparable cases.
 """
 
 import logging
-from typing import Dict, List, Tuple, Any, Optional
+from typing import Dict, List, Any, Optional
 from datetime import datetime
 import numpy as np
 from sklearn.preprocessing import StandardScaler
@@ -58,21 +58,21 @@ class SimilarityMatcher:
     def index_patients(self, all_patient_features: List[Dict[str, Any]]):
         """
         Index all patients for similarity searches.
-        
+
         Should be called once with all training data or periodically to update.
-        
+
         Args:
             all_patient_features: List of feature vectors from FeatureEngineer
         """
         try:
             self.patient_data_cache = all_patient_features
-            
+
             # Extract feature matrix
             feature_matrix = []
             for patient_data in all_patient_features:
                 vector = self._extract_feature_vector(patient_data)
                 feature_matrix.append(vector)
-            
+
             if feature_matrix:
                 # Scale features
                 feature_matrix = np.array(feature_matrix)
@@ -80,7 +80,7 @@ class SimilarityMatcher:
                 logger.info(f"Indexed {len(self.patient_data_cache)} patients for similarity search")
             else:
                 logger.warning("No patient data to index")
-        
+
         except Exception as e:
             logger.error(f"Error indexing patients: {e}")
             raise
@@ -93,12 +93,12 @@ class SimilarityMatcher:
     ) -> Dict[str, Any]:
         """
         Find similar patients for a given patient.
-        
+
         Args:
             patient_features: Feature vector for query patient
             k: Number of similar patients to return
             include_outcomes: Include treatment outcomes if available
-        
+
         Returns:
             {
                 'patient_id': str,
@@ -129,27 +129,27 @@ class SimilarityMatcher:
                     'similar_patients': [],
                     'message': 'No patient data indexed yet',
                 }
-            
+
             # Extract and scale query patient features
             query_vector = self._extract_feature_vector(patient_features)
             query_vector_scaled = self.scaler.transform([query_vector])[0:1]
-            
+
             # Calculate similarity with all patients
             similarities = cosine_similarity(query_vector_scaled, self.patient_features_scaled)[0]
-            
+
             # Get top-k most similar (excluding self)
             patient_id = patient_features.get('patient_id')
             similar_indices = np.argsort(-similarities)  # Descending order
-            
+
             similar_patients = []
             for rank, idx in enumerate(similar_indices[:k], 1):
                 similar_patient_data = self.patient_data_cache[idx]
                 similarity_score = float(similarities[idx])
-                
+
                 # Only include if not the same patient and similarity > 0.5
-                if (similar_patient_data.get('patient_id') != patient_id and 
-                    similarity_score > 0.5):
-                    
+                if (similar_patient_data.get('patient_id') != patient_id and
+                        similarity_score > 0.5):
+
                     similar_patients.append({
                         'rank': len(similar_patients) + 1,
                         'patient_id': similar_patient_data.get('patient_id'),
@@ -160,7 +160,7 @@ class SimilarityMatcher:
                         'treatment_outcome': self._get_treatment_outcome(similar_patient_data),
                         'outcome_success_rate': self._estimate_success_rate(similar_patient_data),
                     })
-            
+
             return {
                 'patient_id': patient_id,
                 'query_patient_age': patient_features.get('age'),
@@ -169,7 +169,7 @@ class SimilarityMatcher:
                 'model_version': self.model_metadata['version'],
                 'timestamp': datetime.now().isoformat(),
             }
-        
+
         except Exception as e:
             logger.error(f"Error finding similar patients: {e}")
             raise
@@ -215,11 +215,11 @@ class SimilarityMatcher:
     ) -> Dict[str, Any]:
         """
         Compare two patients and show differences.
-        
+
         Args:
             patient1_features: Feature vector for patient 1
             patient2_features: Feature vector for patient 2
-        
+
         Returns:
             {
                 'patient1_id': str,
@@ -238,18 +238,18 @@ class SimilarityMatcher:
         try:
             vector1 = self._extract_feature_vector(patient1_features)
             vector2 = self._extract_feature_vector(patient2_features)
-            
+
             # Calculate similarity
             similarity = cosine_similarity([vector1], [vector2])[0][0]
-            
+
             # Find differences
             differences = []
             similarities = []
-            
+
             for i, feature_name in enumerate(self.SIMILARITY_FEATURES):
                 val1 = vector1[i]
                 val2 = vector2[i]
-                
+
                 if abs(val1 - val2) > 0.1:  # Threshold for significance
                     differences.append({
                         'feature': feature_name,
@@ -257,12 +257,12 @@ class SimilarityMatcher:
                         'patient2_value': float(val2),
                         'difference': float(abs(val1 - val2)),
                     })
-            
+
             # Check for same conditions
             for condition in ['diabetes', 'hypertension', 'heart_disease', 'kidney_disease']:
                 p1_has = patient1_features.get(f'has_{condition}', False)
                 p2_has = patient2_features.get(f'has_{condition}', False)
-                
+
                 if p1_has and p2_has:
                     similarities.append({
                         'feature': condition.replace('_', ' ').title(),
@@ -273,7 +273,7 @@ class SimilarityMatcher:
                         'feature': condition.replace('_', ' ').title(),
                         'status': 'one_has' if p1_has else 'neither_has',
                     })
-            
+
             return {
                 'patient1_id': patient1_features.get('patient_id'),
                 'patient2_id': patient2_features.get('patient_id'),
@@ -281,7 +281,7 @@ class SimilarityMatcher:
                 'differences': sorted(differences, key=lambda x: x['difference'], reverse=True),
                 'similarities': similarities,
             }
-        
+
         except Exception as e:
             logger.error(f"Error comparing patients: {e}")
             raise
@@ -293,11 +293,11 @@ class SimilarityMatcher:
     ) -> List[Dict[str, Any]]:
         """
         Find similar patients for multiple query patients.
-        
+
         Args:
             query_patients: List of feature vectors
             k: Number of similar to find for each
-        
+
         Returns:
             List of similarity results
         """
@@ -309,7 +309,7 @@ class SimilarityMatcher:
             except Exception as e:
                 logger.error(f"Failed to find similar patients: {e}")
                 continue
-        
+
         return results
 
 

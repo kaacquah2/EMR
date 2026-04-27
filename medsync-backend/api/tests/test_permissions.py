@@ -11,14 +11,12 @@ Tests cover:
 Test cases: 300+ scenarios covering all endpoints
 """
 
-import pytest
 from django.contrib.auth import get_user_model
-from django.test import TestCase, Client
+from django.test import TestCase
 from django.test.utils import override_settings
 from rest_framework.test import APITestCase, APIClient
-from rest_framework import status
-from core.models import Hospital, Ward, Department
-from api.permissions import PermissionValidator
+from core.models import Hospital
+from shared.permissions import PermissionValidator
 from uuid import uuid4
 
 User = get_user_model()
@@ -221,7 +219,7 @@ class APIPermissionTests(APITestCase):
     def test_super_admin_can_access_all_endpoints(self):
         """Test super admin can access all endpoints"""
         self.client.force_authenticate(user=self.users["super_admin"])
-        
+
         # Test various endpoints
         endpoints = [
             ("/api/v1/patients/search", "GET"),
@@ -367,7 +365,7 @@ class PermissionDenialLoggingTests(TestCase):
     def test_permission_denial_logged(self):
         """Test that permission denials are logged to audit trail"""
         from django.test import RequestFactory
-        from api.permissions import PermissionValidator
+        from shared.permissions import PermissionValidator
 
         factory = RequestFactory()
         request = factory.post("/api/v1/admin/users")
@@ -437,7 +435,8 @@ class PermissionMatrixRouteCoverageTests(TestCase):
 
         root = pathlib.Path(__file__).resolve().parents[1]
         urls_text = (root / "urls.py").read_text(encoding="utf-8")
-        permissions_text = (root / "permissions.py").read_text(encoding="utf-8")
+        permissions_path = root.parent / "shared" / "permissions.py"
+        permissions_text = permissions_path.read_text(encoding="utf-8")
 
         url_routes = re.findall(r'path\("([^"]+)"', urls_text)
         matrix_keys = re.findall(r'^\s*"([^"]+)":\s*\{', permissions_text, flags=re.MULTILINE)
@@ -533,3 +532,5 @@ PERMISSION_TEST_MATRIX = {
         ],
     },
 }
+
+

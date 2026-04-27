@@ -5,12 +5,9 @@ from django.test import TestCase
 from django.utils import timezone
 from datetime import timedelta
 from rest_framework.test import APIClient
-from rest_framework import status
-import json
 
-from core.models import User, Hospital, AuditLog
+from core.models import User, Hospital
 from interop.models import GlobalPatient, BreakGlassLog
-from patients.models import Patient
 
 
 class BreakGlassTimeWindowTestCase(TestCase):
@@ -24,14 +21,12 @@ class BreakGlassTimeWindowTestCase(TestCase):
         self.hospital1 = Hospital.objects.create(
             name="Test Hospital 1",
             region="Region A",
-            nhis_code="H001",
-            is_active=True,
+            nhis_code="H001",is_active=True,
         )
         self.hospital2 = Hospital.objects.create(
             name="Test Hospital 2",
             region="Region B",
-            nhis_code="H002",
-            is_active=True,
+            nhis_code="H002",is_active=True,
         )
 
         # Create users
@@ -162,7 +157,7 @@ class BreakGlassTimeWindowTestCase(TestCase):
 
     def test_break_glass_multiple_hospitals_scoped(self):
         """Test break-glass logs are scoped correctly by hospital."""
-        log_h1 = BreakGlassLog.objects.create(
+        BreakGlassLog.objects.create(
             global_patient=self.global_patient,
             facility=self.hospital1,
             accessed_by=self.doctor1,
@@ -171,7 +166,7 @@ class BreakGlassTimeWindowTestCase(TestCase):
         )
 
         # Create doctor in hospital2
-        doctor2 = User.objects.create_user(
+        User.objects.create_user(
             email="doctor2@medsync.gh",
             password="SecurePass123!@#",
             role="doctor",
@@ -182,7 +177,7 @@ class BreakGlassTimeWindowTestCase(TestCase):
         # Verify logs are per-hospital
         h1_logs = BreakGlassLog.objects.filter(facility=self.hospital1)
         h2_logs = BreakGlassLog.objects.filter(facility=self.hospital2)
-        
+
         self.assertEqual(h1_logs.count(), 1)
         self.assertEqual(h2_logs.count(), 0)
 
@@ -200,3 +195,5 @@ class BreakGlassTimeWindowTestCase(TestCase):
         self.assertIsNotNone(log.expires_at)
         # Verify it's in the future
         self.assertFalse(log.is_expired())
+
+

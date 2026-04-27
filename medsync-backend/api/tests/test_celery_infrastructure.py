@@ -3,10 +3,8 @@ Tests for Celery task queue infrastructure.
 """
 from django.test import TestCase, override_settings
 from celery import current_app
-from celery.result import EagerResult
 from api.tasks import (
     export_patient_pdf_task,
-    export_encounter_pdf_task,
     comprehensive_analysis_task,
     risk_prediction_task,
     mark_no_shows_task,
@@ -27,7 +25,7 @@ class CeleryTaskTestCase(TestCase):
         result = export_patient_pdf_task.apply_async(
             args=["invalid-uuid"], kwargs={"format_type": "summary"}
         ).get()
-        
+
         self.assertEqual(result["status"], "error")
         self.assertIn("not found", result["message"].lower())
 
@@ -36,7 +34,7 @@ class CeleryTaskTestCase(TestCase):
         result = comprehensive_analysis_task.apply_async(
             args=["invalid-uuid"], kwargs={"analysis_type": "full"}
         ).get()
-        
+
         self.assertEqual(result["status"], "error")
 
     def test_risk_prediction_task_success(self):
@@ -44,7 +42,7 @@ class CeleryTaskTestCase(TestCase):
         result = risk_prediction_task.apply_async(
             args=["test-patient-uuid"]
         ).get()
-        
+
         self.assertEqual(result["status"], "success")
         self.assertIn("patient_id", result)
         self.assertIn("predictions", result)
@@ -52,7 +50,7 @@ class CeleryTaskTestCase(TestCase):
     def test_mark_no_shows_task_success(self):
         """Test no-show marking task executes (may be skipped if model not ready)."""
         result = mark_no_shows_task.apply_async().get()
-        
+
         self.assertIn(result["status"], ["success", "skipped"])
 
     def test_celery_task_retry_on_failure(self):
@@ -66,7 +64,7 @@ class CeleryTaskTestCase(TestCase):
         from api.tasks.export_tasks import logger as export_logger
         from api.tasks.ai_tasks import logger as ai_logger
         from api.tasks.appointment_tasks import logger as appointment_logger
-        
+
         self.assertIsNotNone(export_logger)
         self.assertIsNotNone(ai_logger)
         self.assertIsNotNone(appointment_logger)
@@ -74,10 +72,10 @@ class CeleryTaskTestCase(TestCase):
     def test_task_discovery(self):
         """Test that Celery can discover all tasks."""
         tasks = current_app.tasks
-        
+
         # Check for expected task names
         task_names = list(tasks.keys())
-        
+
         # Should have at least the debug task
         self.assertGreater(len(task_names), 0)
 
@@ -129,3 +127,5 @@ class CeleryTaskIntegrationTestCase(TestCase):
             "CELERY_BROKER_CONNECTION_RETRY_ON_STARTUP"
         )
         self.assertTrue(retry_on_startup)
+
+

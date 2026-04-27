@@ -18,7 +18,6 @@ from rest_framework.test import APIClient
 from rest_framework import status
 from core.models import Hospital, User, AuditLog
 from patients.models import Patient, Appointment
-import json
 
 
 class NoShowOverrideTestCase(TestCase):
@@ -27,22 +26,20 @@ class NoShowOverrideTestCase(TestCase):
     def setUp(self):
         """Create test fixtures."""
         self.client = APIClient()
-        
+
         # Create two hospitals
         self.hospital1 = Hospital.objects.create(
             name="Hospital A",
             region="Region 1",
-            nhis_code="H001",
-            is_active=True,
+            nhis_code="H001",is_active=True,
         )
-        
+
         self.hospital2 = Hospital.objects.create(
             name="Hospital B",
             region="Region 2",
-            nhis_code="H002",
-            is_active=True,
+            nhis_code="H002",is_active=True,
         )
-        
+
         # Create users from hospital1
         self.doctor1 = User.objects.create_user(
             email="doctor1@medsync.gh",
@@ -51,7 +48,7 @@ class NoShowOverrideTestCase(TestCase):
             hospital=self.hospital1,
             account_status="active",
         )
-        
+
         self.hospital_admin1 = User.objects.create_user(
             email="admin1@medsync.gh",
             password="SecurePass123!@#",
@@ -59,7 +56,7 @@ class NoShowOverrideTestCase(TestCase):
             hospital=self.hospital1,
             account_status="active",
         )
-        
+
         # Create nurse (should NOT have access)
         self.nurse1 = User.objects.create_user(
             email="nurse1@medsync.gh",
@@ -68,7 +65,7 @@ class NoShowOverrideTestCase(TestCase):
             hospital=self.hospital1,
             account_status="active",
         )
-        
+
         # Create doctor from hospital2 (for scoping test)
         self.doctor2 = User.objects.create_user(
             email="doctor2@medsync.gh",
@@ -77,7 +74,7 @@ class NoShowOverrideTestCase(TestCase):
             hospital=self.hospital2,
             account_status="active",
         )
-        
+
         # Create super admin (should have access)
         self.super_admin = User.objects.create_user(
             email="admin@medsync.gh",
@@ -85,7 +82,7 @@ class NoShowOverrideTestCase(TestCase):
             role="super_admin",
             account_status="active",
         )
-        
+
         # Create patient in hospital1
         self.patient1 = Patient.objects.create(
             ghana_health_id="GHE001",
@@ -95,7 +92,7 @@ class NoShowOverrideTestCase(TestCase):
             registered_at=self.hospital1,
             created_by=self.doctor1,
         )
-        
+
         # Create patient in hospital2
         self.patient2 = Patient.objects.create(
             ghana_health_id="GHE002",
@@ -118,7 +115,7 @@ class NoShowOverrideTestCase(TestCase):
             no_show_marked_at=marked_at,
             created_by=self.doctor1,
         )
-        
+
         # Doctor overrides
         self.client.force_authenticate(user=self.doctor1)
         response = self.client.post(
@@ -126,12 +123,12 @@ class NoShowOverrideTestCase(TestCase):
             {"reason": "Doctor approved absence - patient had emergency"},
             format="json"
         )
-        
+
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         data = response.json()
         self.assertEqual(data["status"], "scheduled")
         self.assertEqual(data["no_show_override_reason"], "Doctor approved absence - patient had emergency")
-        
+
         # Verify database
         apt.refresh_from_db()
         self.assertEqual(apt.status, "scheduled")
@@ -149,14 +146,14 @@ class NoShowOverrideTestCase(TestCase):
             no_show_marked_at=marked_at,
             created_by=self.doctor1,
         )
-        
+
         self.client.force_authenticate(user=self.doctor1)
         response = self.client.post(
             f"/api/v1/appointments/{apt.id}/unmark-no-show",
             {"reason": "Boundary test"},
             format="json"
         )
-        
+
         self.assertEqual(response.status_code, status.HTTP_200_OK)
 
     def test_override_window_expired(self):
@@ -171,14 +168,14 @@ class NoShowOverrideTestCase(TestCase):
             no_show_marked_at=marked_at,
             created_by=self.doctor1,
         )
-        
+
         self.client.force_authenticate(user=self.doctor1)
         response = self.client.post(
             f"/api/v1/appointments/{apt.id}/unmark-no-show",
             {"reason": "Too late"},
             format="json"
         )
-        
+
         self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
         data = response.json()
         self.assertIn("override window", data["message"].lower())
@@ -192,14 +189,14 @@ class NoShowOverrideTestCase(TestCase):
             status="scheduled",  # Still scheduled
             created_by=self.doctor1,
         )
-        
+
         self.client.force_authenticate(user=self.doctor1)
         response = self.client.post(
             f"/api/v1/appointments/{apt.id}/unmark-no-show",
             {"reason": "Not applicable"},
             format="json"
         )
-        
+
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
         data = response.json()
         self.assertIn("not marked as no-show", data["message"].lower())
@@ -215,14 +212,14 @@ class NoShowOverrideTestCase(TestCase):
             no_show_marked_at=None,  # Manual, not auto-marked
             created_by=self.doctor1,
         )
-        
+
         self.client.force_authenticate(user=self.doctor1)
         response = self.client.post(
             f"/api/v1/appointments/{apt.id}/unmark-no-show",
             {"reason": "Cannot override manual"},
             format="json"
         )
-        
+
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
         data = response.json()
         self.assertIn("auto-marked", data["message"].lower())
@@ -238,14 +235,14 @@ class NoShowOverrideTestCase(TestCase):
             no_show_marked_at=marked_at,
             created_by=self.doctor1,
         )
-        
+
         self.client.force_authenticate(user=self.nurse1)
         response = self.client.post(
             f"/api/v1/appointments/{apt.id}/unmark-no-show",
             {"reason": "Nurse attempt"},
             format="json"
         )
-        
+
         self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
 
     def test_hospital_admin_can_override(self):
@@ -259,14 +256,14 @@ class NoShowOverrideTestCase(TestCase):
             no_show_marked_at=marked_at,
             created_by=self.doctor1,
         )
-        
+
         self.client.force_authenticate(user=self.hospital_admin1)
         response = self.client.post(
             f"/api/v1/appointments/{apt.id}/unmark-no-show",
             {"reason": "Admin override"},
             format="json"
         )
-        
+
         self.assertEqual(response.status_code, status.HTTP_200_OK)
 
     def test_super_admin_can_override(self):
@@ -280,14 +277,14 @@ class NoShowOverrideTestCase(TestCase):
             no_show_marked_at=marked_at,
             created_by=self.doctor1,
         )
-        
+
         self.client.force_authenticate(user=self.super_admin)
         response = self.client.post(
             f"/api/v1/appointments/{apt.id}/unmark-no-show",
             {"reason": "Super admin override"},
             format="json"
         )
-        
+
         self.assertEqual(response.status_code, status.HTTP_200_OK)
 
     def test_multi_hospital_scoping(self):
@@ -302,7 +299,7 @@ class NoShowOverrideTestCase(TestCase):
             no_show_marked_at=marked_at,
             created_by=self.doctor2,
         )
-        
+
         # Doctor1 tries to override (wrong hospital)
         self.client.force_authenticate(user=self.doctor1)
         response = self.client.post(
@@ -310,7 +307,7 @@ class NoShowOverrideTestCase(TestCase):
             {"reason": "Wrong hospital"},
             format="json"
         )
-        
+
         self.assertEqual(response.status_code, status.HTTP_404_NOT_FOUND)
 
     def test_reason_field_required(self):
@@ -324,14 +321,14 @@ class NoShowOverrideTestCase(TestCase):
             no_show_marked_at=marked_at,
             created_by=self.doctor1,
         )
-        
+
         self.client.force_authenticate(user=self.doctor1)
         response = self.client.post(
             f"/api/v1/appointments/{apt.id}/unmark-no-show",
             {"reason": ""},  # Empty reason
             format="json"
         )
-        
+
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
         data = response.json()
         self.assertIn("reason", data["message"].lower())
@@ -347,16 +344,16 @@ class NoShowOverrideTestCase(TestCase):
             no_show_marked_at=marked_at,
             created_by=self.doctor1,
         )
-        
+
         self.client.force_authenticate(user=self.doctor1)
         response = self.client.post(
             f"/api/v1/appointments/{apt.id}/unmark-no-show",
             {"reason": "Emergency situation"},
             format="json"
         )
-        
+
         self.assertEqual(response.status_code, status.HTTP_200_OK)
-        
+
         # Check audit log
         audit_logs = AuditLog.objects.filter(
             action="NO_SHOW_OVERRIDE",
@@ -364,7 +361,7 @@ class NoShowOverrideTestCase(TestCase):
             resource_id=str(apt.id)
         )
         self.assertEqual(audit_logs.count(), 1)
-        
+
         audit = audit_logs.first()
         self.assertEqual(audit.user, self.doctor1)
         self.assertEqual(audit.hospital, self.hospital1)
@@ -372,12 +369,14 @@ class NoShowOverrideTestCase(TestCase):
     def test_appointment_not_found(self):
         """Test 404 if appointment doesn't exist."""
         fake_id = "00000000-0000-0000-0000-000000000000"
-        
+
         self.client.force_authenticate(user=self.doctor1)
         response = self.client.post(
             f"/api/v1/appointments/{fake_id}/unmark-no-show",
             {"reason": "Non-existent"},
             format="json"
         )
-        
+
         self.assertEqual(response.status_code, status.HTTP_404_NOT_FOUND)
+
+

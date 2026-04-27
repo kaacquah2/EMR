@@ -44,6 +44,15 @@ class Command(BaseCommand):
             "[WARNING] This command should only run in LOCAL DEVELOPMENT.\n"
             "          Do not run in production or staging environments."
         ))
+        
+        # Ensure MFA cache table exists (required for login flow)
+        from django.core.management import call_command
+        try:
+            call_command("createcachetable", verbosity=0)
+        except Exception as e:
+            self.stdout.write(self.style.WARNING(
+                f"[WARNING] Could not create cache table (may already exist): {e}"
+            ))
 
         # Create hospitals and wards
         for ref in GHANA_HOSPITALS:
@@ -65,7 +74,7 @@ class Command(BaseCommand):
             ))
             return
 
-        # Deterministic local dev credentials (11 accounts)
+        # Deterministic local dev credentials (6 accounts per spec)
         # NOTE: MFA TOTP secrets remain random per database; re-run prints current secrets.
         DEV_ACCOUNTS = [
             ("admin@medsync.gh", "super_admin", "Super Admin", "Admin123!@#", None, None, None),
@@ -75,10 +84,6 @@ class Command(BaseCommand):
             ("nurse@medsync.gh", "nurse", "Nurse Test", "Nurse123!@#", None, None, None),
             ("receptionist@medsync.gh", "receptionist", "Receptionist Test", "Receptionist123!@#", None, None, None),
             ("lab_technician@medsync.gh", "lab_technician", "Lab Tech Test", "LabTech123!@#", None, None, None),
-            ("pharmacist@medsync.gh", "pharmacist", "Pharmacist Test", "Pharmacist123!@#", None, None, None),
-            ("radiology_technician@medsync.gh", "radiology_technician", "Radiology Tech Test", "Radiology123!@#", None, None, None),
-            ("billing_staff@medsync.gh", "billing_staff", "Billing Staff Test", "Billing123!@#", None, None, None),
-            ("ward_clerk@medsync.gh", "ward_clerk", "Ward Clerk Test", "WardClerk123!@#", None, None, None),
         ]
 
         ward = Ward.objects.filter(hospital=hospital).first()
@@ -96,7 +101,7 @@ class Command(BaseCommand):
             lu = lab_unit if role == "lab_technician" else None
             enriched.append((email, role, full_name, password, w, d, lu))
 
-        self.stdout.write(self.style.SUCCESS("[OK] Dev Users (11)"))
+        self.stdout.write(self.style.SUCCESS("[OK] Dev Users (6)"))
         for email, role, full_name, password, w, d, lu in enriched:
             if role == "super_admin":
                 u, created = User.objects.get_or_create(

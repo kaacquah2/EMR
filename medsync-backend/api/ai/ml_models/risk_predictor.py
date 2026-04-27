@@ -12,7 +12,7 @@ Uses XGBoost for high accuracy and interpretability.
 """
 
 import logging
-from typing import Dict, List, Tuple, Optional, Any
+from typing import Dict, List, Tuple, Any
 from datetime import datetime
 
 logger = logging.getLogger(__name__)
@@ -76,7 +76,7 @@ class RiskPredictorModel:
             self._create_placeholder_models()
 
     def _load_models_from_disk(self) -> bool:
-        """Load trained models from api/ai/models/risk_predictor.joblib. Returns True if loaded."""
+        """Load trained models from versioned directory or fallback to single files. Returns True if loaded."""
         try:
             import joblib
         except ImportError:
@@ -84,17 +84,43 @@ class RiskPredictorModel:
             return False
         try:
             from api.ai.model_config import get_models_dir
-            path = get_models_dir() / 'risk_predictor.joblib'
-            if not path.exists():
-                return False
-            payload = joblib.load(path)
-            self.models = payload.get('models', {})
-            if payload.get('feature_order'):
-                self._feature_order = list(payload['feature_order'])
-            if payload.get('version'):
-                self.model_metadata['version'] = payload['version']
-            logger.info("Loaded risk predictor from %s", path)
-            return bool(self.models)
+            from django.conf import settings
+            
+            models_dir = get_models_dir()
+            
+            # Phase 3: Try to load from versioned model directory first
+            # Version comes from settings.AI_MODEL_VERSION (e.g., "1.0.0-hybrid")
+            model_version = getattr(settings, 'AI_MODEL_VERSION', '1.0.0-hybrid')
+            versioned_dir = models_dir / f"v{model_version}"
+            
+            # Check versioned directory first (Phase 3 trained models)
+            if versioned_dir.exists():
+                risk_predictor_file = versioned_dir / 'risk_predictor.joblib'
+                if risk_predictor_file.exists():
+                    payload = joblib.load(risk_predictor_file)
+                    self.models = payload.get('models', {})
+                    if payload.get('feature_order'):
+                        self._feature_order = list(payload['feature_order'])
+                    if payload.get('version'):
+                        self.model_metadata['version'] = payload['version']
+                    logger.info("Loaded risk predictor from versioned models (v%s)", model_version)
+                    return bool(self.models)
+            
+            # Fallback: Try single file (legacy format)
+            legacy_path = models_dir / 'risk_predictor.joblib'
+            if legacy_path.exists():
+                payload = joblib.load(legacy_path)
+                self.models = payload.get('models', {})
+                if payload.get('feature_order'):
+                    self._feature_order = list(payload['feature_order'])
+                if payload.get('version'):
+                    self.model_metadata['version'] = payload['version']
+                logger.info("Loaded risk predictor from legacy single file")
+                return bool(self.models)
+            
+            # No models found
+            logger.warning("No risk predictor models found in %s or v%s/", models_dir, model_version)
+            return False
         except Exception as e:
             logger.warning("Could not load risk predictor from disk: %s", e)
             return False
@@ -102,7 +128,7 @@ class RiskPredictorModel:
     def _create_placeholder_models(self):
         """
         Create placeholder models for demo/testing.
-        
+
         In production, these will be loaded from trained .joblib files.
         """
         for disease in self.DISEASES:
@@ -121,11 +147,11 @@ class RiskPredictorModel:
     ) -> Dict[str, Any]:
         """
         Predict disease risk for a patient.
-        
+
         Args:
             features: Feature vector from FeatureEngineer (patient profile)
             return_confidence: Include confidence intervals
-        
+
         Returns:
             {
                 'patient_id': str,
@@ -147,10 +173,10 @@ class RiskPredictorModel:
         try:
             patient_id = features.get('patient_id', 'unknown')
             predictions = {}
-            
+
             # Extract feature vector in model's expected order
             feature_vector = self._prepare_feature_vector(features)
-            
+
             # Get predictions for each disease
             for disease in self.DISEASES:
                 risk_score, confidence = self._predict_disease_risk(
@@ -158,18 +184,18 @@ class RiskPredictorModel:
                     feature_vector,
                     features
                 )
-                
+
                 risk_category = self._categorize_risk(risk_score)
-                
+
                 predictions[disease] = {
                     'risk_score': float(risk_score),
                     'confidence': float(confidence),
                     'risk_category': risk_category,
                 }
-            
+
             # Find highest risk
             top_disease = max(predictions.items(), key=lambda x: x[1]['risk_score'])
-            
+
             return {
                 'patient_id': patient_id,
                 'predictions': predictions,
@@ -178,7 +204,7 @@ class RiskPredictorModel:
                 'model_version': self.model_metadata['version'],
                 'timestamp': datetime.now().isoformat(),
             }
-        
+
         except Exception as e:
             logger.error(f"Error predicting risk for patient {features.get('patient_id')}: {e}")
             raise
@@ -186,14 +212,14 @@ class RiskPredictorModel:
     def _prepare_feature_vector(self, features: Dict[str, Any]) -> List[List[float]]:
         """
         Extract and order features for the model.
-        
+
         Returns: 2D row vector (sklearn/xgboost accept nested lists; avoids numpy import at module load).
         """
         feature_vector: List[float] = []
-        
+
         for feature_name in self._feature_order:
             value = features.get(feature_name)
-            
+
             # Handle missing values
             if value is None:
                 value = 0.0
@@ -201,9 +227,9 @@ class RiskPredictorModel:
                 value = float(value)
             else:
                 value = 0.0
-            
+
             feature_vector.append(value)
-        
+
         return [feature_vector]
 
     def _predict_disease_risk(
@@ -214,16 +240,16 @@ class RiskPredictorModel:
     ) -> Tuple[float, float]:
         """
         Predict risk score and confidence for a disease.
-        
+
         Args:
             disease: Disease name
             feature_vector: Prepared 2D feature row (one sample)
             features: Raw features (for rule-based fallback)
-        
+
         Returns:
             (risk_score: 0-100, confidence: 0-1)
         """
-        
+
         # If model is placeholder, use rule-based scoring
         if isinstance(self.models.get(disease), dict) and self.models[disease].get('type') == 'placeholder':
             return self._rule_based_risk_score(disease, features)
@@ -247,24 +273,24 @@ class RiskPredictorModel:
     ) -> Tuple[float, float]:
         """
         Fallback rule-based risk scoring (until ML models trained).
-        
+
         This provides sensible default predictions based on known risk factors.
         """
-        
+
         score = 0.0
-        
+
         if disease == 'heart_disease':
             # Age factor
             age = features.get('age', 50)
             score += (age - 30) / 2  # +1% per year over 30
-            
+
             # BP factor
             bp_sys = features.get('bp_systolic_mean', 120)
             if bp_sys > 140:
                 score += 20
             elif bp_sys > 130:
                 score += 10
-            
+
             # Existing condition
             if features.get('has_heart_disease'):
                 score += 50
@@ -272,113 +298,113 @@ class RiskPredictorModel:
                 score += 15
             if features.get('has_diabetes'):
                 score += 15
-            
+
             # Weight/BMI
             bmi = features.get('bmi_mean')
             if bmi and bmi > 30:
                 score += 10
-            
+
             score = min(95, score)  # Cap at 95%
-        
+
         elif disease == 'diabetes':
             age = features.get('age', 50)
             score += (age - 25) / 3
-            
+
             # Existing diabetes
             if features.get('has_diabetes'):
                 score += 70
-            
+
             # BMI
             bmi = features.get('bmi_mean')
             if bmi and bmi > 35:
                 score += 25
             elif bmi and bmi > 30:
                 score += 15
-            
+
             # Hypertension
             if features.get('has_hypertension'):
                 score += 10
-            
+
             score = min(95, score)
-        
+
         elif disease == 'stroke':
             age = features.get('age', 50)
             score += (age - 30) / 1.5
-            
+
             # High BP
             bp_sys = features.get('bp_systolic_mean', 120)
             if bp_sys > 160:
                 score += 40
             elif bp_sys > 140:
                 score += 25
-            
+
             if features.get('has_heart_disease'):
                 score += 20
             if features.get('has_diabetes'):
                 score += 15
-            
+
             score = min(95, score)
-        
+
         elif disease == 'pneumonia':
             # Recent admission increases risk
             recent_admission = features.get('recent_admission_count', 0)
             score += recent_admission * 20
-            
+
             # Age extremes
             age = features.get('age', 50)
             if age < 5 or age > 65:
                 score += 15
-            
+
             # Low oxygen
             spo2 = features.get('spo2_mean', 98)
             if spo2 < 92:
                 score += 25
-            
+
             # Chronic conditions increase risk
             chronic_count = features.get('chronic_condition_count', 0)
             score += chronic_count * 10
-            
+
             score = min(85, score)  # Lower baseline for pneumonia
-        
+
         elif disease == 'hypertension':
             # Age factor
             age = features.get('age', 50)
             score += (age - 30) / 2
-            
+
             # Current BP
             bp_sys = features.get('bp_systolic_mean', 120)
             if bp_sys > 140:
                 score += 50
             elif bp_sys > 130:
                 score += 30
-            
+
             # Family history proxy (existing HTN meds)
             if features.get('has_hypertension'):
                 score += 60
-            
+
             # BMI
             bmi = features.get('bmi_mean')
             if bmi and bmi > 30:
                 score += 15
-            
+
             score = min(95, score)
-        
+
         else:
             score = 25.0  # Default baseline
-        
+
         # Confidence depends on feature completeness
         feature_completeness = self._calculate_feature_completeness(features)
         confidence = 0.65 + (feature_completeness * 0.25)  # 0.65-0.90
-        
+
         return max(0.0, min(100.0, score)), confidence
 
     def _categorize_risk(self, risk_score: float) -> str:
         """
         Categorize risk score into levels.
-        
+
         Args:
             risk_score: 0-100
-        
+
         Returns: 'low', 'medium', 'high', or 'critical'
         """
         if risk_score < 20:
@@ -393,7 +419,7 @@ class RiskPredictorModel:
     def _calculate_feature_completeness(self, features: Dict[str, Any]) -> float:
         """
         Calculate feature completeness (0-1).
-        
+
         How many of the required features are provided (not None/0)?
         """
         provided_count = sum(
@@ -409,7 +435,7 @@ class RiskPredictorModel:
     ) -> List[Dict[str, Any]]:
         """
         Explain which factors contributed to the risk score.
-        
+
         Returns:
             [
                 {'factor': 'High Blood Pressure', 'weight': 'high', 'value': '145 mmHg'},
@@ -417,9 +443,9 @@ class RiskPredictorModel:
                 ...
             ]
         """
-        
+
         factors = []
-        
+
         if disease == 'heart_disease':
             bp_sys = features.get('bp_systolic_mean')
             if bp_sys and bp_sys > 140:
@@ -428,14 +454,14 @@ class RiskPredictorModel:
                     'weight': 'high',
                     'value': f'{bp_sys:.0f} mmHg',
                 })
-            
+
             if features.get('has_hypertension'):
                 factors.append({
                     'factor': 'Existing Hypertension Diagnosis',
                     'weight': 'high',
                     'value': 'Diagnosed',
                 })
-            
+
             age = features.get('age', 0)
             if age > 55:
                 factors.append({
@@ -443,7 +469,7 @@ class RiskPredictorModel:
                     'weight': 'medium',
                     'value': f'{age} years',
                 })
-        
+
         elif disease == 'diabetes':
             bmi = features.get('bmi_mean')
             if bmi and bmi > 30:
@@ -452,14 +478,14 @@ class RiskPredictorModel:
                     'weight': 'high',
                     'value': f'BMI {bmi:.1f}',
                 })
-            
+
             if features.get('has_hypertension'):
                 factors.append({
                     'factor': 'Hypertension',
                     'weight': 'medium',
                     'value': 'Diagnosed',
                 })
-        
+
         elif disease == 'stroke':
             bp_sys = features.get('bp_systolic_mean')
             if bp_sys and bp_sys > 160:
@@ -468,7 +494,7 @@ class RiskPredictorModel:
                     'weight': 'critical',
                     'value': f'{bp_sys:.0f} mmHg',
                 })
-            
+
             age = features.get('age', 0)
             if age > 65:
                 factors.append({
@@ -476,7 +502,7 @@ class RiskPredictorModel:
                     'weight': 'medium',
                     'value': f'{age} years',
                 })
-        
+
         return factors
 
     def batch_predict(
@@ -485,10 +511,10 @@ class RiskPredictorModel:
     ) -> List[Dict[str, Any]]:
         """
         Run predictions for multiple patients.
-        
+
         Args:
             feature_list: List of feature vectors from FeatureEngineer
-        
+
         Returns:
             List of prediction results
         """
@@ -500,7 +526,7 @@ class RiskPredictorModel:
             except Exception as e:
                 logger.error(f"Failed to predict for patient: {e}")
                 continue
-        
+
         return results
 
 

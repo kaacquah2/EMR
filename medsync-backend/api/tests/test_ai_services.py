@@ -2,7 +2,6 @@
 
 import pytest
 from datetime import date
-from django.contrib.auth.hashers import make_password
 from core.models import User, Hospital
 from patients.models import Patient
 from api.ai.services import (
@@ -132,3 +131,5 @@ class TestReferralRecommendationService:
         service = ReferralRecommendationService(doctor_user)
         with pytest.raises(AIServiceException):
             service.recommend_referral_hospital("00000000-0000-0000-0000-000000000000")
+
+

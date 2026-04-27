@@ -13,7 +13,6 @@ Features engineered:
 """
 
 from typing import Dict, List, Tuple, Any, Optional
-from datetime import datetime, timedelta
 import logging
 import math
 import statistics
@@ -57,7 +56,7 @@ class FeatureEngineer:
     def extract_age_group(self, age: int) -> Dict[str, int]:
         """
         Convert age to group encoding.
-        
+
         Returns: one-hot encoded age groups
             {
                 'age_group_0_17': 0 or 1,
@@ -79,7 +78,7 @@ class FeatureEngineer:
     def encode_gender(self, gender: str) -> Dict[str, int]:
         """
         Encode gender as one-hot.
-        
+
         Returns:
             {'gender_male': 0|1, 'gender_female': 0|1, 'gender_other': 0|1}
         """
@@ -92,13 +91,13 @@ class FeatureEngineer:
     def encode_blood_group(self, blood_group: str) -> Dict[str, int]:
         """
         Encode blood group as one-hot.
-        
+
         Returns:
             {'blood_group_o': 0|1, 'blood_group_a': 0|1, ...}
         """
         base_type = blood_group[0].lower() if blood_group else 'unknown'
         is_positive = '+' in blood_group if blood_group else False
-        
+
         return {
             'blood_group_o': 1 if base_type == 'o' else 0,
             'blood_group_a': 1 if base_type == 'a' else 0,
@@ -110,7 +109,7 @@ class FeatureEngineer:
     def detect_diagnoses(self, diagnoses: List[Dict[str, Any]]) -> Dict[str, int]:
         """
         Detect presence of major conditions from ICD-10 codes.
-        
+
         Returns:
             {
                 'has_heart_disease': 0|1,
@@ -120,7 +119,7 @@ class FeatureEngineer:
             }
         """
         detected = {}
-        
+
         for condition, icd_codes in self.CONDITIONS.items():
             found = False
             for diagnosis in diagnoses:
@@ -132,15 +131,15 @@ class FeatureEngineer:
                 if found:
                     break
             detected[f'has_{condition}'] = 1 if found else 0
-        
+
         return detected
 
     def calculate_comorbidity_index(self, diagnoses: List[Dict[str, Any]]) -> int:
         """
         Calculate Charlson Comorbidity Index (simplified).
-        
+
         Weights conditions by severity and counts them.
-        
+
         Returns: integer comorbidity score (0+)
         """
         weights = {
@@ -152,20 +151,20 @@ class FeatureEngineer:
             'cancer': 2,
             'stroke': 2,
         }
-        
+
         score = 0
         detected_conditions = self.detect_diagnoses(diagnoses)
-        
+
         for condition, weight in weights.items():
             if detected_conditions.get(f'has_{condition}', 0):
                 score += weight
-        
+
         return score
 
     def count_chronic_conditions(self, diagnoses: List[Dict[str, Any]]) -> int:
         """
         Count number of chronic diagnoses.
-        
+
         Returns: integer count of chronic conditions
         """
         return sum(1 for d in diagnoses if d.get('is_chronic', False))
@@ -173,7 +172,7 @@ class FeatureEngineer:
     def count_active_medications(self, medications: List[Dict[str, Any]]) -> int:
         """
         Count number of active medications.
-        
+
         Returns: count of dispensed/active prescriptions
         """
         return sum(
@@ -184,19 +183,19 @@ class FeatureEngineer:
     def calculate_medication_complexity(self, medications: List[Dict[str, Any]]) -> float:
         """
         Calculate medication complexity score (polypharmacy indicator).
-        
+
         Score based on:
         - Number of medications
         - Frequency complexity
         - Route diversity
-        
+
         Returns: complexity score 0-100
         """
         if not medications:
             return 0.0
-        
+
         num_meds = self.count_active_medications(medications)
-        
+
         # Frequency weights
         freq_weights = {
             'once daily': 1,
@@ -207,49 +206,49 @@ class FeatureEngineer:
             'weekly': 1,
             'monthly': 0.5,
         }
-        
+
         freq_score = sum(
             freq_weights.get(m.get('frequency', '').lower(), 2)
             for m in medications
             if m.get('dispense_status') != 'cancelled'
         )
-        
+
         # Route diversity
         unique_routes = len(set(m['route'] for m in medications if m.get('dispense_status') != 'cancelled'))
-        
+
         # Combined score: (meds count * 5) + (frequency score * 2) + (route diversity * 5)
         complexity = min(100, (num_meds * 5) + (freq_score * 2) + (unique_routes * 5))
-        
+
         return complexity
 
     def calculate_allergy_severity_index(self, allergies: List[Dict[str, Any]]) -> float:
         """
         Calculate overall allergy severity index.
-        
+
         Returns: weighted severity score 0-100
         """
         if not allergies:
             return 0.0
-        
+
         severity_weights = {
             'critical': 100,
             'severe': 50,
             'moderate': 25,
             'mild': 10,
         }
-        
+
         total_severity = 0
         for allergy in allergies:
             severity = allergy.get('severity', 'mild').lower()
             total_severity += severity_weights.get(severity, 10)
-        
+
         # Average severity across allergies
         return min(100, (total_severity / len(allergies)) if allergies else 0)
 
     def calculate_vital_statistics(self, vitals: List[Dict[str, Any]]) -> Dict[str, Optional[float]]:
         """
         Calculate aggregate vital sign statistics (mean, trend, abnormality).
-        
+
         Returns:
             {
                 'bp_systolic_mean': float,
@@ -273,7 +272,7 @@ class FeatureEngineer:
                 'bmi_mean': None,
                 'bp_trend': 0,
             }
-        
+
         # Extract numeric values
         systolic = [v['bp_systolic'] for v in vitals if v.get('bp_systolic')]
         diastolic = [v['bp_diastolic'] for v in vitals if v.get('bp_diastolic')]
@@ -282,7 +281,7 @@ class FeatureEngineer:
         temp = [v['temperature_c'] for v in vitals if v.get('temperature_c')]
         weight = [v['weight_kg'] for v in vitals if v.get('weight_kg')]
         bmi = [v['bmi'] for v in vitals if v.get('bmi')]
-        
+
         # Calculate trend (first vs last for systolic BP)
         bp_trend = 0
         if len(systolic) >= 2:
@@ -290,7 +289,7 @@ class FeatureEngineer:
                 bp_trend = -1  # Declining
             elif systolic[-1] > systolic[0] + 5:
                 bp_trend = 1   # Increasing
-        
+
         return {
             'bp_systolic_mean': statistics.mean(systolic) if systolic else None,
             'bp_diastolic_mean': statistics.mean(diastolic) if diastolic else None,
@@ -305,7 +304,7 @@ class FeatureEngineer:
     def classify_lab_values(self, labs: List[Dict[str, Any]]) -> Dict[str, str]:
         """
         Classify lab values as normal/abnormal based on reference ranges.
-        
+
         Returns:
             {
                 'hba1c_status': 'normal'|'prediabetic'|'diabetic'|'unknown',
@@ -315,20 +314,20 @@ class FeatureEngineer:
             }
         """
         classifications = {}
-        
+
         for lab in labs:
             test_name = lab.get('test_name', '').lower()
             result_value_str = lab.get('result_value', '')
-            
+
             # Try to parse result value
             try:
                 result_value = float(result_value_str.split()[0]) if result_value_str else None
             except (ValueError, IndexError):
                 result_value = None
-            
+
             if not result_value:
                 continue
-            
+
             # Match lab test to ranges
             for range_test, ranges in self.LAB_RANGES.items():
                 if range_test.lower() in test_name:
@@ -337,21 +336,21 @@ class FeatureEngineer:
                             key = f'{range_test.lower().replace(" ", "_")}_status'
                             classifications[key] = status
                             break
-        
+
         return classifications
 
     def create_feature_vector(self, patient_data: Dict[str, Any]) -> Dict[str, Any]:
         """
         Create complete feature vector from raw patient data.
-        
+
         Args:
             patient_data: Output from DataProcessor.extract_complete_patient_data()
-        
+
         Returns:
             Flattened feature dictionary ready for ML models:
             {
                 'patient_id': str,
-                
+
                 # Demographics
                 'age': int,
                 'age_group_0_17': int,
@@ -361,36 +360,36 @@ class FeatureEngineer:
                 'gender_female': int,
                 'blood_group_o': int,
                 ...
-                
+
                 # Diagnosis-based features
                 'has_heart_disease': int,
                 'has_diabetes': int,
                 ...
                 'comorbidity_index': int,
                 'chronic_condition_count': int,
-                
+
                 # Medication features
                 'active_medication_count': int,
                 'medication_complexity_score': float,
-                
+
                 # Allergy features
                 'allergy_count': int,
                 'allergy_severity_index': float,
-                
+
                 # Vital statistics
                 'bp_systolic_mean': float,
                 'pulse_mean': float,
                 ...
-                
+
                 # Lab classifications
                 'hba1c_status': str,
                 'glucose_status': str,
                 ...
-                
+
                 # Admission history
                 'recent_admission_count': int,
                 'avg_los_days': float,
-                
+
                 # Encounter history
                 'recent_encounter_count': int,
             }
@@ -404,36 +403,36 @@ class FeatureEngineer:
             labs = patient_data['labs']
             admissions = patient_data['admissions']
             encounters = patient_data['encounters']
-            
+
             features = {
                 'patient_id': demographics['patient_id'],
                 'age': demographics['age'],
             }
-            
+
             # Age and gender
             features.update(self.extract_age_group(demographics['age']))
             features.update(self.encode_gender(demographics['gender']))
             features.update(self.encode_blood_group(demographics['blood_group']))
-            
+
             # Diagnoses
             features.update(self.detect_diagnoses(diagnoses))
             features['comorbidity_index'] = self.calculate_comorbidity_index(diagnoses)
             features['chronic_condition_count'] = self.count_chronic_conditions(diagnoses)
-            
+
             # Medications
             features['active_medication_count'] = self.count_active_medications(medications)
             features['medication_complexity_score'] = self.calculate_medication_complexity(medications)
-            
+
             # Allergies
             features['allergy_count'] = len(allergies)
             features['allergy_severity_index'] = self.calculate_allergy_severity_index(allergies)
-            
+
             # Vitals
             features.update(self.calculate_vital_statistics(vitals))
-            
+
             # Labs
             features.update(self.classify_lab_values(labs))
-            
+
             # Admission history
             features['recent_admission_count'] = len([a for a in admissions if a['discharged_at'] is None])
             los_vals = [a['length_of_stay_days'] for a in admissions if a.get('length_of_stay_days')]
@@ -442,12 +441,12 @@ class FeatureEngineer:
                 features['avg_los_days'] = avg_los if not math.isnan(avg_los) else None
             else:
                 features['avg_los_days'] = None
-            
+
             # Encounter history
             features['recent_encounter_count'] = len(encounters)
-            
+
             return features
-        
+
         except Exception as e:
             logger.error(f"Error creating feature vector: {e}")
             raise
@@ -458,16 +457,16 @@ class FeatureEngineer:
     ) -> Tuple[List[Dict[str, Any]], List[str]]:
         """
         Create feature vectors for multiple patients.
-        
+
         Args:
             patient_data_list: List of patient data from DataProcessor
-        
+
         Returns:
             (feature_dicts, patient_ids)
         """
         features = []
         patient_ids = []
-        
+
         for patient_data in patient_data_list:
             try:
                 feature_vector = self.create_feature_vector(patient_data)
@@ -476,6 +475,6 @@ class FeatureEngineer:
             except Exception as e:
                 logger.error(f"Failed to create features for patient: {e}")
                 continue
-        
+
         logger.info(f"Created feature vectors for {len(features)} patients")
         return features, patient_ids

@@ -1,0 +1,1571 @@
+{
+  "metadata": {
+    "generated_at": "2026-04-20T10:28:24.801996",
+    "count": 10,
+    "hospital_id": "demo-gh-001",
+    "hospital_name": "Demo Hospital Ghana"
+  },
+  "patients": [
+    {
+      "patient_id": "PAT-00001",
+      "ghana_health_id": "GH-2021-733658",
+      "full_name": "Nii Addo",
+      "date_of_birth": "1998-11-30",
+      "age_years": 27,
+      "gender": "male",
+      "blood_group": "A-",
+      "phone": "0550929228",
+      "registered_at": "demo-gh-001",
+      "hospital_name": "Demo Hospital Ghana",
+      "allergies": [
+        "Peanuts"
+      ],
+      "encounters": [
+        {
+          "encounter_id": "ENC-001",
+          "encounter_type": "clinic",
+          "date": "2026-02-15",
+          "time": "09:48",
+          "chief_complaint": "Nausea and vomiting",
+          "vitals": {
+            "temperature_celsius": 36.9,
+            "systolic_bp": 155,
+            "diastolic_bp": 87,
+            "heart_rate": 77,
+            "respiratory_rate": 22,
+            "spo2_percent": 99
+          },
+          "diagnoses": [
+            {
+              "icd10_code": "I10",
+              "description": "Essential hypertension",
+              "severity": "moderate",
+              "is_chronic": false
+            }
+          ],
+          "prescriptions": [
+            {
+              "drug_name": "Metformin",
+              "dosage": "500mg",
+              "frequency": "Twice daily",
+              "route": "oral",
+              "duration_days": 3
+            },
+            {
+              "drug_name": "Paracetamol",
+              "dosage": "500mg",
+              "frequency": "Thrice daily",
+              "route": "iv",
+              "duration_days": 14
+            },
+            {
+              "drug_name": "Salbutamol",
+              "dosage": "100mcg",
+              "frequency": "2 puffs as needed",
+              "route": "iv",
+              "duration_days": 30
+            },
+            {
+              "drug_name": "Omeprazole",
+              "dosage": "20mg",
+              "frequency": "Once daily",
+              "route": "oral",
+              "duration_days": 7
+            }
+          ]
+        },
+        {
+          "encounter_id": "ENC-002",
+          "encounter_type": "emergency",
+          "date": "2026-02-25",
+          "time": "10:16",
+          "chief_complaint": "Cough and sore throat",
+          "vitals": {
+            "temperature_celsius": 38.0,
+            "systolic_bp": 118,
+            "diastolic_bp": 80,
+            "heart_rate": 94,
+            "respiratory_rate": 20,
+            "spo2_percent": 99
+          },
+          "diagnoses": [
+            {
+              "icd10_code": "I10",
+              "description": "Essential hypertension",
+              "severity": "mild",
+              "is_chronic": true
+            },
+            {
+              "icd10_code": "B54",
+              "description": "Malaria",
+              "severity": "moderate",
+              "is_chronic": true
+            },
+            {
+              "icd10_code": "J00",
+              "description": "Acute nasopharyngitis (common cold)",
+              "severity": "moderate",
+              "is_chronic": true
+            }
+          ],
+          "prescriptions": [
+            {
+              "drug_name": "Artemether/Lumefantrine",
+              "dosage": "80/480mg",
+              "frequency": "Twice daily x3 days",
+              "route": "topical",
+              "duration_days": 5
+            }
+          ]
+        },
+        {
+          "encounter_id": "ENC-003",
+          "encounter_type": "clinic",
+          "date": "2026-01-23",
+          "time": "08:31",
+          "chief_complaint": "Diarrhea",
+          "vitals": {
+            "temperature_celsius": 36.7,
+            "systolic_bp": 127,
+            "diastolic_bp": 87,
+            "heart_rate": 87,
+            "respiratory_rate": 17,
+            "spo2_percent": 92
+          },
+          "diagnoses": [
+            {
+              "icd10_code": "B20",
+              "description": "HIV/AIDS",
+              "severity": "moderate",
+              "is_chronic": true
+            },
+            {
+              "icd10_code": "A09",
+              "description": "Diarrhea and gastroenteritis",
+              "severity": "mild",
+              "is_chronic": true
+            }
+          ],
+          "prescriptions": [
+            {
+              "drug_name": "Artemether/Lumefantrine",
+              "dosage": "80/480mg",
+              "frequency": "Twice daily x3 days",
+              "route": "oral",
+              "duration_days": 14
+            },
+            {
+              "drug_name": "Chloroquine",
+              "dosage": "300mg",
+              "frequency": "Once daily x3 days",
+              "route": "oral",
+              "duration_days": 14
+            },
+            {
+              "drug_name": "Metformin",
+              "dosage": "500mg",
+              "frequency": "Twice daily",
+              "route": "oral",
+              "duration_days": 5
+            },
+            {
+              "drug_name": "Amoxicillin",
+              "dosage": "250mg",
+              "frequency": "Thrice daily x7 days",
+              "route": "oral",
+              "duration_days": 14
+            }
+          ]
+        },
+        {
+          "encounter_id": "ENC-004",
+          "encounter_type": "admission",
+          "date": "2026-04-09",
+          "time": "08:02",
+          "chief_complaint": "Routine check-up",
+          "vitals": {
+            "temperature_celsius": 38.4,
+            "systolic_bp": 137,
+            "diastolic_bp": 90,
+            "heart_rate": 75,
+            "respiratory_rate": 22,
+            "spo2_percent": 99
+          },
+          "diagnoses": [
+            {
+              "icd10_code": "I10",
+              "description": "Essential hypertension",
+              "severity": "moderate",
+              "is_chronic": true
+            },
+            {
+              "icd10_code": "M79.3",
+              "description": "Myalgia",
+              "severity": "mild",
+              "is_chronic": false
+            },
+            {
+              "icd10_code": "B54",
+              "description": "Malaria",
+              "severity": "severe",
+              "is_chronic": false
+            }
+          ],
+          "prescriptions": [
+            {
+              "drug_name": "Chloroquine",
+              "dosage": "300mg",
+              "frequency": "Once daily x3 days",
+              "route": "topical",
+              "duration_days": 30
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "patient_id": "PAT-00002",
+      "ghana_health_id": "GH-2025-916900",
+      "full_name": "Kwesi Appiah",
+      "date_of_birth": "1941-09-06",
+      "age_years": 84,
+      "gender": "male",
+      "blood_group": "A-",
+      "phone": "0240798251",
+      "registered_at": "demo-gh-001",
+      "hospital_name": "Demo Hospital Ghana",
+      "allergies": [
+        "Latex",
+        "Aspirin"
+      ],
+      "encounters": [
+        {
+          "encounter_id": "ENC-001",
+          "encounter_type": "admission",
+          "date": "2026-04-16",
+          "time": "18:33",
+          "chief_complaint": "Fatigue",
+          "vitals": {
+            "temperature_celsius": 37.9,
+            "systolic_bp": 142,
+            "diastolic_bp": 93,
+            "heart_rate": 97,
+            "respiratory_rate": 24,
+            "spo2_percent": 94
+          },
+          "diagnoses": [
+            {
+              "icd10_code": "M79.3",
+              "description": "Myalgia",
+              "severity": "mild",
+              "is_chronic": true
+            }
+          ],
+          "prescriptions": [
+            {
+              "drug_name": "Omeprazole",
+              "dosage": "20mg",
+              "frequency": "Once daily",
+              "route": "iv",
+              "duration_days": 5
+            }
+          ]
+        },
+        {
+          "encounter_id": "ENC-002",
+          "encounter_type": "admission",
+          "date": "2025-11-25",
+          "time": "15:06",
+          "chief_complaint": "Follow-up consultation",
+          "vitals": {
+            "temperature_celsius": 36.6,
+            "systolic_bp": 141,
+            "diastolic_bp": 88,
+            "heart_rate": 102,
+            "respiratory_rate": 12,
+            "spo2_percent": 92
+          },
+          "diagnoses": [
+            {
+              "icd10_code": "M79.3",
+              "description": "Myalgia",
+              "severity": "mild",
+              "is_chronic": true
+            },
+            {
+              "icd10_code": "B54",
+              "description": "Malaria",
+              "severity": "mild",
+              "is_chronic": true
+            }
+          ],
+          "prescriptions": [
+            {
+              "drug_name": "Salbutamol",
+              "dosage": "100mcg",
+              "frequency": "2 puffs as needed",
+              "route": "topical",
+              "duration_days": 14
+            },
+            {
+              "drug_name": "Ibuprofen",
+              "dosage": "400mg",
+              "frequency": "Thrice daily as needed",
+              "route": "oral",
+              "duration_days": 7
+            }
+          ]
+        },
+        {
+          "encounter_id": "ENC-003",
+          "encounter_type": "clinic",
+          "date": "2026-03-25",
+          "time": "08:45",
+          "chief_complaint": "Diarrhea",
+          "vitals": {
+            "temperature_celsius": 39.3,
+            "systolic_bp": 110,
+            "diastolic_bp": 89,
+            "heart_rate": 74,
+            "respiratory_rate": 22,
+            "spo2_percent": 93
+          },
+          "diagnoses": [
+            {
+              "icd10_code": "J45",
+              "description": "Asthma",
+              "severity": "mild",
+              "is_chronic": false
+            },
+            {
+              "icd10_code": "B54",
+              "description": "Malaria",
+              "severity": "moderate",
+              "is_chronic": true
+            }
+          ],
+          "prescriptions": [
+            {
+              "drug_name": "Metformin",
+              "dosage": "500mg",
+              "frequency": "Twice daily",
+              "route": "topical",
+              "duration_days": 5
+            },
+            {
+              "drug_name": "Omeprazole",
+              "dosage": "20mg",
+              "frequency": "Once daily",
+              "route": "iv",
+              "duration_days": 30
+            },
+            {
+              "drug_name": "Paracetamol",
+              "dosage": "500mg",
+              "frequency": "Thrice daily",
+              "route": "topical",
+              "duration_days": 7
+            }
+          ]
+        },
+        {
+          "encounter_id": "ENC-004",
+          "encounter_type": "emergency",
+          "date": "2025-12-14",
+          "time": "16:13",
+          "chief_complaint": "Fever and malaise",
+          "vitals": {
+            "temperature_celsius": 38.7,
+            "systolic_bp": 122,
+            "diastolic_bp": 90,
+            "heart_rate": 76,
+            "respiratory_rate": 24,
+            "spo2_percent": 96
+          },
+          "diagnoses": [
+            {
+              "icd10_code": "J45",
+              "description": "Asthma",
+              "severity": "severe",
+              "is_chronic": true
+            },
+            {
+              "icd10_code": "A09",
+              "description": "Diarrhea and gastroenteritis",
+              "severity": "severe",
+              "is_chronic": false
+            },
+            {
+              "icd10_code": "K21",
+              "description": "Gastro-esophageal reflux disease",
+              "severity": "moderate",
+              "is_chronic": false
+            }
+          ],
+          "prescriptions": [
+            {
+              "drug_name": "Ibuprofen",
+              "dosage": "400mg",
+              "frequency": "Thrice daily as needed",
+              "route": "oral",
+              "duration_days": 7
+            },
+            {
+              "drug_name": "Chloroquine",
+              "dosage": "300mg",
+              "frequency": "Once daily x3 days",
+              "route": "iv",
+              "duration_days": 3
+            },
+            {
+              "drug_name": "Salbutamol",
+              "dosage": "100mcg",
+              "frequency": "2 puffs as needed",
+              "route": "topical",
+              "duration_days": 3
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "patient_id": "PAT-00003",
+      "ghana_health_id": "GH-2021-372520",
+      "full_name": "Adjoa Osei",
+      "date_of_birth": "1954-01-26",
+      "age_years": 72,
+      "gender": "female",
+      "blood_group": "A+",
+      "phone": "0255374373",
+      "registered_at": "demo-gh-001",
+      "hospital_name": "Demo Hospital Ghana",
+      "allergies": [
+        "Penicillin"
+      ],
+      "encounters": [
+        {
+          "encounter_id": "ENC-001",
+          "encounter_type": "clinic",
+          "date": "2025-12-08",
+          "time": "09:26",
+          "chief_complaint": "Joint pain",
+          "vitals": {
+            "temperature_celsius": 37.7,
+            "systolic_bp": 112,
+            "diastolic_bp": 80,
+            "heart_rate": 96,
+            "respiratory_rate": 25,
+            "spo2_percent": 98
+          },
+          "diagnoses": [
+            {
+              "icd10_code": "M79.3",
+              "description": "Myalgia",
+              "severity": "mild",
+              "is_chronic": false
+            },
+            {
+              "icd10_code": "J00",
+              "description": "Acute nasopharyngitis (common cold)",
+              "severity": "moderate",
+              "is_chronic": true
+            },
+            {
+              "icd10_code": "J00",
+              "description": "Acute nasopharyngitis (common cold)",
+              "severity": "moderate",
+              "is_chronic": true
+            }
+          ],
+          "prescriptions": [
+            {
+              "drug_name": "Amoxicillin",
+              "dosage": "250mg",
+              "frequency": "Thrice daily x7 days",
+              "route": "oral",
+              "duration_days": 7
+            },
+            {
+              "drug_name": "Lisinopril",
+              "dosage": "10mg",
+              "frequency": "Once daily",
+              "route": "topical",
+              "duration_days": 5
+            }
+          ]
+        },
+        {
+          "encounter_id": "ENC-002",
+          "encounter_type": "emergency",
+          "date": "2026-03-11",
+          "time": "17:59",
+          "chief_complaint": "Fever and malaise",
+          "vitals": {
+            "temperature_celsius": 38.9,
+            "systolic_bp": 116,
+            "diastolic_bp": 68,
+            "heart_rate": 84,
+            "respiratory_rate": 12,
+            "spo2_percent": 94
+          },
+          "diagnoses": [
+            {
+              "icd10_code": "I10",
+              "description": "Essential hypertension",
+              "severity": "mild",
+              "is_chronic": true
+            },
+            {
+              "icd10_code": "J00",
+              "description": "Acute nasopharyngitis (common cold)",
+              "severity": "mild",
+              "is_chronic": true
+            }
+          ],
+          "prescriptions": [
+            {
+              "drug_name": "Ibuprofen",
+              "dosage": "400mg",
+              "frequency": "Thrice daily as needed",
+              "route": "oral",
+              "duration_days": 14
+            },
+            {
+              "drug_name": "Antihistamine",
+              "dosage": "10mg",
+              "frequency": "Once at night",
+              "route": "im",
+              "duration_days": 30
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "patient_id": "PAT-00004",
+      "ghana_health_id": "GH-2023-853658",
+      "full_name": "Ama Kusi",
+      "date_of_birth": "2007-06-13",
+      "age_years": 18,
+      "gender": "female",
+      "blood_group": "B+",
+      "phone": "0251757119",
+      "registered_at": "demo-gh-001",
+      "hospital_name": "Demo Hospital Ghana",
+      "allergies": [
+        "Latex"
+      ],
+      "encounters": [
+        {
+          "encounter_id": "ENC-001",
+          "encounter_type": "admission",
+          "date": "2026-01-05",
+          "time": "17:57",
+          "chief_complaint": "Shortness of breath",
+          "vitals": {
+            "temperature_celsius": 37.5,
+            "systolic_bp": 152,
+            "diastolic_bp": 81,
+            "heart_rate": 93,
+            "respiratory_rate": 13,
+            "spo2_percent": 94
+          },
+          "diagnoses": [
+            {
+              "icd10_code": "M79.3",
+              "description": "Myalgia",
+              "severity": "moderate",
+              "is_chronic": true
+            }
+          ],
+          "prescriptions": [
+            {
+              "drug_name": "Antihistamine",
+              "dosage": "10mg",
+              "frequency": "Once at night",
+              "route": "topical",
+              "duration_days": 5
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "patient_id": "PAT-00005",
+      "ghana_health_id": "GH-2020-311049",
+      "full_name": "Ama Osei",
+      "date_of_birth": "1955-08-02",
+      "age_years": 70,
+      "gender": "male",
+      "blood_group": "O+",
+      "phone": "0567356949",
+      "registered_at": "demo-gh-001",
+      "hospital_name": "Demo Hospital Ghana",
+      "allergies": [],
+      "encounters": [
+        {
+          "encounter_id": "ENC-001",
+          "encounter_type": "admission",
+          "date": "2025-12-30",
+          "time": "14:14",
+          "chief_complaint": "Fatigue",
+          "vitals": {
+            "temperature_celsius": 37.9,
+            "systolic_bp": 154,
+            "diastolic_bp": 89,
+            "heart_rate": 105,
+            "respiratory_rate": 18,
+            "spo2_percent": 99
+          },
+          "diagnoses": [
+            {
+              "icd10_code": "J00",
+              "description": "Acute nasopharyngitis (common cold)",
+              "severity": "mild",
+              "is_chronic": false
+            },
+            {
+              "icd10_code": "K21",
+              "description": "Gastro-esophageal reflux disease",
+              "severity": "severe",
+              "is_chronic": false
+            }
+          ],
+          "prescriptions": [
+            {
+              "drug_name": "Salbutamol",
+              "dosage": "100mcg",
+              "frequency": "2 puffs as needed",
+              "route": "topical",
+              "duration_days": 3
+            }
+          ]
+        },
+        {
+          "encounter_id": "ENC-002",
+          "encounter_type": "clinic",
+          "date": "2026-02-17",
+          "time": "08:07",
+          "chief_complaint": "Nausea and vomiting",
+          "vitals": {
+            "temperature_celsius": 36.6,
+            "systolic_bp": 109,
+            "diastolic_bp": 68,
+            "heart_rate": 63,
+            "respiratory_rate": 12,
+            "spo2_percent": 97
+          },
+          "diagnoses": [
+            {
+              "icd10_code": "B54",
+              "description": "Malaria",
+              "severity": "severe",
+              "is_chronic": true
+            }
+          ],
+          "prescriptions": [
+            {
+              "drug_name": "Ibuprofen",
+              "dosage": "400mg",
+              "frequency": "Thrice daily as needed",
+              "route": "topical",
+              "duration_days": 30
+            }
+          ]
+        },
+        {
+          "encounter_id": "ENC-003",
+          "encounter_type": "admission",
+          "date": "2026-03-07",
+          "time": "08:40",
+          "chief_complaint": "Headache and body aches",
+          "vitals": {
+            "temperature_celsius": 38.0,
+            "systolic_bp": 147,
+            "diastolic_bp": 66,
+            "heart_rate": 66,
+            "respiratory_rate": 15,
+            "spo2_percent": 99
+          },
+          "diagnoses": [
+            {
+              "icd10_code": "E11",
+              "description": "Type 2 diabetes mellitus",
+              "severity": "mild",
+              "is_chronic": false
+            },
+            {
+              "icd10_code": "J00",
+              "description": "Acute nasopharyngitis (common cold)",
+              "severity": "moderate",
+              "is_chronic": false
+            },
+            {
+              "icd10_code": "B54",
+              "description": "Malaria",
+              "severity": "mild",
+              "is_chronic": true
+            }
+          ],
+          "prescriptions": [
+            {
+              "drug_name": "Ibuprofen",
+              "dosage": "400mg",
+              "frequency": "Thrice daily as needed",
+              "route": "topical",
+              "duration_days": 3
+            },
+            {
+              "drug_name": "Salbutamol",
+              "dosage": "100mcg",
+              "frequency": "2 puffs as needed",
+              "route": "oral",
+              "duration_days": 30
+            },
+            {
+              "drug_name": "Omeprazole",
+              "dosage": "20mg",
+              "frequency": "Once daily",
+              "route": "oral",
+              "duration_days": 7
+            },
+            {
+              "drug_name": "Metformin",
+              "dosage": "500mg",
+              "frequency": "Twice daily",
+              "route": "im",
+              "duration_days": 5
+            }
+          ]
+        },
+        {
+          "encounter_id": "ENC-004",
+          "encounter_type": "emergency",
+          "date": "2026-02-13",
+          "time": "10:42",
+          "chief_complaint": "Diarrhea",
+          "vitals": {
+            "temperature_celsius": 39.4,
+            "systolic_bp": 107,
+            "diastolic_bp": 80,
+            "heart_rate": 63,
+            "respiratory_rate": 21,
+            "spo2_percent": 94
+          },
+          "diagnoses": [
+            {
+              "icd10_code": "J00",
+              "description": "Acute nasopharyngitis (common cold)",
+              "severity": "mild",
+              "is_chronic": true
+            },
+            {
+              "icd10_code": "J00",
+              "description": "Acute nasopharyngitis (common cold)",
+              "severity": "mild",
+              "is_chronic": false
+            },
+            {
+              "icd10_code": "E11",
+              "description": "Type 2 diabetes mellitus",
+              "severity": "moderate",
+              "is_chronic": false
+            }
+          ],
+          "prescriptions": [
+            {
+              "drug_name": "Ibuprofen",
+              "dosage": "400mg",
+              "frequency": "Thrice daily as needed",
+              "route": "im",
+              "duration_days": 14
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "patient_id": "PAT-00006",
+      "ghana_health_id": "GH-2018-475014",
+      "full_name": "Ebo Osei",
+      "date_of_birth": "1944-04-09",
+      "age_years": 82,
+      "gender": "male",
+      "blood_group": "B-",
+      "phone": "0554590697",
+      "registered_at": "demo-gh-001",
+      "hospital_name": "Demo Hospital Ghana",
+      "allergies": [
+        "Penicillin",
+        "Aspirin"
+      ],
+      "encounters": [
+        {
+          "encounter_id": "ENC-001",
+          "encounter_type": "emergency",
+          "date": "2026-02-22",
+          "time": "13:07",
+          "chief_complaint": "Routine check-up",
+          "vitals": {
+            "temperature_celsius": 38.9,
+            "systolic_bp": 117,
+            "diastolic_bp": 76,
+            "heart_rate": 66,
+            "respiratory_rate": 14,
+            "spo2_percent": 96
+          },
+          "diagnoses": [
+            {
+              "icd10_code": "E11",
+              "description": "Type 2 diabetes mellitus",
+              "severity": "severe",
+              "is_chronic": true
+            }
+          ],
+          "prescriptions": [
+            {
+              "drug_name": "Paracetamol",
+              "dosage": "500mg",
+              "frequency": "Thrice daily",
+              "route": "topical",
+              "duration_days": 30
+            },
+            {
+              "drug_name": "Ibuprofen",
+              "dosage": "400mg",
+              "frequency": "Thrice daily as needed",
+              "route": "oral",
+              "duration_days": 5
+            },
+            {
+              "drug_name": "Metformin",
+              "dosage": "500mg",
+              "frequency": "Twice daily",
+              "route": "im",
+              "duration_days": 30
+            },
+            {
+              "drug_name": "Antihistamine",
+              "dosage": "10mg",
+              "frequency": "Once at night",
+              "route": "iv",
+              "duration_days": 7
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "patient_id": "PAT-00007",
+      "ghana_health_id": "GH-2023-455980",
+      "full_name": "Akosua Kusi",
+      "date_of_birth": "1959-01-06",
+      "age_years": 67,
+      "gender": "male",
+      "blood_group": "A+",
+      "phone": "0565751911",
+      "registered_at": "demo-gh-001",
+      "hospital_name": "Demo Hospital Ghana",
+      "allergies": [
+        "NSAIDs",
+        "Aspirin"
+      ],
+      "encounters": [
+        {
+          "encounter_id": "ENC-001",
+          "encounter_type": "clinic",
+          "date": "2026-03-13",
+          "time": "18:14",
+          "chief_complaint": "Follow-up consultation",
+          "vitals": {
+            "temperature_celsius": 38.8,
+            "systolic_bp": 117,
+            "diastolic_bp": 61,
+            "heart_rate": 71,
+            "respiratory_rate": 20,
+            "spo2_percent": 96
+          },
+          "diagnoses": [
+            {
+              "icd10_code": "M79.3",
+              "description": "Myalgia",
+              "severity": "mild",
+              "is_chronic": false
+            },
+            {
+              "icd10_code": "B54",
+              "description": "Malaria",
+              "severity": "severe",
+              "is_chronic": false
+            },
+            {
+              "icd10_code": "M79.3",
+              "description": "Myalgia",
+              "severity": "mild",
+              "is_chronic": true
+            }
+          ],
+          "prescriptions": [
+            {
+              "drug_name": "Lisinopril",
+              "dosage": "10mg",
+              "frequency": "Once daily",
+              "route": "topical",
+              "duration_days": 5
+            }
+          ]
+        },
+        {
+          "encounter_id": "ENC-002",
+          "encounter_type": "clinic",
+          "date": "2026-03-09",
+          "time": "08:15",
+          "chief_complaint": "Follow-up consultation",
+          "vitals": {
+            "temperature_celsius": 37.6,
+            "systolic_bp": 129,
+            "diastolic_bp": 99,
+            "heart_rate": 62,
+            "respiratory_rate": 12,
+            "spo2_percent": 92
+          },
+          "diagnoses": [
+            {
+              "icd10_code": "B54",
+              "description": "Malaria",
+              "severity": "mild",
+              "is_chronic": true
+            }
+          ],
+          "prescriptions": [
+            {
+              "drug_name": "Paracetamol",
+              "dosage": "500mg",
+              "frequency": "Thrice daily",
+              "route": "im",
+              "duration_days": 14
+            },
+            {
+              "drug_name": "Metformin",
+              "dosage": "500mg",
+              "frequency": "Twice daily",
+              "route": "iv",
+              "duration_days": 3
+            },
+            {
+              "drug_name": "Salbutamol",
+              "dosage": "100mcg",
+              "frequency": "2 puffs as needed",
+              "route": "im",
+              "duration_days": 14
+            },
+            {
+              "drug_name": "Chloroquine",
+              "dosage": "300mg",
+              "frequency": "Once daily x3 days",
+              "route": "iv",
+              "duration_days": 7
+            }
+          ]
+        },
+        {
+          "encounter_id": "ENC-003",
+          "encounter_type": "emergency",
+          "date": "2026-03-01",
+          "time": "16:37",
+          "chief_complaint": "Fatigue",
+          "vitals": {
+            "temperature_celsius": 38.8,
+            "systolic_bp": 147,
+            "diastolic_bp": 79,
+            "heart_rate": 103,
+            "respiratory_rate": 23,
+            "spo2_percent": 93
+          },
+          "diagnoses": [
+            {
+              "icd10_code": "J00",
+              "description": "Acute nasopharyngitis (common cold)",
+              "severity": "moderate",
+              "is_chronic": false
+            }
+          ],
+          "prescriptions": [
+            {
+              "drug_name": "Ibuprofen",
+              "dosage": "400mg",
+              "frequency": "Thrice daily as needed",
+              "route": "topical",
+              "duration_days": 3
+            },
+            {
+              "drug_name": "Amoxicillin",
+              "dosage": "250mg",
+              "frequency": "Thrice daily x7 days",
+              "route": "oral",
+              "duration_days": 30
+            },
+            {
+              "drug_name": "Paracetamol",
+              "dosage": "500mg",
+              "frequency": "Thrice daily",
+              "route": "topical",
+              "duration_days": 5
+            },
+            {
+              "drug_name": "Chloroquine",
+              "dosage": "300mg",
+              "frequency": "Once daily x3 days",
+              "route": "im",
+              "duration_days": 5
+            }
+          ]
+        },
+        {
+          "encounter_id": "ENC-004",
+          "encounter_type": "clinic",
+          "date": "2026-02-03",
+          "time": "09:39",
+          "chief_complaint": "Headache and body aches",
+          "vitals": {
+            "temperature_celsius": 38.9,
+            "systolic_bp": 132,
+            "diastolic_bp": 98,
+            "heart_rate": 87,
+            "respiratory_rate": 24,
+            "spo2_percent": 93
+          },
+          "diagnoses": [
+            {
+              "icd10_code": "I10",
+              "description": "Essential hypertension",
+              "severity": "severe",
+              "is_chronic": true
+            },
+            {
+              "icd10_code": "J45",
+              "description": "Asthma",
+              "severity": "mild",
+              "is_chronic": false
+            },
+            {
+              "icd10_code": "J00",
+              "description": "Acute nasopharyngitis (common cold)",
+              "severity": "mild",
+              "is_chronic": false
+            }
+          ],
+          "prescriptions": [
+            {
+              "drug_name": "Salbutamol",
+              "dosage": "100mcg",
+              "frequency": "2 puffs as needed",
+              "route": "oral",
+              "duration_days": 5
+            },
+            {
+              "drug_name": "Artemether/Lumefantrine",
+              "dosage": "80/480mg",
+              "frequency": "Twice daily x3 days",
+              "route": "im",
+              "duration_days": 5
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "patient_id": "PAT-00008",
+      "ghana_health_id": "GH-2022-532436",
+      "full_name": "Nana Asare",
+      "date_of_birth": "1983-09-22",
+      "age_years": 42,
+      "gender": "female",
+      "blood_group": "AB+",
+      "phone": "0248470402",
+      "registered_at": "demo-gh-001",
+      "hospital_name": "Demo Hospital Ghana",
+      "allergies": [
+        "Penicillin"
+      ],
+      "encounters": [
+        {
+          "encounter_id": "ENC-001",
+          "encounter_type": "clinic",
+          "date": "2025-12-23",
+          "time": "16:51",
+          "chief_complaint": "Nausea and vomiting",
+          "vitals": {
+            "temperature_celsius": 37.3,
+            "systolic_bp": 122,
+            "diastolic_bp": 63,
+            "heart_rate": 90,
+            "respiratory_rate": 14,
+            "spo2_percent": 99
+          },
+          "diagnoses": [
+            {
+              "icd10_code": "A09",
+              "description": "Diarrhea and gastroenteritis",
+              "severity": "moderate",
+              "is_chronic": false
+            },
+            {
+              "icd10_code": "M79.3",
+              "description": "Myalgia",
+              "severity": "severe",
+              "is_chronic": true
+            }
+          ],
+          "prescriptions": [
+            {
+              "drug_name": "Chloroquine",
+              "dosage": "300mg",
+              "frequency": "Once daily x3 days",
+              "route": "iv",
+              "duration_days": 14
+            }
+          ]
+        },
+        {
+          "encounter_id": "ENC-002",
+          "encounter_type": "emergency",
+          "date": "2025-12-24",
+          "time": "18:59",
+          "chief_complaint": "Follow-up consultation",
+          "vitals": {
+            "temperature_celsius": 38.4,
+            "systolic_bp": 136,
+            "diastolic_bp": 97,
+            "heart_rate": 66,
+            "respiratory_rate": 21,
+            "spo2_percent": 97
+          },
+          "diagnoses": [
+            {
+              "icd10_code": "B54",
+              "description": "Malaria",
+              "severity": "mild",
+              "is_chronic": false
+            },
+            {
+              "icd10_code": "I10",
+              "description": "Essential hypertension",
+              "severity": "mild",
+              "is_chronic": false
+            },
+            {
+              "icd10_code": "M79.3",
+              "description": "Myalgia",
+              "severity": "severe",
+              "is_chronic": true
+            }
+          ],
+          "prescriptions": [
+            {
+              "drug_name": "Ibuprofen",
+              "dosage": "400mg",
+              "frequency": "Thrice daily as needed",
+              "route": "im",
+              "duration_days": 30
+            },
+            {
+              "drug_name": "Paracetamol",
+              "dosage": "500mg",
+              "frequency": "Thrice daily",
+              "route": "im",
+              "duration_days": 7
+            },
+            {
+              "drug_name": "Antihistamine",
+              "dosage": "10mg",
+              "frequency": "Once at night",
+              "route": "oral",
+              "duration_days": 3
+            }
+          ]
+        },
+        {
+          "encounter_id": "ENC-003",
+          "encounter_type": "clinic",
+          "date": "2025-11-07",
+          "time": "18:07",
+          "chief_complaint": "Cough and sore throat",
+          "vitals": {
+            "temperature_celsius": 38.0,
+            "systolic_bp": 133,
+            "diastolic_bp": 92,
+            "heart_rate": 79,
+            "respiratory_rate": 17,
+            "spo2_percent": 97
+          },
+          "diagnoses": [
+            {
+              "icd10_code": "J00",
+              "description": "Acute nasopharyngitis (common cold)",
+              "severity": "severe",
+              "is_chronic": false
+            }
+          ],
+          "prescriptions": [
+            {
+              "drug_name": "Paracetamol",
+              "dosage": "500mg",
+              "frequency": "Thrice daily",
+              "route": "topical",
+              "duration_days": 7
+            },
+            {
+              "drug_name": "Metformin",
+              "dosage": "500mg",
+              "frequency": "Twice daily",
+              "route": "im",
+              "duration_days": 7
+            },
+            {
+              "drug_name": "Omeprazole",
+              "dosage": "20mg",
+              "frequency": "Once daily",
+              "route": "oral",
+              "duration_days": 14
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "patient_id": "PAT-00009",
+      "ghana_health_id": "GH-2020-318345",
+      "full_name": "Abena Addo",
+      "date_of_birth": "1997-01-18",
+      "age_years": 29,
+      "gender": "male",
+      "blood_group": "O+",
+      "phone": "0556278415",
+      "registered_at": "demo-gh-001",
+      "hospital_name": "Demo Hospital Ghana",
+      "allergies": [
+        "Shellfish"
+      ],
+      "encounters": [
+        {
+          "encounter_id": "ENC-001",
+          "encounter_type": "admission",
+          "date": "2025-11-09",
+          "time": "13:45",
+          "chief_complaint": "Diarrhea",
+          "vitals": {
+            "temperature_celsius": 38.3,
+            "systolic_bp": 127,
+            "diastolic_bp": 73,
+            "heart_rate": 67,
+            "respiratory_rate": 22,
+            "spo2_percent": 100
+          },
+          "diagnoses": [
+            {
+              "icd10_code": "M79.3",
+              "description": "Myalgia",
+              "severity": "mild",
+              "is_chronic": false
+            },
+            {
+              "icd10_code": "B54",
+              "description": "Malaria",
+              "severity": "moderate",
+              "is_chronic": true
+            }
+          ],
+          "prescriptions": [
+            {
+              "drug_name": "Amoxicillin",
+              "dosage": "250mg",
+              "frequency": "Thrice daily x7 days",
+              "route": "oral",
+              "duration_days": 14
+            },
+            {
+              "drug_name": "Lisinopril",
+              "dosage": "10mg",
+              "frequency": "Once daily",
+              "route": "iv",
+              "duration_days": 30
+            }
+          ]
+        },
+        {
+          "encounter_id": "ENC-002",
+          "encounter_type": "admission",
+          "date": "2026-04-08",
+          "time": "16:12",
+          "chief_complaint": "Nausea and vomiting",
+          "vitals": {
+            "temperature_celsius": 37.1,
+            "systolic_bp": 159,
+            "diastolic_bp": 99,
+            "heart_rate": 81,
+            "respiratory_rate": 25,
+            "spo2_percent": 93
+          },
+          "diagnoses": [
+            {
+              "icd10_code": "J00",
+              "description": "Acute nasopharyngitis (common cold)",
+              "severity": "severe",
+              "is_chronic": true
+            },
+            {
+              "icd10_code": "J00",
+              "description": "Acute nasopharyngitis (common cold)",
+              "severity": "mild",
+              "is_chronic": true
+            },
+            {
+              "icd10_code": "M79.3",
+              "description": "Myalgia",
+              "severity": "moderate",
+              "is_chronic": true
+            }
+          ],
+          "prescriptions": [
+            {
+              "drug_name": "Ibuprofen",
+              "dosage": "400mg",
+              "frequency": "Thrice daily as needed",
+              "route": "oral",
+              "duration_days": 14
+            },
+            {
+              "drug_name": "Antihistamine",
+              "dosage": "10mg",
+              "frequency": "Once at night",
+              "route": "oral",
+              "duration_days": 30
+            },
+            {
+              "drug_name": "Lisinopril",
+              "dosage": "10mg",
+              "frequency": "Once daily",
+              "route": "oral",
+              "duration_days": 3
+            }
+          ]
+        },
+        {
+          "encounter_id": "ENC-003",
+          "encounter_type": "clinic",
+          "date": "2026-02-19",
+          "time": "12:37",
+          "chief_complaint": "Headache and body aches",
+          "vitals": {
+            "temperature_celsius": 36.8,
+            "systolic_bp": 129,
+            "diastolic_bp": 84,
+            "heart_rate": 80,
+            "respiratory_rate": 18,
+            "spo2_percent": 98
+          },
+          "diagnoses": [
+            {
+              "icd10_code": "B54",
+              "description": "Malaria",
+              "severity": "mild",
+              "is_chronic": false
+            },
+            {
+              "icd10_code": "A09",
+              "description": "Diarrhea and gastroenteritis",
+              "severity": "mild",
+              "is_chronic": true
+            }
+          ],
+          "prescriptions": [
+            {
+              "drug_name": "Antihistamine",
+              "dosage": "10mg",
+              "frequency": "Once at night",
+              "route": "topical",
+              "duration_days": 7
+            },
+            {
+              "drug_name": "Paracetamol",
+              "dosage": "500mg",
+              "frequency": "Thrice daily",
+              "route": "im",
+              "duration_days": 3
+            },
+            {
+              "drug_name": "Metformin",
+              "dosage": "500mg",
+              "frequency": "Twice daily",
+              "route": "oral",
+              "duration_days": 14
+            }
+          ]
+        },
+        {
+          "encounter_id": "ENC-004",
+          "encounter_type": "emergency",
+          "date": "2026-01-28",
+          "time": "16:40",
+          "chief_complaint": "Cough and sore throat",
+          "vitals": {
+            "temperature_celsius": 37.0,
+            "systolic_bp": 137,
+            "diastolic_bp": 95,
+            "heart_rate": 94,
+            "respiratory_rate": 17,
+            "spo2_percent": 95
+          },
+          "diagnoses": [
+            {
+              "icd10_code": "E11",
+              "description": "Type 2 diabetes mellitus",
+              "severity": "mild",
+              "is_chronic": true
+            },
+            {
+              "icd10_code": "K21",
+              "description": "Gastro-esophageal reflux disease",
+              "severity": "mild",
+              "is_chronic": true
+            }
+          ],
+          "prescriptions": [
+            {
+              "drug_name": "Artemether/Lumefantrine",
+              "dosage": "80/480mg",
+              "frequency": "Twice daily x3 days",
+              "route": "iv",
+              "duration_days": 14
+            }
+          ]
+        },
+        {
+          "encounter_id": "ENC-005",
+          "encounter_type": "clinic",
+          "date": "2026-02-03",
+          "time": "10:15",
+          "chief_complaint": "Routine check-up",
+          "vitals": {
+            "temperature_celsius": 38.0,
+            "systolic_bp": 143,
+            "diastolic_bp": 97,
+            "heart_rate": 68,
+            "respiratory_rate": 19,
+            "spo2_percent": 94
+          },
+          "diagnoses": [
+            {
+              "icd10_code": "E11",
+              "description": "Type 2 diabetes mellitus",
+              "severity": "mild",
+              "is_chronic": true
+            },
+            {
+              "icd10_code": "I10",
+              "description": "Essential hypertension",
+              "severity": "mild",
+              "is_chronic": false
+            },
+            {
+              "icd10_code": "J00",
+              "description": "Acute nasopharyngitis (common cold)",
+              "severity": "moderate",
+              "is_chronic": false
+            }
+          ],
+          "prescriptions": [
+            {
+              "drug_name": "Artemether/Lumefantrine",
+              "dosage": "80/480mg",
+              "frequency": "Twice daily x3 days",
+              "route": "oral",
+              "duration_days": 14
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "patient_id": "PAT-00010",
+      "ghana_health_id": "GH-2018-233457",
+      "full_name": "Ama Darko",
+      "date_of_birth": "1977-12-26",
+      "age_years": 48,
+      "gender": "female",
+      "blood_group": "AB-",
+      "phone": "0252765726",
+      "registered_at": "demo-gh-001",
+      "hospital_name": "Demo Hospital Ghana",
+      "allergies": [],
+      "encounters": [
+        {
+          "encounter_id": "ENC-001",
+          "encounter_type": "clinic",
+          "date": "2025-11-18",
+          "time": "09:57",
+          "chief_complaint": "Fatigue",
+          "vitals": {
+            "temperature_celsius": 37.3,
+            "systolic_bp": 144,
+            "diastolic_bp": 74,
+            "heart_rate": 64,
+            "respiratory_rate": 12,
+            "spo2_percent": 92
+          },
+          "diagnoses": [
+            {
+              "icd10_code": "J00",
+              "description": "Acute nasopharyngitis (common cold)",
+              "severity": "mild",
+              "is_chronic": true
+            },
+            {
+              "icd10_code": "I10",
+              "description": "Essential hypertension",
+              "severity": "mild",
+              "is_chronic": true
+            },
+            {
+              "icd10_code": "E11",
+              "description": "Type 2 diabetes mellitus",
+              "severity": "severe",
+              "is_chronic": false
+            }
+          ],
+          "prescriptions": [
+            {
+              "drug_name": "Lisinopril",
+              "dosage": "10mg",
+              "frequency": "Once daily",
+              "route": "topical",
+              "duration_days": 3
+            },
+            {
+              "drug_name": "Omeprazole",
+              "dosage": "20mg",
+              "frequency": "Once daily",
+              "route": "im",
+              "duration_days": 3
+            },
+            {
+              "drug_name": "Metformin",
+              "dosage": "500mg",
+              "frequency": "Twice daily",
+              "route": "iv",
+              "duration_days": 5
+            },
+            {
+              "drug_name": "Artemether/Lumefantrine",
+              "dosage": "80/480mg",
+              "frequency": "Twice daily x3 days",
+              "route": "im",
+              "duration_days": 14
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

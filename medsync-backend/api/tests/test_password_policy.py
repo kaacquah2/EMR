@@ -66,3 +66,5 @@ class TestCheckPasswordReuse:
         UserPasswordHistory.objects.create(user=user, password_hash=make_password("OldPass12!"))
         ok, msg = check_password_reuse(user, "BrandNew12!")
         assert ok
+
+

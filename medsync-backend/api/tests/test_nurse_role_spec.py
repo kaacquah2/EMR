@@ -162,3 +162,5 @@ class NurseRoleSpecTests(TestCase):
         self.assertEqual(ok.status_code, 200)
         forbidden = self.client.post(f"/api/v1/records/prescription/{record_b.id}/dispense-by-nurse", format="json")
         self.assertEqual(forbidden.status_code, 403)
+
+

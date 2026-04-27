@@ -6,12 +6,13 @@ import { useAuth } from "@/lib/auth-context";
 import { useLabOrders } from "@/hooks/use-lab";
 import { Badge } from "@/components/ui/badge";
 import { Card } from "@/components/ui/card";
+import { LabBulkResultForm } from "@/components/features/LabBulkResultForm";
 
 export default function LabOrdersPage() {
   const router = useRouter();
   const { user } = useAuth();
-  const [tab, setTab] = useState<"all" | "pending" | "in_progress" | "resulted_today" | "verified">("all");
-  const { orders, stats, loading } = useLabOrders(tab);
+  const [tab, setTab] = useState<"all" | "pending" | "in_progress" | "resulted_today" | "verified" | "bulk">("all");
+  const { orders, stats, loading } = useLabOrders(tab !== "bulk" ? tab : "all");
 
   const canAccess = user?.role === "lab_technician";
   useEffect(() => {
@@ -62,19 +63,20 @@ export default function LabOrdersPage() {
         <Card className="p-4"><p className="text-sm text-[#64748B]">In progress</p><p className="text-2xl font-bold text-blue-700">{stats.in_progress_orders}</p></Card>
       </div>
 
-      <div className="flex gap-2 border-b border-[#CBD5E1]">
+      <div className="flex gap-2 border-b border-[#CBD5E1] overflow-x-auto">
         {[
           ["all", "All"],
           ["pending", "Pending"],
           ["in_progress", "In Progress"],
           ["resulted_today", "Resulted (today)"],
           ["verified", "Verified"],
+          ["bulk", "Bulk Submit"],
         ].map(([value, label]) => (
           <button
             key={value}
             type="button"
             onClick={() => setTab(value as typeof tab)}
-            className={`border-b-2 px-3 py-2 text-sm font-medium ${
+            className={`border-b-2 px-3 py-2 text-sm font-medium whitespace-nowrap ${
               tab === value ? "border-[#0B8A96] text-[#0B8A96]" : "border-transparent text-[#64748B]"
             }`}
           >
@@ -83,37 +85,41 @@ export default function LabOrdersPage() {
         ))}
       </div>
 
-      <Card className="p-6">
-        {loading ? (
-          <p className="text-[#64748B]">Loading...</p>
-        ) : rows.length === 0 ? (
-          <p className="text-[#64748B]">No matching orders.</p>
-        ) : (
-          <div className="space-y-2">
-            {rows.map((o) => {
-              const tat = tatText(o.minutes_remaining);
-              return (
-              <div
-                key={o.id}
-                className="flex cursor-pointer items-center justify-between rounded-lg border border-[#E2E8F0] p-4 hover:bg-[#F8FAFC]"
-                onClick={() => router.push(`/lab/orders/${o.id}`)}
-              >
-                <div>
-                  <p className="font-medium">{o.patient_name} ({o.gha_id}) - {o.test_name}</p>
-                  <p className="text-sm text-[#64748B]">
-                    {o.ordering_doctor_name} - {o.ordered_at?.slice(0, 16)}
-                  </p>
-                  <p className={`text-sm ${tat.cls}`}>{tat.label}</p>
+      {tab === "bulk" ? (
+        <LabBulkResultForm />
+      ) : (
+        <Card className="p-6">
+          {loading ? (
+            <p className="text-[#64748B]">Loading...</p>
+          ) : rows.length === 0 ? (
+            <p className="text-[#64748B]">No matching orders.</p>
+          ) : (
+            <div className="space-y-2">
+              {rows.map((o) => {
+                const tat = tatText(o.minutes_remaining);
+                return (
+                <div
+                  key={o.id}
+                  className="flex cursor-pointer items-center justify-between rounded-lg border border-[#E2E8F0] p-4 hover:bg-[#F8FAFC]"
+                  onClick={() => router.push(`/lab/orders/${o.id}`)}
+                >
+                  <div>
+                    <p className="font-medium">{o.patient_name} ({o.gha_id}) - {o.test_name}</p>
+                    <p className="text-sm text-[#64748B]">
+                      {o.ordering_doctor_name} - {o.ordered_at?.slice(0, 16)}
+                    </p>
+                    <p className={`text-sm ${tat.cls}`}>{tat.label}</p>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <Badge className={urgencyClass(o.urgency)}>{o.urgency.toUpperCase()}</Badge>
+                    <Badge className="bg-blue-100 text-blue-700">{statusLabel(o.status)}</Badge>
+                  </div>
                 </div>
-                <div className="flex items-center gap-2">
-                  <Badge className={urgencyClass(o.urgency)}>{o.urgency.toUpperCase()}</Badge>
-                  <Badge className="bg-blue-100 text-blue-700">{statusLabel(o.status)}</Badge>
-                </div>
-              </div>
-            )})}
-          </div>
-        )}
-      </Card>
+              )})}
+            </div>
+          )}
+        </Card>
+      )}
     </div>
   );
 }

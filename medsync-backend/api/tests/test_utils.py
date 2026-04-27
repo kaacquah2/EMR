@@ -1,9 +1,8 @@
 import pytest
 from datetime import date
-from django.contrib.auth.hashers import make_password
 from api.utils import get_patient_queryset, can_access_cross_facility, sanitize_audit_resource_id
 from core.models import User, Hospital, Ward
-from patients.models import Patient, PatientAdmission
+from patients.models import Patient
 from interop.models import GlobalPatient, Consent
 import secrets
 import string
@@ -12,6 +11,7 @@ import string
 # Generate a strong password for testing (same one reused throughout tests)
 # This is shared across tests but NOT hardcoded
 _TEST_PASSWORD = None
+
 
 def _get_test_password():
     """Get or generate a test password. Uses same value throughout test session."""
@@ -57,8 +57,11 @@ def ward(db, hospital):
 @pytest.fixture
 def creator_user(db, hospital):
     return User.objects.create_user(
-        email="creator@test.com", password=_get_test_password(), role="doctor", full_name="Dr Creator", hospital=hospital
-    )
+        email="creator@test.com",
+        password=_get_test_password(),
+        role="doctor",
+        full_name="Dr Creator",
+        hospital=hospital)
 
 
 @pytest.mark.django_db
@@ -82,8 +85,11 @@ class TestGetPatientQueryset:
 
     def test_lab_technician_sees_none(self, hospital, creator_user):
         lab = User.objects.create_user(
-            email="lab@test.com", password=_get_test_password(), role="lab_technician", full_name="Lab", hospital=hospital
-        )
+            email="lab@test.com",
+            password=_get_test_password(),
+            role="lab_technician",
+            full_name="Lab",
+            hospital=hospital)
         _make_patient("G1", "P1", hospital, creator_user)
         qs = get_patient_queryset(lab)
         assert qs.count() == 0
@@ -129,7 +135,7 @@ class TestCanAccessCrossFacility:
             global_patient=gp,
             granted_to_facility=hospital,
             granted_by=doctor,
-            is_active=True,
+            account_status="active",
             scope=Consent.SCOPE_SUMMARY,
         )
         allowed, scope = can_access_cross_facility(doctor, gp.id)
@@ -148,3 +154,5 @@ class TestSanitizeAuditResourceId:
 
     def test_none_unchanged(self):
         assert sanitize_audit_resource_id(None) is None
+
+

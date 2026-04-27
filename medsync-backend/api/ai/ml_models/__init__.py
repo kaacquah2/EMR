@@ -18,42 +18,29 @@ from django.conf import settings
 from django.core.exceptions import ImproperlyConfigured
 
 
-def _load_model(path: str) -> Any:
-    """Load a pickled model from disk with basic validation."""
-    if not os.path.exists(path):
-        raise ImproperlyConfigured(f"AI model file not found: {path}")
-    with open(path, "rb") as f:
-        return pickle.load(f)
+def _load_model(path: str, model_name: str = 'unknown') -> Any:
+    """Load a model via ModelRegistry (uses in-memory cache)."""
+    from api.ai.model_registry import get_model_registry
+    registry = get_model_registry()
+    return registry.get_model(model_name, model_path=path)
 
 
 def get_risk_predictor():
-    from .risk_predictor import RiskPredictorModel
+    from .risk_predictor import get_risk_predictor as _get_rp
 
-    path = settings.MODEL_PATHS["risk_predictor"]
-    model = _load_model(path)
-    if not isinstance(model, RiskPredictorModel):
-        raise ImproperlyConfigured("Loaded risk predictor model has unexpected type")
-    return model
+    return _get_rp()
 
 
 def get_diagnosis_classifier():
-    from .diagnosis_classifier import DiagnosisClassifier
+    from .diagnosis_classifier import get_diagnosis_classifier as _get_dc
 
-    path = settings.MODEL_PATHS["diagnosis_classifier"]
-    model = _load_model(path)
-    if not isinstance(model, DiagnosisClassifier):
-        raise ImproperlyConfigured("Loaded diagnosis classifier model has unexpected type")
-    return model
+    return _get_dc()
 
 
 def get_triage_classifier():
-    from .triage_classifier import TriageClassifier
+    from .triage_classifier import get_triage_classifier as _get_tc
 
-    path = settings.MODEL_PATHS["triage_classifier"]
-    model = _load_model(path)
-    if not isinstance(model, TriageClassifier):
-        raise ImproperlyConfigured("Loaded triage classifier model has unexpected type")
-    return model
+    return _get_tc()
 
 
 def get_similarity_matcher():

@@ -1,0 +1,8 @@
+{
+  "model_version": "1.0.0-mgmt-test",
+  "training_date": "2026-04-20T13:03:19.398941",
+  "data_source": "synthetic",
+  "data_size": 2000,
+  "n_features": 26,
+  "readmission_rate": 0.1515
+}

@@ -1,10 +1,13 @@
 "use client";
 
 import React, { useState, useCallback, useEffect } from "react";
+import { List } from "react-window";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/lib/auth-context";
+import { ROLES, PATIENT_SEARCH_ROLES, REGISTER_PATIENT_ROLES, hasRole } from "@/lib/permissions";
 import { usePatientSearch } from "@/hooks/use-patients";
+import type { Patient } from "@/lib/types";
 import { useGlobalPatientSearch, useLinkFacilityPatient } from "@/hooks/use-interop";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -19,7 +22,58 @@ import {
 } from "@/components/ui/dialog";
 import { downloadCsv } from "@/lib/export-csv";
 
-const PATIENT_SEARCH_ROLES = ["doctor", "hospital_admin", "super_admin", "nurse", "receptionist"];
+// RBAC-01: moved to centralised permissions.ts
+
+const VirtualPatientList = ({ 
+  patients, 
+  isReceptionist 
+}: { 
+  patients: Patient[], 
+  isReceptionist: boolean 
+}) => {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const Row = ({ index, style }: any) => {
+    const p = patients[index];
+    return (
+      <div 
+        style={style} 
+        className="flex items-center border-b border-[#E2E8F0] hover:bg-[#F8FAFC] px-4"
+      >
+        <div className="w-[25%] font-medium text-[#0F172A] truncate pr-4">{p.full_name}</div>
+        <div className="w-[20%] font-mono text-sm text-[#64748B] truncate pr-4">{p.ghana_health_id}</div>
+        <div className="w-[10%] text-sm text-[#64748B]">
+          {Math.max(0, new Date().getFullYear() - new Date(p.date_of_birth).getFullYear())}
+        </div>
+        <div className="w-[10%] text-sm text-[#64748B]">{p.gender}</div>
+        <div className="w-[15%] text-sm text-[#64748B] truncate">{p.nhis_number || "—"}</div>
+        <div className="w-[20%] flex justify-end gap-3 text-sm">
+          {isReceptionist ? (
+            <>
+              <Link href="/appointments" className="text-[#0B8A96] hover:underline">
+                Book
+              </Link>
+              <span className="text-[#0B8A96] cursor-pointer hover:underline">Info</span>
+            </>
+          ) : (
+            <Link href={`/patients/${p.patient_id}`} className="text-[#0B8A96] hover:underline">
+              View
+            </Link>
+          )}
+        </div>
+      </div>
+    );
+  };
+
+  return (
+    <List
+      rowCount={patients.length}
+      rowHeight={56}
+      style={{ height: 400, width: "100%" }}
+      rowComponent={Row}
+      rowProps={{}}
+    />
+  );
+};
 
 export default function PatientSearchPage() {
   const router = useRouter();
@@ -67,10 +121,11 @@ export default function PatientSearchPage() {
   const handleChange = (v: string) => {
     setQuery(v);
     if (debounceRef) clearTimeout(debounceRef);
+    // UX-18: 300ms debounce (was 150ms)
     const id = setTimeout(() => {
       if (v.trim()) doSearch();
       setDebounceRef(null);
-    }, 150);
+    }, 300);
     setDebounceRef(id);
   };
 
@@ -103,9 +158,9 @@ export default function PatientSearchPage() {
     }
   }, [link, linkGlobalPatient, localPatientId, router]);
 
-  const isReceptionist = user?.role === "receptionist";
-  const canRegister = user?.role === "doctor" || user?.role === "hospital_admin" || user?.role === "super_admin";
-  const canExport = canRegister;
+  const isReceptionist = user?.role === ROLES.RECEPTIONIST;
+  const canRegister = hasRole(user?.role, REGISTER_PATIENT_ROLES);
+  const canExport = hasRole(user?.role, [ROLES.HOSPITAL_ADMIN, ROLES.SUPER_ADMIN]);
 
   if (user && !canAccess) return <div className="flex min-h-[200px] items-center justify-center text-[#64748B]">Redirecting...</div>;
 
@@ -116,12 +171,12 @@ export default function PatientSearchPage() {
           Patient Search
         </h1>
         <div className="flex gap-2">
-          {canExport && !isReceptionist && (
+          {canExport && (
             <Button variant="secondary" onClick={handleExportPatients} disabled={exporting}>
               {exporting ? "Exporting..." : "Export CSV"}
             </Button>
           )}
-          {canRegister && !isReceptionist && (
+          {canRegister && (
             <Link href="/patients/register">
               <Button>Register New Patient</Button>
             </Link>
@@ -143,6 +198,7 @@ export default function PatientSearchPage() {
                     ? "YYYY-MM-DD"
                     : "Search by name, Ghana Health ID, phone, or NHIS number"
               }
+              data-testid="patient-search-input"
               onKeyDown={(e) => e.key === "Enter" && doSearch()}
             />
           </div>
@@ -162,7 +218,7 @@ export default function PatientSearchPage() {
               </button>
             ))}
           </div>
-          <Button onClick={doSearch} disabled={loading}>
+          <Button onClick={doSearch} disabled={loading} data-testid="patient-search-submit">
             {loading ? "Searching..." : "Search"}
           </Button>
         </div>
@@ -181,11 +237,7 @@ export default function PatientSearchPage() {
       {!loading && results.length === 0 && query.trim() && (
         <Card className="p-8 text-center">
           <p className="text-[#64748B]">Patient not found.</p>
-          {isReceptionist ? (
-            <p className="mt-2 text-sm text-[#64748B]">
-              To register a new patient, please ask a doctor or hospital admin.
-            </p>
-          ) : canRegister && (
+          {canRegister && (
             <Link href="/patients/register" className="mt-4 inline-block">
               <Button variant="secondary">Register them?</Button>
             </Link>
@@ -199,53 +251,36 @@ export default function PatientSearchPage() {
             <table className="w-full">
               <thead>
                 <tr className="border-b border-[#E2E8F0] bg-[#F8FAFC]">
-                  <th className="px-4 py-3 text-left text-xs font-semibold uppercase text-[#64748B]">Name</th>
-                  <th className="px-4 py-3 text-left text-xs font-semibold uppercase text-[#64748B]">Ghana Health ID</th>
-                  <th className="px-4 py-3 text-left text-xs font-semibold uppercase text-[#64748B]">Age</th>
-                  <th className="px-4 py-3 text-left text-xs font-semibold uppercase text-[#64748B]">Gender</th>
-                  <th className="px-4 py-3 text-left text-xs font-semibold uppercase text-[#64748B]">NHIS</th>
-                  <th className="px-4 py-3 text-left text-xs font-semibold uppercase text-[#64748B]">Phone</th>
-                  <th className="px-4 py-3 text-left text-xs font-semibold uppercase text-[#64748B]">Actions</th>
+                  <th className="px-4 py-3 text-left text-xs font-semibold uppercase text-[#64748B] w-[25%]">Name</th>
+                  <th className="px-4 py-3 text-left text-xs font-semibold uppercase text-[#64748B] w-[20%]">Ghana Health ID</th>
+                  <th className="px-4 py-3 text-left text-xs font-semibold uppercase text-[#64748B] w-[10%]">Age</th>
+                  <th className="px-4 py-3 text-left text-xs font-semibold uppercase text-[#64748B] w-[10%]">Gender</th>
+                  <th className="px-4 py-3 text-left text-xs font-semibold uppercase text-[#64748B] w-[15%]">NHIS</th>
+                  <th className="px-4 py-3 text-left text-xs font-semibold uppercase text-[#64748B] w-[20%] text-right">Actions</th>
                 </tr>
               </thead>
-              <tbody>
-                {results.map((p) => (
-                  <tr key={p.patient_id} className="border-b border-[#E2E8F0] hover:bg-[#F8FAFC]">
-                    <td className="px-4 py-3 font-medium text-[#0F172A]">{p.full_name}</td>
-                    <td className="px-4 py-3 font-mono text-sm text-[#64748B]">{p.ghana_health_id}</td>
-                    <td className="px-4 py-3 text-sm text-[#64748B]">
-                      {Math.max(0, new Date().getFullYear() - new Date(p.date_of_birth).getFullYear())}
-                    </td>
-                    <td className="px-4 py-3 text-sm text-[#64748B]">{p.gender}</td>
-                    <td className="px-4 py-3 text-sm text-[#64748B]">{p.nhis_number || "—"}</td>
-                    <td className="px-4 py-3 text-sm text-[#64748B]">{p.phone || "—"}</td>
-                    <td className="px-4 py-3">
-                      {isReceptionist ? (
-                        <div className="flex gap-3 text-sm">
-                          <Link href="/appointments" className="text-[#0B8A96] hover:underline">
-                            Book Appointment
-                          </Link>
-                          <span className="text-[#0B8A96]">View Demographics</span>
-                        </div>
-                      ) : (
-                        <Link href={`/patients/${p.patient_id}`} className="text-[#0B8A96] hover:underline">
-                          View
-                        </Link>
-                      )}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
             </table>
+            
+            <div className="h-[400px] w-full">
+              <VirtualPatientList 
+                patients={results} 
+                isReceptionist={isReceptionist} 
+              />
+            </div>
           </div>
         </Card>
       )}
 
       {!isReceptionist && (
-      <div className="mt-10 border-t border-[#E2E8F0] pt-8">
-        <h2 className="font-sora text-xl font-bold text-[#0F172A] mb-4">
-          Search nationwide (global registry)
+      <div className="mt-10 border-t border-[var(--gray-300)] pt-8">
+        {/* UX-20: contextual help text */}
+        <h2 className="font-sora text-xl font-bold text-[var(--gray-900)] mb-2">
+          Nationwide registry search
         </h2>
+        <p className="mb-4 text-sm text-[var(--gray-500)]">
+          Use this to find patients who visited <strong>other facilities</strong>. Results can be linked to this hospital so their records are accessible here.
+          Use the local search above for patients already registered at your facility.
+        </p>
         <Card className="p-4">
           <div className="flex flex-col gap-4 sm:flex-row">
             <div className="flex-1">
@@ -254,12 +289,14 @@ export default function PatientSearchPage() {
                 value={globalQuery}
                 onChange={(e) => setGlobalQuery(e.target.value)}
                 placeholder="e.g. name or national ID"
+                data-testid="patient-global-search-input"
                 onKeyDown={(e) => e.key === "Enter" && globalSearch(globalQuery)}
               />
             </div>
             <Button
               onClick={() => globalSearch(globalQuery)}
               disabled={globalLoading}
+              data-testid="patient-global-search-submit"
             >
               {globalLoading ? "Searching..." : "Search nationwide"}
             </Button>
@@ -300,6 +337,7 @@ export default function PatientSearchPage() {
                           variant="secondary"
                           size="sm"
                           onClick={() => openLinkModal({ global_patient_id: gp.global_patient_id, full_name: gp.full_name })}
+                          data-testid="patient-link-to-facility"
                         >
                           Link to this facility
                         </Button>

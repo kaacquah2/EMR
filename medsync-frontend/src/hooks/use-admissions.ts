@@ -20,13 +20,17 @@ export function useAdmissions() {
   const api = useApi();
   const [admissions, setAdmissions] = useState<Admission[]>([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
   const fetch = useCallback(async () => {
     setLoading(true);
+    setError(null);
     try {
       const data = await api.get<{ data: Admission[] }>("/admissions");
       setAdmissions(data.data || []);
-    } catch {
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "Failed to load admissions";
+      setError(message);
       setAdmissions([]);
     } finally {
       setLoading(false);
@@ -37,5 +41,5 @@ export function useAdmissions() {
     fetch();
   }, [fetch]);
 
-  return { admissions, loading, fetch };
+  return { admissions, loading, error, fetch };
 }

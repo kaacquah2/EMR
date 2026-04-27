@@ -6,7 +6,13 @@ from django.db.models import Q
 
 from core.models import Hospital
 from interop.models import GlobalPatient, FacilityPatient, SharedRecordAccess
-from api.utils import get_global_patient_queryset, can_access_cross_facility, get_effective_hospital, get_request_hospital, audit_log
+from api.utils import (
+    get_global_patient_queryset,
+    can_access_cross_facility,
+    get_effective_hospital,
+    get_request_hospital,
+    audit_log
+)
 from api.serializers import GlobalPatientSerializer, FacilityPatientSerializer
 
 
@@ -116,7 +122,7 @@ def facility_patient_link(request):
                 id=local_patient_id, registered_at=hospital
             )
         except (Patient.DoesNotExist, ValueError):
-            pass
+            logger.debug(f"Patient {local_patient_id} not found in hospital {hospital.id} for global registry link")
     if not local_patient_id:
         local_patient_id = str(gp.id)
 
@@ -142,7 +148,7 @@ def facilities_list(request):
                 {"message": "Permission denied"},
                 status=status.HTTP_403_FORBIDDEN,
             )
-        
+
         # Super admin sees only hospitals they have explicit access to
         if request.user.role == "super_admin":
             from core.models import SuperAdminHospitalAccess
@@ -164,7 +170,7 @@ def facilities_list(request):
                 {"message": "Permission denied"},
                 status=status.HTTP_403_FORBIDDEN,
             )
-        
+
         data = [
             {
                 "facility_id": str(h.id),
@@ -265,17 +271,15 @@ def facility_update(request, pk):
 @api_view(["GET"])
 @permission_classes([IsAuthenticated])
 def cross_facility_records(request, global_patient_id):
-    """Read-only aggregated records for a global patient. Requires consent, accepted referral, or recent break-glass (enforced server-side)."""
+    """
+    Read-only aggregated records for a global patient. Requires consent,
+    accepted referral, or recent break-glass (enforced server-side).
+    """
     from interop.models import FacilityPatient
-    from patients.models import Patient
     from records.models import MedicalRecord
     from api.serializers import (
         GlobalPatientSerializer,
         MedicalRecordSerializer,
-        DiagnosisSerializer,
-        PrescriptionSerializer,
-        LabResultSerializer,
-        VitalSerializer,
     )
 
     if not _interop_role_ok(request.user):

@@ -13,6 +13,7 @@ import string
 # Test password helper (same as test_utils.py)
 _TEST_PASSWORD = None
 
+
 def _get_test_password():
     """Get or generate a test password. Uses same value throughout test session."""
     global _TEST_PASSWORD
@@ -237,9 +238,66 @@ def test_login_dev_seed_uses_authenticator_channel_not_email(api_client, hospita
 
 
 @pytest.mark.django_db
+@override_settings(
+    EMAIL_BACKEND="django.core.mail.backends.locmem.EmailBackend",
+    DEV_PERMISSION_BYPASS_EMAILS=[],
+)
+def test_login_non_dev_user_with_totp_secret_uses_email_otp(api_client, hospital):
+    """
+    Verify that non-dev users with TOTP still use email OTP channel during login.
+    This confirms that the system distinguishes between dev (TOTP only) and
+    regular users (email OTP), while both can verify with TOTP if email fails.
+    """
+    import pyotp
+
+    pwd = _get_test_password()
+    secret = "JBSWY3DPEHPK3PXP"
+    
+    # Create a regular (non-dev) user with TOTP enabled
+    user = User.objects.create_user(
+        email="regular@test.com",  # NOT in DEV_PERMISSION_BYPASS_EMAILS
+        password=pwd,
+        role="doctor",
+        full_name="Regular TOTP User",
+        hospital=hospital,
+    )
+    user.is_mfa_enabled = True
+    user.totp_secret = secret
+    user.save()
+    mail.outbox.clear()
+
+    # Step 1: Login with email and password
+    r1 = api_client.post(
+        "/api/v1/auth/login",
+        {"email": user.email, "password": pwd},
+        format="json",
+    )
+    assert r1.status_code == 200
+    body = r1.json()
+    assert body.get("mfa_token")
+    assert body.get("mfa_channel") == "email"  # Non-dev users get email OTP channel
+    assert len(mail.outbox) == 1  # Email OTP was sent
+
+    # Step 2: Verify with the email OTP code
+    m = re.search(r"code is:\s*(\d{6})", mail.outbox[0].body)
+    assert m, mail.outbox[0].body
+    otp = m.group(1)
+    
+    r2 = api_client.post(
+        "/api/v1/auth/mfa-verify",
+        {"mfa_token": body["mfa_token"], "code": otp},
+        format="json",
+    )
+    assert r2.status_code == 200
+    assert r2.json().get("access_token")
+
+
+@pytest.mark.django_db
 class TestHealth:
     def test_health_returns_200_when_db_ok(self, api_client):
         res = api_client.get("/api/v1/health")
         assert res.status_code == 200
         assert res.json().get("status") == "ok"
         assert res.json().get("database") == "ok"
+
+

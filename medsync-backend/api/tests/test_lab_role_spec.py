@@ -107,3 +107,4 @@ class LabRoleSpecTests(TestCase):
         self.assertEqual(result.status_code, 200)
         self.assertEqual(result.data["status"], "resulted")
 
+

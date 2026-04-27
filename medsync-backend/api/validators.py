@@ -8,6 +8,7 @@ Centralizes all input validation logic for:
 - Numeric fields (age, dosages, quantities)
 """
 
+import uuid as uuid_module
 import re
 from django.core.exceptions import ValidationError
 from django.utils.translation import gettext_lazy as _
@@ -145,23 +146,23 @@ def validate_name(value, min_length=2, max_length=200):
     """
     if not value:
         raise ValidationError(_('Name cannot be empty.'), code='blank')
-    
+
     value = str(value).strip()
-    
+
     if len(value) < min_length:
         raise ValidationError(
             _('Name must be at least %(min)d characters.'),
             code='too_short',
             params={'min': min_length},
         )
-    
+
     if len(value) > max_length:
         raise ValidationError(
             _('Name cannot exceed %(max)d characters.'),
             code='too_long',
             params={'max': max_length},
         )
-    
+
     # Allow letters (any language), spaces, hyphens, apostrophes only
     if not re.match(r"^[\p{L}\s\-']+$", value, re.UNICODE):
         raise ValidationError(
@@ -181,9 +182,9 @@ def validate_dosage(value):
     """
     if not value:
         return  # Allow blank
-    
+
     value = str(value).strip()
-    
+
     # Pattern: number (with optional decimal) + space + unit
     pattern = r'^(\d+\.?\d*)\s*([a-zA-Z]+)$'
     if not re.match(pattern, value):
@@ -205,9 +206,9 @@ def validate_icd_code(value):
     """
     if not value:
         return  # Allow blank
-    
+
     value = str(value).strip().upper()
-    
+
     # ICD-10 pattern
     if not re.match(r'^[A-Z][0-9]{2}(\.[0-9]{1,2})?$', value):
         raise ValidationError(
@@ -227,16 +228,16 @@ def validate_safe_string(value, max_length=5000):
     """
     if not value:
         return
-    
+
     value = str(value).strip()
-    
+
     if len(value) > max_length:
         raise ValidationError(
             _('Text exceeds maximum length of %(max)d characters.'),
             code='too_long',
             params={'max': max_length},
         )
-    
+
     # Detect HTML tags or script tags
     if re.search(r'<[^>]*>', value) or 'script' in value.lower():
         raise ValidationError(
@@ -249,8 +250,6 @@ def validate_safe_string(value, max_length=5000):
 # UUID VALIDATION (Database IDs)
 # ============================================================================
 
-import uuid as uuid_module
-
 
 def validate_uuid(value):
     """
@@ -258,7 +257,7 @@ def validate_uuid(value):
     """
     if not value:
         return
-    
+
     try:
         uuid_module.UUID(str(value))
     except (ValueError, AttributeError):
@@ -279,7 +278,7 @@ def validate_numeric_range(value, min_value=None, max_value=None):
     """
     if value is None:
         return
-    
+
     try:
         num = float(value)
     except (ValueError, TypeError):
@@ -287,14 +286,14 @@ def validate_numeric_range(value, min_value=None, max_value=None):
             _('Value must be numeric.'),
             code='not_numeric',
         )
-    
+
     if min_value is not None and num < min_value:
         raise ValidationError(
             _('Value must be at least %(min)d.'),
             code='too_small',
             params={'min': min_value},
         )
-    
+
     if max_value is not None and num > max_value:
         raise ValidationError(
             _('Value must not exceed %(max)d.'),
@@ -316,7 +315,7 @@ def validate_blood_group(value):
     """
     if not value:
         return
-    
+
     if value not in BLOOD_GROUPS:
         raise ValidationError(
             _('Invalid blood group. Must be one of: %(choices)s'),
@@ -338,7 +337,7 @@ def validate_gender(value):
     """
     if not value:
         return
-    
+
     if value not in VALID_GENDERS:
         raise ValidationError(
             _('Invalid gender. Must be one of: %(choices)s'),
@@ -357,63 +356,63 @@ def validate_patient_demographics(data):
     Called from serializers before save.
     """
     errors = {}
-    
+
     # Full name validation
     if 'full_name' in data:
         try:
             validate_name(data['full_name'])
         except ValidationError as e:
             errors['full_name'] = e
-    
+
     # Phone validation
     if 'phone' in data and data['phone']:
         try:
             validate_phone_number(data['phone'])
         except ValidationError as e:
             errors['phone'] = e
-    
+
     # Ghana Health ID
     if 'ghana_health_id' in data:
         try:
             validate_ghana_health_id(data['ghana_health_id'])
         except ValidationError as e:
             errors['ghana_health_id'] = e
-    
+
     # National ID
     if 'national_id' in data:
         try:
             validate_national_id(data['national_id'])
         except ValidationError as e:
             errors['national_id'] = e
-    
+
     # NHIS number
     if 'nhis_number' in data:
         try:
             validate_nhis_number(data['nhis_number'])
         except ValidationError as e:
             errors['nhis_number'] = e
-    
+
     # Passport
     if 'passport_number' in data:
         try:
             validate_passport_number(data['passport_number'])
         except ValidationError as e:
             errors['passport_number'] = e
-    
+
     # Blood group
     if 'blood_group' in data:
         try:
             validate_blood_group(data['blood_group'])
         except ValidationError as e:
             errors['blood_group'] = e
-    
+
     # Gender
     if 'gender' in data:
         try:
             validate_gender(data['gender'])
         except ValidationError as e:
             errors['gender'] = e
-    
+
     if errors:
         raise ValidationError(errors)
 
@@ -423,27 +422,27 @@ def validate_medical_record(data):
     PHASE 2: Validates medical record data (diagnosis, prescription, etc.).
     """
     errors = {}
-    
+
     # Diagnosis code
     if 'icd_code' in data:
         try:
             validate_icd_code(data['icd_code'])
         except ValidationError as e:
             errors['icd_code'] = e
-    
+
     # Dosage
     if 'dosage' in data:
         try:
             validate_dosage(data['dosage'])
         except ValidationError as e:
             errors['dosage'] = e
-    
+
     # Clinical notes
     if 'clinical_notes' in data:
         try:
             validate_safe_string(data['clinical_notes'], max_length=5000)
         except ValidationError as e:
             errors['clinical_notes'] = e
-    
+
     if errors:
         raise ValidationError(errors)

@@ -9,6 +9,8 @@ from rest_framework.response import Response
 from patients.models import ClinicalAlert, PatientAdmission
 from records.models import MedicalRecord, NurseShift, Prescription, NursingNote
 from api.utils import get_effective_hospital, get_request_hospital, audit_log
+from core.models import User, AuditLog
+from api.decorators import requires_role
 
 
 def _nurse_context_or_403(request):
@@ -58,13 +60,13 @@ def _build_shift_payload(shift):
 @permission_classes([IsAuthenticated])
 def nurse_shift_start(request):
     """Start a nursing shift.
-    
+
     Request body:
     {
         "ward_id": "uuid",
         "bed_assignments": ["patient_id1", "patient_id2", ...] (optional)
     }
-    
+
     Returns:
     {
         "shift_id": "uuid",
@@ -97,21 +99,21 @@ def nurse_shift_start(request):
             shift_start=timezone.now(),
             status="active",
         )
-    
+
     if not created:
         shift.status = "active"
         shift.shift_start = timezone.now()
         shift.save(update_fields=["status", "shift_start"])
-    
+
     # Get assigned patients and pending tasks
     admissions = PatientAdmission.objects.filter(
         ward=ward,
         hospital=hospital,
         discharged_at__isnull=True,
     ).select_related("patient")
-    
+
     assigned_patients = admissions.count()
-    
+
     # Count pending vitals (vitals not recorded in last 4 hours)
     pending_vitals = 0
     for admission in admissions:
@@ -122,7 +124,7 @@ def nurse_shift_start(request):
         ).exists()
         if not recent_vital:
             pending_vitals += 1
-    
+
     # Count pending medications (not dispensed)
     pending_meds = 0
     for admission in admissions:
@@ -132,7 +134,7 @@ def nurse_shift_start(request):
         ).filter(
             prescription__dispense_status="pending"
         ).count()
-    
+
     audit_log(
         request.user,
         "NURSE_SHIFT_START",
@@ -141,7 +143,7 @@ def nurse_shift_start(request):
         hospital,
         request,
     )
-    
+
     return Response({
         "shift_id": str(shift.id),
         "status": shift.status,
@@ -219,11 +221,18 @@ def nurse_dashboard(request):
             "patient_id": str(admission.patient_id),
             "patient_name": admission.patient.full_name,
             "bed_code": bed_code,
-            "last_recorded": latest_vitals.get(admission.patient_id).isoformat() if latest_vitals.get(admission.patient_id) else None,
+            "last_recorded": (
+                latest_vitals.get(admission.patient_id).isoformat()
+                if latest_vitals.get(admission.patient_id)
+                else None
+            ),
         })
     for rx in list(pending_rx[:6]):
         patient = rx.record.patient
-        admission = next((a for a in vitals_due + list(admissions) if a.patient_id == patient.id), None)
+        admission = next(
+            (a for a in vitals_due + list(admissions) if a.patient_id == patient.id),
+            None
+        )
         bed_code = admission.bed.bed_code if admission and admission.bed else "Unassigned"
         priority_rows.append({
             "type": "DISPENSE",
@@ -425,111 +434,228 @@ def nurse_shift_end(request):
 
 
 @api_view(["POST"])
-@permission_classes([IsAuthenticated])
+@requires_role("nurse", "super_admin")
 def nurse_shift_handover(request, shift_id):
-    """Submit shift handover notes with summary of activities.
-    
-    Request body:
-    {
-        "handover_notes": "All vitals recorded. 2 patients admitted, 1 discharged...",
-        "critical_alerts": ["patient_id1", "patient_id2"],  (optional)
-        "pending_orders": [{"patient_id": "uuid", "order_type": "lab", "details": "..."}],  (optional)
-        "medications_given": [
-            {"patient_id": "uuid", "medication": "Paracetamol", "dosage": "500mg", "route": "PO"}
-        ]  (optional)
-    }
-    
-    Returns:
-    {
-        "handover_id": "uuid",
-        "status": "submitted",
-        "submitted_at": "2024-01-15T16:00:00Z",
-        "shift_id": "uuid",
-        "summary": {...}
-    }
     """
+    Submit shift handover with SBAR structure and incoming nurse assignment.
+
+    Request body (enhanced with SBAR):
+    {
+        "sbar_situation": "Patient vitals stable, no acute complaints...",
+        "sbar_background": "Admitted 2 days ago with pneumonia...",
+        "sbar_assessment": "Pain level 2/10, SpO2 96%, alert and oriented...",
+        "sbar_recommendation": "Continue antibiotics, monitor temp q4h...",
+        "incoming_nurse_id": "uuid",  (required - assign to specific nurse)
+        "critical_patients": ["patient_id1", "patient_id2"]  (optional)
+    }
+
+    Legacy format still supported:
+    {
+        "handover_notes": "All vitals recorded...",  (optional, for backward compat)
+        "critical_alerts": ["patient_id1"],
+        ...
+    }
+
+    Returns 201: ShiftHandover object with both signatures timestamps
+    """
+    from records.models import ShiftHandover
+    from api.serializers import ShiftHandoverSerializer
+
     ctx, err = _nurse_context_or_403(request)
     if err:
         return err
     hospital = ctx["hospital"]
-    from records.models import ShiftHandover
+
+    # Get shift
     shift = NurseShift.objects.filter(
         id=shift_id,
         nurse=request.user,
         hospital=hospital
     ).first()
-    
+
     if not shift:
         return Response(
-            {"message": "Shift not found"},
+            {"error": "Shift not found"},
             status=status.HTTP_404_NOT_FOUND,
         )
-    
+
     data = request.data
-    handover_notes = (data.get("handover_notes") or "").strip()
-    
-    if not handover_notes:
+
+    # Validate SBAR fields (all required)
+    sbar_situation = (data.get("sbar_situation") or "").strip()
+    sbar_background = (data.get("sbar_background") or "").strip()
+    sbar_assessment = (data.get("sbar_assessment") or "").strip()
+    sbar_recommendation = (data.get("sbar_recommendation") or "").strip()
+
+    # Check all SBAR fields populated
+    if not all([sbar_situation, sbar_background, sbar_assessment, sbar_recommendation]):
         return Response(
-            {"message": "handover_notes required"},
+            {
+                "error": (
+                    "All SBAR fields required: sbar_situation, "
+                    "sbar_background, sbar_assessment, sbar_recommendation"
+                )
+            },
             status=status.HTTP_400_BAD_REQUEST,
         )
-    
-    # Create handover record
+
+    # Get incoming nurse (required)
+    incoming_nurse_id = data.get("incoming_nurse_id")
+    if not incoming_nurse_id:
+        return Response(
+            {"error": "incoming_nurse_id required"},
+            status=status.HTTP_400_BAD_REQUEST,
+        )
+
+    try:
+        incoming_nurse = User.objects.get(id=incoming_nurse_id)
+    except User.DoesNotExist:
+        return Response(
+            {"error": "Incoming nurse not found"},
+            status=status.HTTP_404_NOT_FOUND,
+        )
+
+    # Validate incoming nurse is at same hospital and is a nurse
+    if incoming_nurse.hospital != hospital:
+        return Response(
+            {"error": "Incoming nurse must be at same hospital"},
+            status=status.HTTP_403_FORBIDDEN,
+        )
+
+    if incoming_nurse.role != "nurse":
+        return Response(
+            {"error": "Incoming nurse must have nurse role"},
+            status=status.HTTP_400_BAD_REQUEST,
+        )
+
+    # Create handover with SBAR structure
     handover = ShiftHandover.objects.create(
         shift=shift,
         nurse=request.user,
         hospital=hospital,
-        handover_notes=handover_notes,
-        submitted_at=timezone.now(),
+        sbar_situation=sbar_situation,
+        sbar_background=sbar_background,
+        sbar_assessment=sbar_assessment,
+        sbar_recommendation=sbar_recommendation,
+        incoming_nurse=incoming_nurse,
+        # Keep legacy field for backward compat
+        handover_notes=data.get("handover_notes", ""),
     )
-    
-    # Store critical alerts
-    critical_alerts = data.get("critical_alerts", [])
-    if critical_alerts:
+
+    # Add critical patients if provided
+    critical_patients = data.get("critical_patients", [])
+    if critical_patients:
         from patients.models import Patient
-        for patient_id in critical_alerts:
+        for patient_id in critical_patients:
             try:
-                patient = Patient.objects.get(id=patient_id, hospital=hospital)
+                patient = Patient.objects.get(id=patient_id, registered_at=hospital)
                 handover.critical_patients.add(patient)
             except Patient.DoesNotExist:
-                pass
-    
+                logger.debug(f"Patient {patient_id} not found in hospital {hospital.id} for handover")
+
     # Close shift
     shift.status = "completed"
     shift.shift_end = timezone.now()
     shift.save(update_fields=["status", "shift_end"])
-    
-    audit_log(
-        request.user,
-        "NURSE_SHIFT_HANDOVER",
-        "shift_handover",
-        str(handover.id),
-        hospital,
-        request,
+
+    # Audit log
+    AuditLog.log_action(
+        user=request.user,
+        action="HANDOVER_SUBMITTED",
+        resource_type="ShiftHandover",
+        resource_id=str(handover.id),
+        hospital=hospital,
+        request=request,
+        extra_data={"incoming_nurse_id": str(incoming_nurse_id)}
     )
-    
-    return Response({
-        "handover_id": str(handover.id),
-        "status": "submitted",
-        "submitted_at": handover.submitted_at.isoformat(),
-        "shift_id": str(shift.id),
-        "summary": {
-            "notes_length": len(handover_notes),
-            "critical_patients": handover.critical_patients.count(),
-        }
-    }, status=status.HTTP_201_CREATED)
+
+    # Return serialized handover
+    serializer = ShiftHandoverSerializer(handover)
+    return Response(serializer.data, status=status.HTTP_201_CREATED)
+
+
+@api_view(["POST"])
+@requires_role("nurse", "super_admin")
+def nurse_shift_handover_acknowledge(request, handover_id):
+    """
+    Incoming nurse acknowledges a pending handover (second signature).
+
+    Validates:
+    - User is the assigned incoming_nurse
+    - Handover not yet acknowledged
+    - User has access to handover's hospital
+
+    Request body: {} (empty, or can include optional acknowledgement comment)
+
+    Returns 200: Updated ShiftHandover with incoming_acknowledged_at set
+    """
+    from records.models import ShiftHandover
+    from api.serializers import ShiftHandoverSerializer
+
+    try:
+        handover = ShiftHandover.objects.get(id=handover_id)
+    except ShiftHandover.DoesNotExist:
+        return Response(
+            {"error": "Handover not found"},
+            status=status.HTTP_404_NOT_FOUND
+        )
+
+    # Check user can access this handover's hospital
+    if handover.hospital != request.user.hospital:
+        return Response(
+            {"error": "Access denied"},
+            status=status.HTTP_403_FORBIDDEN
+        )
+
+    # Check user is the assigned incoming nurse
+    if handover.incoming_nurse_id != request.user.id:
+        return Response(
+            {
+                "error": "Only assigned incoming nurse can acknowledge",
+                "expected_incoming_nurse": str(handover.incoming_nurse_id) if handover.incoming_nurse_id else None
+            },
+            status=status.HTTP_403_FORBIDDEN
+        )
+
+    # Check not already acknowledged
+    if handover.is_acknowledged:
+        return Response(
+            {
+                "error": "Handover already acknowledged",
+                "acknowledged_at": handover.incoming_acknowledged_at.isoformat()
+            },
+            status=status.HTTP_400_BAD_REQUEST
+        )
+
+    # Record second signature
+    handover.incoming_acknowledged_at = timezone.now()
+    handover.save(update_fields=["incoming_acknowledged_at"])
+
+    # Audit log
+    AuditLog.log_action(
+        user=request.user,
+        action="HANDOVER_ACKNOWLEDGED",
+        resource_type="ShiftHandover",
+        resource_id=str(handover.id),
+        hospital=handover.hospital,
+        request=request,
+    )
+
+    # Return updated handover via serializer
+    serializer = ShiftHandoverSerializer(handover)
+    return Response(serializer.data, status=status.HTTP_200_OK)
 
 
 @api_view(["GET"])
 @permission_classes([IsAuthenticated])
 def nurse_overdue_vitals(request):
     """Get list of patients with overdue vital signs.
-    
+
     Query parameters:
     - ward_id: Filter by ward UUID (optional)
     - hours_threshold: Hours since last vital (default 4)
     - limit: Max results (default 50)
-    
+
     Returns:
     {
         "count": 12,
@@ -551,28 +677,28 @@ def nurse_overdue_vitals(request):
     """
     if request.user.role not in ("nurse", "hospital_admin", "super_admin"):
         return Response({"message": "Permission denied"}, status=status.HTTP_403_FORBIDDEN)
-    
+
     hospital = get_effective_hospital(request)
     hours_threshold = int(request.GET.get("hours_threshold", "4") or "4")
     limit = min(int(request.GET.get("limit", "50") or "50"), 200)
-    
+
     # Get active admissions
     admissions = PatientAdmission.objects.filter(
         hospital=hospital,
         discharged_at__isnull=True
     ).select_related("patient", "ward")
-    
+
     if request.user.role == "nurse":
         admissions = admissions.filter(ward=request.user.ward)
     else:
         ward_id = request.GET.get("ward_id")
         if ward_id:
             admissions = admissions.filter(ward_id=ward_id)
-    
+
     # Find overdue vitals
     cutoff_time = timezone.now() - timedelta(hours=hours_threshold)
     overdue_list = []
-    
+
     for admission in admissions:
         # Check for recent vitals
         recent_vital = MedicalRecord.objects.filter(
@@ -580,33 +706,41 @@ def nurse_overdue_vitals(request):
             record_type="vital_signs",
             created_at__gte=cutoff_time
         ).order_by("-created_at").first()
-        
+
         if not recent_vital:
             # No vitals in threshold window
             last_vital = MedicalRecord.objects.filter(
                 patient=admission.patient,
                 record_type="vital_signs"
             ).order_by("-created_at").first()
-            
+
             base_ts = last_vital.created_at if last_vital else admission.admitted_at
             hours_overdue = (timezone.now() - base_ts).total_seconds() / 3600
-            
+
             overdue_list.append({
                 "patient_id": str(admission.patient.id),
                 "patient_name": admission.patient.full_name,
                 "ghana_health_id": admission.patient.ghana_health_id,
-                "last_vital_at": last_vital.created_at.isoformat() if last_vital else None,
+                "last_vital_at": (
+                    last_vital.created_at.isoformat() if last_vital else None
+                ),
                 "hours_overdue": round(hours_overdue, 1),
-                "vital_types_needed": ["temperature", "blood_pressure", "heart_rate", "respiratory_rate", "oxygen_saturation"],
+                "vital_types_needed": [
+                    "temperature",
+                    "blood_pressure",
+                    "heart_rate",
+                    "respiratory_rate",
+                    "oxygen_saturation"
+                ],
                 "ward": admission.ward.ward_name if admission.ward else "Unknown",
                 "admission_id": str(admission.id),
                 "priority": "critical" if hours_overdue > 8 else "high" if hours_overdue > 4 else "medium",
             })
-    
+
     # Sort by hours_overdue (most overdue first)
     overdue_list.sort(key=lambda x: x["hours_overdue"], reverse=True)
     overdue_list = overdue_list[:limit]
-    
+
     return Response({
         "count": len(overdue_list),
         "hours_threshold": hours_threshold,

@@ -1,0 +1,19 @@
+{
+  "encounters": 439,
+  "qsofa_dist": {
+    "1": 125,
+    "0": 312,
+    "2": 2
+  },
+  "news2_dist": {
+    "1": 201,
+    "0": 209,
+    "2": 29
+  },
+  "risk_dist": {
+    "MEDIUM": 125,
+    "LOW": 312,
+    "HIGH": 2
+  },
+  "high_risk_count": 2
+}

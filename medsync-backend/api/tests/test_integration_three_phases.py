@@ -5,13 +5,10 @@ Comprehensive end-to-end integration test covering:
 3. No-show auto-marking with override window
 4. Multi-hospital isolation
 """
-import pytest
 from django.test import TestCase, override_settings
 from django.utils import timezone
 from datetime import timedelta
 from rest_framework.test import APIClient
-from rest_framework import status
-import json
 
 from core.models import User, Hospital, AuditLog
 from interop.models import GlobalPatient, BreakGlassLog
@@ -34,14 +31,12 @@ class BreakGlassTimeWindowIntegrationTestCase(TestCase):
         self.hospital1 = Hospital.objects.create(
             name="Emergency Hospital 1",
             region="Region A",
-            nhis_code="EH001",
-            is_active=True,
+            nhis_code="EH001",is_active=True,
         )
         self.hospital2 = Hospital.objects.create(
             name="Emergency Hospital 2",
             region="Region B",
-            nhis_code="EH002",
-            is_active=True,
+            nhis_code="EH002",is_active=True,
         )
 
         # Create users in different hospitals
@@ -220,8 +215,7 @@ class CeleryTaskExecutionIntegrationTestCase(TestCase):
         self.hospital = Hospital.objects.create(
             name="PDF Export Hospital",
             region="Region C",
-            nhis_code="PH001",
-            is_active=True,
+            nhis_code="PH001",is_active=True,
         )
 
         self.doctor = User.objects.create_user(
@@ -303,8 +297,7 @@ class NoShowAutoMarkingIntegrationTestCase(TestCase):
         self.hospital = Hospital.objects.create(
             name="No-Show Test Hospital",
             region="Region D",
-            nhis_code="NSH001",
-            is_active=True,
+            nhis_code="NSH001",is_active=True,
         )
 
         self.doctor = User.objects.create_user(
@@ -535,15 +528,13 @@ class MultiHospitalIsolationIntegrationTestCase(TestCase):
         self.hospital1 = Hospital.objects.create(
             name="Isolation Hospital 1",
             region="Region E",
-            nhis_code="IH001",
-            is_active=True,
+            nhis_code="IH001",is_active=True,
         )
 
         self.hospital2 = Hospital.objects.create(
             name="Isolation Hospital 2",
             region="Region F",
-            nhis_code="IH002",
-            is_active=True,
+            nhis_code="IH002",is_active=True,
         )
 
         # Create users in each hospital
@@ -829,8 +820,7 @@ class EndToEndThreePhaseIntegrationTestCase(TestCase):
         self.hospital = Hospital.objects.create(
             name="E2E Test Hospital",
             region="Region G",
-            nhis_code="E2E001",
-            is_active=True,
+            nhis_code="E2E001",is_active=True,
         )
 
         self.doctor = User.objects.create_user(
@@ -915,3 +905,5 @@ class EndToEndThreePhaseIntegrationTestCase(TestCase):
         audit_actions = audit_entries.values_list("action", flat=True)
 
         self.assertIn("EMERGENCY_ACCESS", audit_actions)
+
+

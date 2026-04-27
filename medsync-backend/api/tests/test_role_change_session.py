@@ -142,3 +142,5 @@ def test_jwt_authentication_loads_user_from_database_each_request(hospital):
     auth = JWTAuthentication()
     user, _ = auth.authenticate(drf_req)
     assert user.role == "nurse"
+
+

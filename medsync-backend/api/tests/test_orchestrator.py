@@ -101,3 +101,5 @@ class TestAIOrchestrator:
         )
         assert "similarity_agent" in result["agents_executed"] or "similar_patients" in result
         assert "referral_agent" in result["agents_executed"] or "referral_recommendations" in result
+
+

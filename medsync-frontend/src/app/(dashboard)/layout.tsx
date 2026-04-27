@@ -4,15 +4,20 @@ import React, { useEffect } from "react";
 import { useRouter, usePathname } from "next/navigation";
 import { Sidebar } from "@/components/layout/Sidebar";
 import { TopBar } from "@/components/layout/TopBar";
+import { ViewAsBanner } from "@/components/layout/ViewAsBanner";
+import { CommandPalette } from "@/components/ui/CommandPalette";
 import { useAuth } from "@/lib/auth-context";
+import { useSidebar } from "@/lib/sidebar-context";
 import { isPathnameAccessible } from "@/lib/navigation";
+import { SidebarProvider } from "@/lib/sidebar-context";
 
-export default function DashboardLayout({
+function DashboardLayoutContent({
   children,
 }: {
   children: React.ReactNode;
 }) {
   const { isAuthenticated, user, hydrated, viewAsHospitalId } = useAuth();
+  const { collapsed } = useSidebar();
   const router = useRouter();
   const pathname = usePathname();
 
@@ -36,8 +41,8 @@ export default function DashboardLayout({
   // Show loading until auth is ready: not hydrated, or no session, or have token but user not yet loaded (/auth/me in flight)
   if (!hydrated || (!isAuthenticated && !user) || (isAuthenticated && !user)) {
     return (
-      <div className="flex min-h-screen items-center justify-center bg-gradient-to-br from-[#F5F3EE] to-[#EDF2F7]">
-        <div className="text-[#64748B]">Loading...</div>
+      <div className="flex min-h-screen items-center justify-center bg-gradient-to-br from-[var(--cream-bg)] to-[#EDF2F7] dark:from-[#0F172A] dark:to-[#1A2E47]">
+        <div className="text-[var(--gray-500)]">Loading...</div>
       </div>
     );
   }
@@ -50,19 +55,39 @@ export default function DashboardLayout({
     })
   ) {
     return (
-      <div className="flex min-h-screen items-center justify-center bg-gradient-to-br from-[#F5F3EE] to-[#EDF2F7]">
-        <div className="text-[#64748B]">Redirecting...</div>
+      <div className="flex min-h-screen items-center justify-center bg-gradient-to-br from-[var(--cream-bg)] to-[#EDF2F7] dark:from-[#0F172A] dark:to-[#1A2E47]">
+        <div className="text-[var(--gray-500)]">Redirecting...</div>
       </div>
     );
   }
 
   return (
-    <div className="flex min-h-screen bg-[#F5F3EE]">
-      <Sidebar />
-      <div className="flex flex-1 flex-col pl-[260px]">
-        <TopBar />
-        <main className="dashboard-main flex-1 p-8">{children}</main>
+    <>
+      <ViewAsBanner />
+      <div className="flex min-h-screen bg-[var(--cream-bg)]">
+        <Sidebar />
+        <div
+          className={`flex flex-1 flex-col transition-all duration-200 ${
+            collapsed ? "lg:pl-16" : "lg:pl-[260px]"
+          }`}
+        >
+          <TopBar />
+          <main className="dashboard-main flex-1 p-4 md:p-6 lg:p-8">{children}</main>
+        </div>
       </div>
-    </div>
+      <CommandPalette />
+    </>
+  );
+}
+
+export default function DashboardLayout({
+  children,
+}: {
+  children: React.ReactNode;
+}) {
+  return (
+    <SidebarProvider>
+      <DashboardLayoutContent>{children}</DashboardLayoutContent>
+    </SidebarProvider>
   );
 }

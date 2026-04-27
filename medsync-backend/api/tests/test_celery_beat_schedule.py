@@ -8,7 +8,6 @@ from django.test import TestCase, override_settings
 from django.conf import settings
 from celery import current_app
 from celery.schedules import crontab
-import re
 
 
 class CeleryBeatScheduleTestCase(TestCase):
@@ -30,7 +29,7 @@ class CeleryBeatScheduleTestCase(TestCase):
         """Test that task name points to correct function."""
         beat_schedule = settings.CELERY_BEAT_SCHEDULE
         task_config = beat_schedule['mark-no-shows-every-15-minutes']
-        
+
         self.assertEqual(
             task_config['task'],
             'api.tasks.appointment_tasks.mark_no_shows_task'
@@ -41,10 +40,10 @@ class CeleryBeatScheduleTestCase(TestCase):
         beat_schedule = settings.CELERY_BEAT_SCHEDULE
         task_config = beat_schedule['mark-no-shows-every-15-minutes']
         schedule = task_config['schedule']
-        
+
         # Verify it's a crontab schedule
         self.assertIsInstance(schedule, crontab)
-        
+
         # Check that minute pattern is */15 (every 15 minutes)
         # crontab minute attribute is a set of allowed minutes
         minute_pattern = schedule.minute
@@ -56,7 +55,7 @@ class CeleryBeatScheduleTestCase(TestCase):
         """Test that task has expiry time (10 minutes)."""
         beat_schedule = settings.CELERY_BEAT_SCHEDULE
         task_config = beat_schedule['mark-no-shows-every-15-minutes']
-        
+
         self.assertIn('options', task_config)
         self.assertIn('expires', task_config['options'])
         self.assertEqual(task_config['options']['expires'], 600)  # 10 minutes
@@ -72,9 +71,7 @@ class CeleryBeatScheduleTestCase(TestCase):
 
     def test_celery_beat_scheduler_available(self):
         """Test that django-celery-beat is installed and available."""
-        from django.apps import apps
-        from django_celery_beat.apps import BeatConfig
-        
+
         # Check that django_celery_beat app is installed
         self.assertIn('django_celery_beat', settings.INSTALLED_APPS)
 
@@ -83,7 +80,7 @@ class CeleryBeatScheduleTestCase(TestCase):
         """Test that Celery can discover the mark_no_shows_task."""
         tasks = current_app.tasks
         task_name = 'api.tasks.appointment_tasks.mark_no_shows_task'
-        
+
         # The task should be registered in Celery
         self.assertIn(task_name, tasks)
 
@@ -92,7 +89,7 @@ class CeleryBeatScheduleTestCase(TestCase):
         # Read the settings file to verify documentation
         import inspect
         import medsync_backend.settings as settings_module
-        
+
         source = inspect.getsource(settings_module)
         # Check that documentation about 15-minute interval exists
         self.assertIn('15 minutes', source)
@@ -103,7 +100,7 @@ class CeleryBeatScheduleTestCase(TestCase):
         beat_schedule = settings.CELERY_BEAT_SCHEDULE
         task_config = beat_schedule['mark-no-shows-every-15-minutes']
         schedule = task_config['schedule']
-        
+
         # Verify that the schedule will fire on valid times
         # Check that it fires at minute 0 (start of hour)
         self.assertIn(0, schedule.minute)
@@ -124,13 +121,15 @@ class CeleryBeatScheduleTestCase(TestCase):
         """Test that schedule options are properly formatted."""
         beat_schedule = settings.CELERY_BEAT_SCHEDULE
         task_config = beat_schedule['mark-no-shows-every-15-minutes']
-        
+
         # Verify options dict structure
         options = task_config['options']
         self.assertIsInstance(options, dict)
-        
+
         # Verify expires is a positive integer (seconds)
         expires = options['expires']
         self.assertIsInstance(expires, int)
         self.assertGreater(expires, 0)
         self.assertEqual(expires, 600)  # 10 minutes in seconds
+
+

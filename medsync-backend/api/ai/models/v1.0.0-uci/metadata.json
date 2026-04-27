@@ -1,0 +1,8 @@
+{
+  "model_version": "1.0.0-uci",
+  "training_date": "2026-04-20T12:55:53.312970",
+  "data_source": "uci",
+  "data_size": 5000,
+  "n_features": 26,
+  "readmission_rate": 0.3576
+}

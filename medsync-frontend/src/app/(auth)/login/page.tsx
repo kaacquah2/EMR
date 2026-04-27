@@ -6,15 +6,27 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { AuthLayout } from "@/components/auth/AuthLayout";
 import { useAuth } from "@/lib/auth-context";
+import { usePasskey } from "@/hooks/use-passkey";
 import type { AuthTokens } from "@/lib/types";
 import { API_BASE } from "@/lib/api-base";
+import { validateDevicePolicy, cacheDevicePolicyCheck, getCachedDevicePolicy } from "@/lib/device-policy";
+import type { DevicePolicy } from "@/lib/device-policy";
 
-type Step = "credentials" | "mfa";
+type Step = "credentials" | "passkey" | "password" | "mfa";
 type MfaMode = "totp" | "backup";
 type MfaChannel = "email" | "authenticator";
 
+// UX-09: Context-aware save button labels per step
+const STEP_LABELS: Record<Step, string> = {
+  credentials: "Sign in",
+  passkey: "Sign in",
+  password: "Sign in",
+  mfa: "Verify code",
+};
+
 export default function LoginPage() {
   const { login } = useAuth();
+  const passkey = usePasskey();
   const [step, setStep] = useState<Step>("credentials");
   const [mfaMode, setMfaMode] = useState<MfaMode>("totp");
   const [email, setEmail] = useState("");
@@ -23,10 +35,17 @@ export default function LoginPage() {
   const [backupCode, setBackupCode] = useState("");
   const [mfaToken, setMfaToken] = useState<string | null>(null);
   const [mfaChannel, setMfaChannel] = useState<MfaChannel | null>(null);
+  // UX-04: errors use role="alert"
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
   const [rememberMe, setRememberMe] = useState(false);
   const [timeRemaining, setTimeRemaining] = useState(30);
+  const [devicePolicy, setDevicePolicy] = useState<DevicePolicy | null>(null);
+  const [userHasPasskey, setUserHasPasskey] = useState(false);
+  const [checkingPasskey, setCheckingPasskey] = useState(false);
+  // UX-02: Resend code state
+  const [resendCooldown, setResendCooldown] = useState(0);
+  const [resendLoading, setResendLoading] = useState(false);
 
   const handleCredentials = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -77,6 +96,8 @@ export default function LoginPage() {
         setMfaChannel(ch === "email" || ch === "authenticator" ? ch : "authenticator");
         setStep("mfa");
         setTimeRemaining(30);
+        // UX-02: start resend cooldown for email OTP
+        if (ch === "email") setResendCooldown(60);
       } else if (data.access_token) {
         login(data as AuthTokens, { rememberMe });
         const role = (data as AuthTokens).user_profile?.role;
@@ -89,16 +110,77 @@ export default function LoginPage() {
     }
   };
 
+  // UX-02: Resend OTP handler
+  const handleResend = async () => {
+    if (resendCooldown > 0 || !mfaToken) return;
+    setResendLoading(true);
+    try {
+      await fetch(`${API_BASE}/auth/mfa-resend`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ mfa_token: mfaToken }),
+      });
+      setResendCooldown(60);
+      setMfaCode(["", "", "", "", "", ""]);
+      setError("");
+    } catch {
+      setError("Could not resend code. Please try again.");
+    } finally {
+      setResendLoading(false);
+    }
+  };
+
+  // UX-02: Resend cooldown countdown
+  useEffect(() => {
+    if (resendCooldown <= 0) return;
+    const t = setInterval(() => setResendCooldown((v) => Math.max(0, v - 1)), 1000);
+    return () => clearInterval(t);
+  }, [resendCooldown]);
+
+  useEffect(() => {
+    const cached = getCachedDevicePolicy();
+    if (cached) {
+      setDevicePolicy(cached);
+    } else {
+      const policy = validateDevicePolicy();
+      setDevicePolicy(policy);
+      cacheDevicePolicyCheck(policy);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (!email || !email.includes("@")) {
+      setUserHasPasskey(false);
+      return;
+    }
+    setCheckingPasskey(true);
+    const checkPasskey = async () => {
+      try {
+        const res = await fetch(`${API_BASE}/auth/passkey/check`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ email }),
+        });
+        const data = await res.json();
+        setUserHasPasskey(data.has_passkeys === true);
+      } catch {
+        setUserHasPasskey(false);
+      } finally {
+        setCheckingPasskey(false);
+      }
+    };
+    const timer = setTimeout(checkPasskey, 300);
+    return () => clearTimeout(timer);
+  }, [email]);
+
   useEffect(() => {
     if (step !== "mfa" || mfaChannel !== "authenticator") return;
-
     const interval = setInterval(() => {
       setTimeRemaining((prev) => {
         if (prev <= 1) return 30;
         return prev - 1;
       });
     }, 1000);
-
     return () => clearInterval(interval);
   }, [step, mfaChannel]);
 
@@ -121,11 +203,7 @@ export default function LoginPage() {
       const data = await res.json();
       if (!res.ok) {
         const msg = data.message || "Invalid code";
-        if (
-          mfaMode === "totp" &&
-          mfaChannel === "authenticator" &&
-          msg.toLowerCase().includes("invalid")
-        ) {
+        if (mfaMode === "totp" && mfaChannel === "authenticator" && msg.toLowerCase().includes("invalid")) {
           setError(`${msg}. Tip: Make sure your device's date and time are correct.`);
         } else {
           setError(msg);
@@ -165,57 +243,111 @@ export default function LoginPage() {
     }
   };
 
+  const handlePasskeyLogin = async () => {
+    if (!email) { setError("Please enter your email first"); return; }
+    setError("");
+    setLoading(true);
+    try {
+      const result = await passkey.authenticate(email);
+      login(result as AuthTokens, { rememberMe });
+      const role = (result as AuthTokens).role;
+      window.location.href = role === "super_admin" ? "/superadmin" : "/dashboard";
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : "Passkey authentication failed. Try password instead.";
+      setError(message);
+      setStep("password");
+    } finally {
+      setLoading(false);
+    }
+  };
+
   return (
     <AuthLayout title="MedSync" subtitle="One Record. Every Hospital.">
+      {/* UX-28: Apply login-form-enter animation on step change */}
       {step === "credentials" ? (
-        <form key="credentials" onSubmit={handleCredentials} className="space-y-4">
-          <h2 className="font-sora text-lg font-semibold text-[#0F172A]">Sign in to MedSync</h2>
+        <form key="credentials" onSubmit={handleCredentials} className="login-form-enter space-y-4">
+          <h2 className="font-sora text-lg font-semibold text-[var(--gray-900)]">Sign in to MedSync</h2>
+
+          {devicePolicy && !devicePolicy.isSupported && devicePolicy.warning && (
+            <div className="rounded-lg border border-[#FCD34D] bg-[#FEF3C7] p-3 text-sm text-[#92400E]" role="alert">
+              <p className="font-medium">{devicePolicy.warning}</p>
+              <p className="mt-1 text-xs">Supported: Windows (Hello) · macOS (Touch ID/Face ID)</p>
+            </div>
+          )}
+
           <Input
             label="Email"
             type="email"
             value={email}
             onChange={(e) => setEmail(e.target.value)}
             placeholder="you@hospital.gov.gh"
+            data-testid="login-email"
             required
             autoFocus
           />
+
+          {passkey.isSupported && email && passkey.isPlatformAvailable && userHasPasskey && !checkingPasskey && (
+            <div className="border-t pt-4">
+              <p className="mb-3 text-xs text-[var(--gray-500)]">Sign in with your saved passkey</p>
+              <Button type="button" fullWidth variant="outline" onClick={handlePasskeyLogin} disabled={loading} data-testid="login-passkey">
+                {loading ? "Signing in…" : "👆 Sign in with passkey (fingerprint/face ID)"}
+              </Button>
+              <p className="mt-2 text-center text-xs text-[var(--gray-500)]">No code needed — just your fingerprint or face</p>
+              <hr className="my-4 border-[var(--gray-300)]" />
+              <p className="mb-3 text-xs text-[var(--gray-500)]">Or continue with password</p>
+            </div>
+          )}
+
           <Input
             label="Password"
             type="password"
             value={password}
             onChange={(e) => setPassword(e.target.value)}
             placeholder="••••••••"
+            data-testid="login-password"
             required
           />
-          <label className="flex items-center gap-2 text-sm text-[#475569]">
+
+          <label className="flex items-center gap-2 text-sm text-[var(--gray-500)]">
             <input
               type="checkbox"
               checked={rememberMe}
               onChange={(e) => setRememberMe(e.target.checked)}
-              className="h-4 w-4 rounded border-[#CBD5E1] text-[#0B8A96] focus:ring-[#0B8A96]"
+              className="h-4 w-4 rounded border-[var(--gray-300)] text-[var(--teal-500)] focus:ring-[var(--teal-500)]"
             />
             Remember me (keep signed in after closing tab)
           </label>
-          <Link href="/forgot-password" className="block text-sm text-[#0B8A96] hover:underline">
+
+          <Link href="/forgot-password" className="block text-sm text-[var(--teal-500)] hover:underline">
             Forgot password?
           </Link>
-          {error && <p className="text-sm text-[#DC2626]">{error}</p>}
-          <Button type="submit" fullWidth disabled={loading}>
-            {loading ? "Signing in..." : "Continue"}
+
+          {/* UX-04: role="alert" on error */}
+          {error && <p className="text-sm text-[var(--red-600)]" role="alert" aria-live="polite">{error}</p>}
+
+          {/* UX-01: "Sign in" instead of "Continue" */}
+          <Button
+            type="submit"
+            fullWidth
+            disabled={loading || !email || !password}
+            data-testid="login-submit"
+          >
+            {loading ? "Signing in…" : STEP_LABELS[step]}
           </Button>
         </form>
       ) : (
-        <form key="mfa" onSubmit={handleMfa} className="space-y-4">
-          <h2 className="font-sora text-lg font-semibold text-[#0F172A]">
+        <form key="mfa" onSubmit={handleMfa} className="login-form-enter space-y-4">
+          <h2 className="font-sora text-lg font-semibold text-[var(--gray-900)]">
             {mfaMode === "backup"
               ? "Enter backup code"
               : mfaChannel === "email"
                 ? "Enter the 6-digit code from your email"
                 : "Enter your 6-digit code"}
           </h2>
+
           {mfaMode === "totp" ? (
             <>
-              <p className="text-sm text-[#64748B]">
+              <p className="text-sm text-[var(--gray-500)]">
                 {mfaChannel === "email"
                   ? "We sent a one-time code to your email. Enter it below."
                   : "Open your authenticator app to get the code."}
@@ -237,33 +369,43 @@ export default function LoginPage() {
                           if (el) (el as HTMLInputElement).focus();
                         }
                       }}
-                      className="h-12 w-10 rounded-lg border-2 border-[#CBD5E1] text-center font-mono text-lg focus:border-[#0B8A96] focus:outline-none focus:ring-2 focus:ring-[#0B8A96]/20"
+                      data-testid={`mfa-code-${i}`}
+                      className="h-12 w-10 rounded-lg border-2 border-[var(--gray-300)] text-center font-mono text-lg focus:border-[var(--teal-500)] focus:outline-none focus:ring-2 focus:ring-[rgba(11,138,150,0.2)]"
                     />
                   ))}
                 </div>
+
                 {mfaChannel === "authenticator" ? (
                   <>
-                    <div className="flex items-center justify-between rounded-lg bg-[#F1F5F9] p-3">
-                      <span className="text-xs text-[#64748B]">Code expires in</span>
-                      <span
-                        className={`font-mono text-sm font-semibold ${timeRemaining <= 10 ? "text-[#DC2626]" : "text-[#0B8A96]"}`}
-                      >
+                    <div className="flex items-center justify-between rounded-lg bg-[var(--gray-100)] p-3">
+                      <span className="text-xs text-[var(--gray-500)]">Code expires in</span>
+                      <span className={`font-mono text-sm font-semibold ${timeRemaining <= 10 ? "text-[var(--red-600)]" : "text-[var(--teal-500)]"}`}>
                         {timeRemaining}s
                       </span>
                     </div>
                     {timeRemaining <= 5 && (
-                      <p className="text-xs text-[#DC2626]">
-                        New code coming soon. Your entry will refresh automatically.
-                      </p>
+                      <p className="text-xs text-[var(--red-600)]">New code coming soon. Your entry will refresh automatically.</p>
                     )}
                   </>
                 ) : (
-                  <p className="text-center text-xs text-[#64748B]">This code expires in 5 minutes.</p>
+                  <div className="flex items-center justify-between">
+                    <p className="text-xs text-[var(--gray-500)]">This code expires in 5 minutes.</p>
+                    {/* UX-02: Resend code for email OTP */}
+                    <button
+                      type="button"
+                      onClick={handleResend}
+                      disabled={resendCooldown > 0 || resendLoading}
+                      className="text-xs font-semibold text-[var(--teal-500)] hover:underline disabled:cursor-not-allowed disabled:opacity-50"
+                    >
+                      {resendLoading ? "Sending…" : resendCooldown > 0 ? `Resend in ${resendCooldown}s` : "Resend code"}
+                    </button>
+                  </div>
                 )}
               </div>
+
               <div className="space-y-2 rounded-lg bg-[#EFF6F9] p-3">
-                <p className="text-xs font-semibold text-[#0B8A96]">Having issues?</p>
-                <ul className="space-y-1 text-xs text-[#64748B]">
+                <p className="text-xs font-semibold text-[var(--teal-500)]">Having issues?</p>
+                <ul className="space-y-1 text-xs text-[var(--gray-500)]">
                   {mfaChannel === "email" ? (
                     <>
                       <li>Check your inbox for the latest message from MedSync.</li>
@@ -279,43 +421,41 @@ export default function LoginPage() {
                   )}
                 </ul>
               </div>
+
               <button
                 type="button"
-                onClick={() => {
-                  setMfaMode("backup");
-                  setError("");
-                  setBackupCode("");
-                }}
-                className="block w-full text-center text-sm text-[#0B8A96] hover:underline"
+                onClick={() => { setMfaMode("backup"); setError(""); setBackupCode(""); }}
+                className="block w-full text-center text-sm text-[var(--teal-500)] hover:underline"
               >
                 Use backup code
               </button>
             </>
           ) : (
             <>
-              <p className="text-sm text-[#64748B]">Enter one of your single-use backup codes.</p>
+              <p className="text-sm text-[var(--gray-500)]">Enter one of your single-use backup codes.</p>
               <input
                 type="text"
                 value={backupCode}
                 onChange={(e) => setBackupCode(e.target.value)}
                 placeholder="xxxxxxxx"
-                className="h-11 w-full rounded-lg border-[1.5px] border-[#CBD5E1] px-3 font-mono"
+                data-testid="mfa-backup-code"
+                className="h-11 w-full rounded-lg border-[1.5px] border-[var(--gray-300)] px-3 font-mono"
                 required
               />
               <button
                 type="button"
-                onClick={() => {
-                  setMfaMode("totp");
-                  setError("");
-                  setBackupCode("");
-                }}
-                className="block w-full text-center text-sm text-[#0B8A96] hover:underline"
+                onClick={() => { setMfaMode("totp"); setError(""); setBackupCode(""); }}
+                className="block w-full text-center text-sm text-[var(--teal-500)] hover:underline"
               >
                 Use authenticator app instead
               </button>
             </>
           )}
-          {error && <p className="text-sm text-[#DC2626]">{error}</p>}
+
+          {/* UX-04: role="alert" on error */}
+          {error && <p className="text-sm text-[var(--red-600)]" role="alert" aria-live="polite">{error}</p>}
+
+          {/* UX-01: "Verify code" label */}
           <Button
             type="submit"
             fullWidth
@@ -324,9 +464,11 @@ export default function LoginPage() {
               (mfaMode === "totp" && mfaCode.join("").length !== 6) ||
               (mfaMode === "backup" && !backupCode.trim())
             }
+            data-testid="mfa-submit"
           >
-            {loading ? "Verifying..." : "Verify"}
+            {loading ? "Verifying…" : "Verify code"}
           </Button>
+
           <button
             type="button"
             onClick={() => {
@@ -337,9 +479,9 @@ export default function LoginPage() {
               setBackupCode("");
               setError("");
             }}
-            className="w-full text-sm text-[#64748B] hover:text-[#0F172A]"
+            className="w-full text-sm text-[var(--gray-500)] hover:text-[var(--gray-900)]"
           >
-            Back to sign in
+            ← Back to sign in
           </button>
         </form>
       )}

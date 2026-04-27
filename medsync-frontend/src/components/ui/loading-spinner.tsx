@@ -17,7 +17,8 @@ export function LoadingSpinner({
 }: LoadingSpinnerProps) {
   return (
     <div
-      className={`animate-spin rounded-full border-[#0B8A96] border-t-transparent ${sizeClasses[size]} ${className}`}
+      className={`animate-spin rounded-full border-[var(--teal-500)] border-t-transparent ${sizeClasses[size]} ${className}`}
+      role="status"
       aria-label="Loading"
     />
   );

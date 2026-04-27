@@ -1,0 +1,1440 @@
+MedSync EMR
+Complete Role-Based Specification
+Frontend · Backend · Permissions · AI · Pages · Buttons · APIs
+Roles covered in this document:
+Role 01 — Doctor
+Role 02 — Nurse
+Role 03 — Lab Technician
+Role 04 — Receptionist
+Role 05 — Hospital Admin
+Role 06 — Super Admin
+Modules covered:
+Security Architecture (JWT, MFA, RBAC)
+Consent Management
+Inter-Hospital Record Access
+Audit Trail & Data Integrity
+Encryption Layer
+Global Patient Identity (GPID)
+AI Integration
+User Creation & Access Control Workflow
+Version 1.1  ·  April 2026
+Global RBAC Permission Matrix
+Every permission in MedSync is enforced at three layers: JWT role field (signed RS256), server-side PERMISSION_MAP check, and role-based serializer on response. The table below is the single source of truth.
+Role 01  Doctor
+Scope: Hospital-scoped · No ward restriction
+Primary clinical user · All clinical decisions flow through this role · ICD-10 · AI Decision Support · Referrals
+Pages & Routes
+Dashboard — Stat Cards
+Dashboard — Panels
+Today's queue widget — rows sorted by (1) AI triage level, (2) wait time. Columns: triage badge, name, age/gender, chief complaint, wait time, [Open →] button.
+New lab results panel — unreviewed only. Critical values in red. Click → patient record at Labs tab.
+Active alerts strip — drug-allergy conflicts, critical vitals. Inline [Dismiss] and [Resolve] buttons.
+Pending dispense panel — prescriptions written but not dispensed. Shows drug, patient, time since written.
+Worklist Page
+Filters: Department dropdown (All / Cardiology / General / Obs-Gyn / Paediatrics etc.)
+Encounter type tabs: Outpatient | Inpatient | Emergency | Follow-up
+Patient row columns: Ghana Health ID · Full name · Age/Gender · Chief complaint · Wait time · AI triage badge · Allergy indicator
+Triage badges: Level 1=CRITICAL (red) · Level 2=URGENT (amber) · Level 3=LESS URGENT (yellow) · 4/5=gray
+Allergy indicator: Red "A" badge if anaphylaxis allergy on file
+[Start Consultation] button → POST /patients/:id/encounters → sets status=in_consultation → navigates to encounter
+Encounter Form (SOAP)
+Header Strip
+Patient photo placeholder · Full name · Age · Blood group · NHIS No. · Allergy indicator · [Run AI Analysis] button
+Allergy banner: sticky red banner if patient has anaphylaxis allergy. CANNOT be dismissed for session.
+S — Subjective
+Chief Complaint — required, plain text
+HPI — rich textarea with OLDCARTS prompts (Onset / Location / Duration / Character / Aggravating / Relieving / Timing / Severity)
+Review of systems checkboxes
+Social / family history toggles
+O — Objective
+Vitals sub-form — nurse-populated, read-only for doctor. Doctor can add own reading.
+Inline sparklines — last 5 readings of BP, pulse, temperature. Visible without leaving encounter form.
+Examination findings — free text textarea
+A — Assessment (Diagnosis)
+ICD-10 search — MUST fire on 2+ characters. Common GH codes (I10, E11, J18, A09, B54) always at top.
+Free-text fallback if ICD-10 code not found
+Per diagnosis: icd10_code · icd10_description · severity (mild/moderate/severe/critical) · onset_date · is_chronic toggle
+Multiple diagnoses supported — [+ Add diagnosis] button
+P — Plan Tabs
+Prescription tab: drug_name (autocomplete with inline allergy flag) · dosage · frequency · duration_days · route (oral/iv/im/topical/inhalation) · instructions
+Drug-allergy check on save: if conflict → modal "⚠ Drug-Allergy Conflict: [drug] vs [allergen] ([severity])". [Override with reason] (typed text required) or [Cancel].
+Lab orders tab: test_name · urgency (routine/urgent/stat) · lab_unit_id (optional, auto-routes if null)
+Radiology tab · Referral tab · Follow-up scheduler
+AI Decision Support Panel
+[Run AI Analysis] button in header → POST /ai/analysis → analysis type: comprehensive
+Results panel slides in from RIGHT side of screen (does not replace form)
+Panel shows: risk scores · diagnosis suggestions ranked 1-10 · triage level 1-5 · similar past cases
+CRITICAL: AI suggestions NEVER auto-fill form fields. Each has explicit [Apply to form] button. Doctor must take action — AI does not write autonomously.
+Auto-Save & Close
+Auto-save every 30 seconds in draft mode. Shows "Saved draft" indicator. Warn on navigation away.
+[Mark as Complete] → confirmation modal listing all items added: "You have added N diagnoses, N prescriptions, N lab orders. Mark complete?"
+After close: encounter is READ-ONLY. Changes require amendment (POST /records/:id/amend with reason required).
+Patient Record — 8 Tabs
+Register Patient — 5 Steps
+Doctor API Endpoints
+Doctor Cannot Do
+Enter or modify vitals (read-only on encounter form)
+Dispense prescriptions (nurse role only)
+Access another ward's patients (hospital-scoped not ward-scoped, but cannot see other hospitals)
+View other doctors' undisclosed notes beyond their hospital
+Manage staff accounts or invite users
+View audit logs
+Access admin or super admin pages
+Register patients without doing GPID check first (enforced by UI flow)
+Role 02  Nurse
+Scope: Ward-scoped only · ward_id in JWT · extracted server-side
+Vitals · Dispensing · SBAR Handover · Shift tracking · Ward bed grid
+Pages & Routes
+Dashboard — Stat Cards
+Ward Bed Grid
+4-column grid of bed cards. Each bed shows: bed code · patient name · age/gender · admission date · last vitals timestamp · status colour.
+Status — left border accent: green=stable · amber=watch · red=critical · gray=vacant
+stable: all vitals within normal, no active alerts
+watch: vitals overdue >4h OR any out-of-range (non-critical) vital
+critical: active ClinicalAlert OR SpO2 <88% OR BP systolic >180
+Bed card shows "Vitals overdue Xh" in red when last_vitals_at > 4h ago
+1-click actions per bed card: [Vitals] [Chart] [Note] [Dispense] (Dispense only shown if pending prescriptions exist)
+Nurse NEVER sees diagnosis in free text. Patient view shows "Admitted for [department]" only — NOT ICD-10 codes.
+Vitals Entry Form
+Touch targets: minimum 44×44px — nurses enter on tablets at bedside
+Auto-advance: Temp → Pulse → Resp → BP sys → BP dia → SpO2 → Weight
+Critical vitals modal: if SpO2 <88% or other critical → full-screen modal. Cannot dismiss without confirming action taken. Logs CRITICAL_VITALS_CONFIRMED audit event.
+Batch mode: toggle to record vitals for all ward patients in one table. POST /records/vitals/batch — server rejects any patient outside ward with 403.
+Dispensing
+Prescription card shows: patient name · bed · drug name · dosage · frequency · route · written by · time since prescribed
+If allergy_conflict=true → red "⚠ ALLERGY CONFLICT" badge. Nurse can still dispense (override already authorised by doctor). Tooltip shows override reason.
+[Mark Dispensed] → POST /records/prescription/:id/dispense. Records dispensed_by + dispensed_at.
+Filters: Pending / Dispensed today / All. Sorted oldest first.
+SBAR Handover
+Shift Tracking Widget (Sidebar)
+Persistent in sidebar across all nurse pages — NOT a dashboard panel
+Shows: shift name · ward · current time · time remaining · progress bar
+[Log break] → POST /shifts/:id/break → pauses accountability. Button changes to [Resume]
+[End shift] → navigates to /worklist/handover — always triggers SBAR handover, never silent logout
+Nurse API Endpoints
+Nurse Cannot Do
+Access patients outside their assigned ward (403 enforced server-side and frontend middleware)
+View diagnoses in free text (ICD-10 codes hidden — "Admitted for [dept]" only)
+Write prescriptions
+Order lab tests
+Run AI analysis
+Register new patients
+Modify encounters (no create/edit access to SOAP)
+View audit logs
+Access admin pages
+Role 03  Lab Technician
+Scope: Lab-unit scoped · lab_unit_id in JWT · extracted server-side
+Order queue · Result entry · TAT tracking · PDF upload · No clinical data visible
+Pages & Routes
+Dashboard — Stat Cards
+Order Queue — Sort Rules
+STAT orders are ALWAYS at the top regardless of creation time. Even if STAT arrives after 20 routine orders — it surfaces immediately to position 1. Sort: urgency_rank ASC (stat=1, urgent=2, routine=3), then created_at ASC.
+Order row columns: urgency badge · test name · patient name + GHA ID (NO diagnoses) · TAT countdown · status badge · ordering doctor · [Open →] button
+TAT countdown: "Due in 42 min" — turns red when <30 min remain. Shows "OVERDUE Xm" in red when past threshold.
+TAT targets: STAT=60 min · Urgent=4h · Routine=24h
+Filter tabs: All / Pending / In Progress / Resulted (today) / Verified
+Status badge flow: Ordered → Collected → In Progress → Resulted → Verified
+Result Entry — 6-Step Flow
+TAT Metrics Dashboard
+Average TAT today: per urgency type with progress bar vs target. Turns red if avg > target.
+TAT breaches today: count + list of specific tests that breached with overdue time
+Pending by age: bar chart — 0-1h (green) · 1-4h (amber) · 4-24h (amber) · 24h+ (red)
+Throughput: Today / Yesterday / 7-day average as stat cards
+Data Visibility Rules
+Lab Technician NEVER sees clinical data. The lab order detail page shows: patient name, age, gender, GHA ID, test name, urgency, ordering doctor. It NEVER shows diagnoses, prescriptions, nursing notes, encounter notes, or allergy details. Enforced by LabOrderSerializer on backend.
+Lab Technician API Endpoints
+Lab Technician Cannot Do
+See diagnoses, prescriptions, nursing notes, encounter notes, or allergy details
+Modify or cancel lab orders (can only update status and enter results)
+Verify results (verification is doctor action — PATCH /lab/orders/:id to "verified")
+Access patients outside their assigned lab unit
+Run AI analysis
+Register or search patients
+Access admin pages or audit logs
+Role 04  Receptionist
+Scope: Hospital-scoped · Demographics ONLY · Zero clinical data access
+Appointment scheduling · Patient check-in · Demographics search · No clinical access
+Pages & Routes
+Dashboard — Stat Cards
+Appointment Management
+Book: Search patient → Select department → Select doctor (optional) → Date/time → Notes → Save
+Double-booking prevention: as soon as date + time + department selected, check availability BEFORE save. Show "Dr. X already has a patient at HH:MM. Available: HH:MM · HH:MM" with clickable slot chips.
+Reschedule: click appointment → new date picker → confirm. PATCH /appointments/:id { appointment_date }
+Cancel: click → reason input (required, blocks confirm if empty) → confirm. DELETE /appointments/:id { cancellation_reason }
+Check-in: ONE click from appointment row. Toast only — NO confirmation modal. Validates ±2 hours of scheduled time.
+No-show: manual button appears after 30 min past scheduled time. Auto-mark via Celery task every 15 min.
+Calendar colour coding — consistent across List/Day/Week: scheduled=gray · checked_in=green · completed=blue · no_show=red · cancelled=strikethrough
+Check-In Rule
+SPEC RULE: Check-in must be achievable in 2 clicks from dashboard. Click 1: "Check in" button. Click 2: none — action fires immediately. Toast confirmation only. No modal. This is non-negotiable for front-desk efficiency.
+Patient Search
+Search by: Full name (partial match) / Ghana Health ID / Phone number / NHIS number
+Results in under 300ms. Debounce at 150ms.
+Patient card shows: Full name · Age · Gender · GHA ID · NHIS · Phone · Registered date
+Buttons: [Book Appointment] and [View Demographics] — no clinical links
+Backend enforces DemographicsOnlySerializer for receptionist role. Even direct API call to /patients/:id/records returns 403. No diagnoses, prescriptions, vitals, labs, or allergies ever returned.
+If patient not found: "Patient not found. To register a new patient, please ask a doctor or hospital admin." NO register form shown — receptionist cannot register patients.
+Receptionist API Endpoints
+Receptionist Cannot Do
+View any clinical data (diagnoses, prescriptions, vitals, labs, allergies, encounters)
+Register new patients
+Modify patient demographics
+Access /patients/:id/records (returns 403)
+View audit logs
+Create or manage staff accounts
+Access admin or clinical pages
+Role 05  Hospital Admin
+Scope: Hospital-scoped · No ward restriction · Administrative only
+User management · Facility config · Audit logs · RBAC review · Staff invitations
+Pages & Routes
+Dashboard — Stat Cards
+User Management Actions
+Facility Configuration Tabs
+RBAC Review
+GET /admin/rbac-review → staff where last_role_reviewed_at is null or >90 days ago
+Dashboard panel shows staff overdue >70 days with coloured badges (red ≥90d, amber 70-89d)
+[Mark reviewed] → PATCH /admin/users/:id/role { last_role_reviewed_at: now() }
+Role change confirmation modal: "Changing [Name] from [Role] to [Role] will [impact]. Confirm?" Shows downstream impact.
+Quarterly review cycle enforced — system flags accounts not reviewed in 90 days
+Audit Logs
+Hospital Admin sees ONLY their hospital's logs — enforced server-side
+Filters: action type · resource type · user · date range (default: last 7 days)
+Cannot edit or delete any log entries — append-only
+Tamper indicator: if chain_hash validation fails → red "⚠ Tamper Detected" badge on that row
+[Export CSV] → POST /audit/export?days=90 — HIPAA-compliant, no PHI in export
+Hospital Admin API Endpoints
+Hospital Admin Cannot Do
+Create or modify super_admin accounts
+Access other hospitals' data
+View cross-hospital records or consent management
+Validate chain hash integrity (Super Admin only)
+Create hospitals
+Deactivate hospitals
+View break-glass events from other hospitals
+Access system health or AI integration config
+Role 06  Super Admin
+Scope: System-wide · No default hospital · View-As required for hospital-scoped data
+Hospital onboarding · Global audit · Break-glass oversight · System health · AI integration
+Pages & Routes
+Dashboard — Stat Cards (6)
+View-As Hospital (Critical Feature)
+When Super Admin selects a hospital from the topbar dropdown, a PERSISTENT TEAL BANNER must appear at the top of EVERY page until cleared. Banner: "Viewing as: [Hospital Name] — all actions are scoped to this hospital [Return to system view ×]". This is non-negotiable — without this, Super Admin cannot tell which hospital context they are in.
+Dropdown in topbar: select hospital → sends X-View-As-Hospital header on all subsequent requests
+Banner cannot be hidden — only explicitly cleared via "Return to system view" button
+Logged as VIEW_AS_HOSPITAL audit event
+Default state: no hospital selected → "Operating in: All hospitals"
+System Health Panel
+Polls every 30 seconds. Shows "Last refreshed HH:MM". Red panel border if any service is down.
+Hospital Onboarding Checklist
+Per hospital: Wards created? · Departments created? · Lab units created? · First doctor invited? · First patient registered?
+Progress bar: each completed item = 20%. Color: green=100% · amber=60-99% · red=0-59%
+Dashboard shows top 5 incomplete hospitals. "Manage hospitals →" links to /superadmin/hospitals
+Super Admin API Endpoints
+Super Admin Cannot Do
+Create regular clinical staff directly (only hospital_admin) — except via emergency-user-create
+Modify super_admin accounts without another super_admin
+Access patient clinical data without using View-As context
+Delete audit log entries (append-only)
+Override consent tokens (consent is patient-controlled)
+AI Integration Module
+AI decision support is available ONLY to the Doctor role. All other roles have zero access to AI analysis features. AI is a decision support tool — it never takes autonomous action.
+AI Analysis Types
+AI UX Rules — Non-Negotiable
+AI suggestions NEVER auto-fill form fields. They appear in a right-side panel with individual "Apply to form" buttons. The doctor must take explicit action for every suggestion. AI does not write to fields autonomously under any circumstance.
+"Run AI Analysis" button in encounter form header → POST /ai/analysis { patient_id, analysis_type: "comprehensive" }
+Results panel slides in from RIGHT — does not replace the SOAP form
+Panel shows: risk scores · diagnosis suggestions ranked 1-10 · triage level 1-5 · similar past cases · referral recommendations
+Each diagnosis suggestion has [Apply to form] button → pre-fills ICD-10 search field only (doctor must still confirm)
+AI History tab on patient record: all past analyses with timestamp, type, confidence score, expandable results
+Average response time target: <800ms. If >800ms → AI service shows amber warning on Super Admin dashboard.
+AI Endpoints
+AI Does Not Have Access To
+The AI module does not have direct database access
+AI cannot write to any patient record
+AI suggestions are advisory only — no clinical decision is made without doctor confirmation
+AI analysis results are not shared between hospitals — each analysis is scoped to the requesting hospital
+Security Architecture
+Authentication Stack
+Account Security Rules
+Account lockout: 5 failed attempts → locked 15 minutes. Admin notified. ACCOUNT_LOCKOUT audit event.
+New device login: email + SMS alert even if MFA succeeded. "New login detected from [location] at [time]."
+Screen lock: 5 minutes inactivity on clinical workstations → blur page + PIN re-entry. Session not destroyed.
+MFA enrolment: mandatory on first login. Blocking setup screen — no skip option. Admin cannot grant PHI access until MFA complete.
+Backup codes: single-use. BACKUP_CODE_USED audit event. Alert when <3 remain. Regeneration requires TOTP re-verification.
+Password Recovery Tiers
+Consent Management
+Every inter-hospital data request requires explicit, scoped, time-limited patient consent. Patients control access via OTP-verified SMS. No clinical need bypasses this — except documented break-glass.
+Consent Lifecycle
+Consent Rules
+Consent is SCOPED — not blanket. Doctor must specify: which hospital, which record types (encounters/labs/prescriptions/all), for how long.
+Patient is the consent authority — not the doctor, not the admin.
+Consent is revocable at any time. Revocation creates CONSENT_REVOKED audit at both hospitals.
+Expiring consent shows countdown to doctor: "Consent expires in 2h 14m — [Extend]". Extend sends new OTP.
+Consent page for patient requires no account — OTP link works in any mobile browser. Shows requesting doctor, hospital, exact record types, duration in plain language.
+Consent API Endpoints
+Audit Trail & Data Integrity
+Chain Hash Design
+content_hash = SHA256(action + user_id + patient_id + timestamp + details)
+chain_hash = SHA256(content_hash + previous_record.chain_hash)
+Any retroactive modification invalidates all subsequent hashes — tampering is mathematically detectable
+AuditLog table: INSERT-only permission at database level. No UPDATE or DELETE ever permitted.
+Chain integrity validation: POST /audit/validate-chain (Super Admin only) — re-computes hashes for date range. Returns tampered_records list.
+Audit Event Catalogue
+Global Patient Identity (GPID)
+Architecture
+Format: GHA-XXXXXXXXX (GHA prefix + 9-character alphanumeric). Immutable once assigned.
+GlobalPatient record (central): gpid · full_name · dob · gender · national_id · nhis_number · registered_hospitals · created_at. No clinical PHI.
+LocalPatient record (per hospital): hospital_patient_id · gpid (FK) · blood_group · allergies · hospital_specific_notes.
+Clinical records (encounters, labs, prescriptions) link to LocalPatient — not GlobalPatient. Hospital data sovereignty preserved.
+Duplicate Detection
+At registration, system performs probabilistic match on: national_id (exact) · nhis_number (exact) · name + DOB (fuzzy, Levenshtein ≤2)
+If potential match found: "A patient matching this profile exists in the network. Is this the same person?" Explicit confirmation required before GPID reuse.
+GPID Merge (Super Admin Only)
+POST /global-patients/merge { primary_gpid, secondary_gpid, reason, patient_otp }
+Patient OTP required before merge — prevents accidental or malicious merging
+Secondary GPID is deprecated (not deleted) — remains searchable and redirects to primary
+Creates GPID_MERGE audit event
+Encryption Layer
+Encryption By Layer
+Encrypted Field Map
+User Creation & Access Control Workflow
+4-Phase Onboarding Flow
+Invitation Token Rules
+Token lifetime: 72 hours (configurable via INVITATION_TOKEN_HOURS in settings.py)
+Celery task runs every 6 hours — notifies admin when tokens expiring within 12 hours
+Expired tokens cannot activate — new token required via Resend
+Bulk resend: POST /admin/users/bulk-resend-invites — regenerates all expired tokens for pending users
+Bulk Import Rules
+Maximum 500 users per CSV file
+dry_run=true: validates all rows, returns preview + errors WITHOUT creating any users
+Atomic: wrapped in transaction.atomic() — if any row fails, ALL rows are rolled back. No partial imports.
+Error response: returns ALL errors before creating any users. Admin must fix and re-upload.
+Inter-Hospital Record Access
+Architecture — Central Platform as Mediator
+Neither hospital directly queries the other's database. ALL cross-hospital requests flow through MedSync central platform.
+Central platform: (1) verifies requesting user's RBAC role, (2) checks active consent token, (3) retrieves records from source hospital API, (4) applies semantic normalisation, (5) returns only consented scope.
+Semantic normalisation: ICD-10 codes verified, drug names resolved to INN, lab units converted to SI.
+Data sovereignty: receiving hospital NEVER stores cross-hospital data. Retrieved on-demand, displayed in session only.
+Cross-Hospital Access Flow
+Break-Glass Emergency Access
+POST /break-glass/access { patient_gpid, source_hospital_id, reason (min 50 chars) }
+Reason is free text — no dropdown. Forces genuine clinical justification.
+Access token valid 4 hours only. Full record scope returned (not consent-scoped).
+BREAK_GLASS_ACCESS audit at BOTH hospitals. Super Admin notified immediately.
+Must be reviewed by Super Admin within 24 hours. Unreviewed events → compliance flag.
+Abuse detection: >3 uses in 24h by same user → excessive_usage flag. Hospital Admin notified. Only Super Admin controls threshold.
+Frontend Component Master List
+All components required across all roles. Grouped by category.
+Shared / Layout
+TopBar — hospital context, role badge, View-As dropdown (Super Admin), quick action buttons, clock
+Sidebar — role-conditional navigation, section grouping, live count badges, shift widget (Nurse/Lab/Doctor)
+ViewAsBanner — persistent teal banner when Super Admin is scoped to a hospital
+StatCard — accent color, value, sub-label, loading skeleton
+AllergyBanner — sticky red, undismissable, shown on all patient pages if anaphylaxis allergy
+AuditBadge — action type coloured badges (LOGIN=gray, RECORD_CREATED=blue, LOCKOUT=red, etc.)
+LoadingSkeleton — shown while API calls in flight — never show dashes or zeros as final state
+Doctor Components
+DoctorDashboard — 5 stat cards + queue + lab results + alerts + dispense
+TriageBadge — level 1-5, colour-coded
+Worklist — department + type filters, patient rows with triage + allergy indicators
+EncounterForm — SOAP structure, auto-save 30s, draft mode
+ICD10Search — fires on 2+ chars, common GH codes at top, free-text fallback
+DrugAutocomplete — inline allergy flag as user types
+VitalsSparklines — inline on encounter form, last 5 readings
+AIAnalysisPanel — right slide-in, ranked suggestions, "Apply to form" buttons only
+DrugAllergyModal — conflict warning, override requires typed reason, [Cancel] option
+CloseEncounterModal — lists all added items, confirm/cancel
+PatientRecord — 8-tab layout
+RegisterPatient — 5-step flow, GPID check first
+AmendmentFlow — reason required, version tracking, original preserved
+Nurse Components
+NurseDashboard — 4 stat cards + priority tasks + bed grid + dispense + alerts
+ShiftWidget — sidebar-persistent, progress bar, Log break / Resume / End shift
+WardBedGrid — 4-col, status colour coded, 1-click actions
+BedCard — left border accent, vitals overdue in red, action buttons
+PriorityTasksPanel — urgent border, vitals + dispense rows with action buttons
+VitalsForm — tablet-optimised, 44px touch targets, auto-advance, BMI auto-calc
+CriticalVitalsModal — full-screen, undismissable until confirmed, logs audit event
+BatchVitalsTable — all ward patients inline, one save button
+PendingDispensePanel — inline Mark dispensed, allergy badge + tooltip
+ActiveAlertsPanel — severity dots, inline Resolve
+SBARHandoverForm — per-patient SBAR, two-signature model
+Lab Technician Components
+LabWorklist — STAT-first sort, TAT countdown, filter tabs
+TATCountdown — per row, turns red <30 min, shows OVERDUE
+UrgencyBadge — STAT/URGENT/ROUTINE with colours
+ResultEntryForm — 6-step linear flow with progress indicator
+StepProgressIndicator — dots showing current step
+ReferenceRangeCheck — auto ▲▼● comparison display
+CriticalValueGate — full confirmation required, creates ClinicalAlert
+PDFUpload — drag-and-drop + file picker, 10MB limit
+TATMetricsDashboard — avg TAT bars, breach list, pending by age, throughput
+Receptionist Components
+ReceptionistDashboard — 4 stat cards + appointment list + patient search + upcoming
+AppointmentList — rows with check-in inline, status pills, time in 24h
+CalendarView — Day / Week grid with colour coding
+BookAppointmentModal — opens from topbar, patient search → dept → doctor → datetime → notes
+DoubleBookingChecker — real-time availability check, available slots as clickable chips
+CheckInButton — 2-click rule, toast only, validates ±2h window
+PatientDemographicsCard — no clinical data, Book + View Demographics buttons
+DemographicsGuard — blocks /patients/:id/records for receptionist role
+Hospital Admin Components
+HospitalAdminDashboard — 5 stat cards + staff + invitations + RBAC + wards + audit
+StaffActivityPanel — status badges, inline Reset MFA / Unlock / Resend
+PendingInvitationsPanel — expiry countdown, colour-coded, Resend inline
+RBACReviewPanel — overdue badges, link to /admin/rbac-review
+WardOccupancyPanel — progress bars, colour threshold, FULL indicator
+AuditEventsPanel — formatted timestamps, colour-coded badges
+BulkImportWizard — Step 1: upload + dry run preview, Step 2: confirm + commit
+ImportErrorTable — row number, email, error message per row
+Super Admin Components
+SuperAdminDashboard — 6 stat cards + system health + AI panel + compliance + onboarding + pending admin
+ViewAsBanner — teal persistent banner, clears on button click
+SystemHealthPanel — 7-row service list, pulse dots, latency, 30s polling
+AIIntegrationPanel — status + metrics + module flags + config link
+ComplianceAlerts — dot-coded alert rows, severity colours, 60s refresh
+OnboardingProgress — hospital list + progress bars + colour coding
+PendingAdminAssignments — hospital admin invite rows + action buttons
+BreakGlassBadge — live count badge on sidebar item
+EmergencyUserCreateModal — reason field min 30 chars, compliance warning banner
+Outstanding Gaps & Pre-Production Checklist
+P0 — Critical (Fix Before Any Live Testing)
+RBAC drift: api/urls.py has endpoints missing from api/permissions.py. Write test_rbac_coverage.py that diffs urls against PERMISSION_MAP. Run in CI on every PR.
+Fail-closed policy: set PERMISSION_FAIL_CLOSED_UNKNOWN_ENDPOINTS=True in settings.py AFTER RBAC coverage is 100%.
+Alert resolve policy mismatch: three different sources of truth (permissions.py, alert_views.py, alerts/page.tsx). Define ALERT_RESOLVE_ROLES once in permissions.py and import everywhere.
+P1 — High Priority
+AI page route: patients/[id]/ai-insights.tsx exists as component but no page.tsx route. Create patients/[id]/ai-insights/page.tsx with route-level role guard (doctor only).
+PHI field-at-rest encryption: check whether national_id, nhis_number, phone_number, allergy details, HIV flags are encrypted with field-level AES-256. If not, install django-cryptography and apply. Write test_phi_encryption.py to verify raw DB value is not plaintext.
+Role-change confirmation modal (Hospital Admin): backend permission change needed to allow Hospital Admin to change roles. Then build frontend modal with downstream impact warning.
+Pharmacist role ambiguity: either add as Role 7 with full spec, or remove from invite form dropdown.
+P2 — Before Production
+Service layer extraction: move business logic out of views into services/ (allergy_service.py, consent_service.py, audit_service.py, gpid_service.py). Start with audit and consent — most reused.
+URL splitting: split api/urls.py into urls/auth.py, urls/clinical.py, urls/admin.py, urls/interop.py. Each domain owns its routes.
+Async AI inference: POST /ai/analysis should queue via Celery and return analysis_id immediately. Frontend polls or uses WebSocket for results. Currently synchronous = blocks encounter form.
+Cache layer: GET /admissions/ward/:ward_id called every 60s by nurses. Cache for 30s to reduce DB load without staleness risk.
+All dashboard stat cards: show loading skeleton during fetch — never show dashes or zeros as placeholder final state.
+All dashboards: remove manual Refresh buttons. Implement 60s auto-refresh with "Last refreshed HH:MM" timestamp.
+MedSync EMR · Role-Based Specification v1.1 · April 2026
+Permission / Feature
+Doctor
+Nurse
+Lab Tech
+Recept.
+Hosp. Admin
+Super Admin
+Notes
+View patient demographics
+✅
+✅ Ward only
+✅ Order only
+✅
+✅ Aggregate
+✅ View-As
+Doctor=any in hospital
+View encounter / SOAP notes
+✅
+❌
+❌
+❌
+❌
+❌
+Doctor only
+Create / edit encounters
+✅
+❌
+❌
+❌
+❌
+❌
+Own encounters only
+View / enter vitals
+✅ View
+✅ Enter+view
+❌
+❌
+❌
+❌
+Nurse=ward scope
+Write prescriptions
+✅
+❌
+❌
+❌
+❌
+❌
+Dispense prescriptions
+❌
+✅ Ward
+❌
+❌
+❌
+❌
+Order lab tests
+✅
+❌
+❌
+❌
+❌
+❌
+Verify lab results
+✅
+❌
+✅ Own unit
+❌
+❌
+❌
+Enter lab results
+❌
+❌
+✅
+❌
+❌
+❌
+Lab unit scoped
+Register patients
+✅
+❌
+❌
+❌
+❌
+❌
+With GPID check
+Book appointments
+✅ Follow-up
+❌
+❌
+✅
+❌
+❌
+Check in patients
+❌
+❌
+❌
+✅
+❌
+❌
+View / resolve clinical alerts
+✅
+✅
+❌
+❌
+❌
+❌
+Run AI analysis
+✅
+❌
+❌
+❌
+❌
+❌
+Doctor only
+View AI analysis results
+✅
+❌
+❌
+❌
+❌
+❌
+Request inter-hospital consent
+✅
+❌
+❌
+❌
+❌
+❌
+View cross-hospital records
+✅ Consent
+❌
+❌
+❌
+❌
+✅ View-As
+Break-glass emergency access
+✅
+❌
+❌
+❌
+❌
+❌
+Documented reason required
+Create referrals
+✅
+❌
+❌
+❌
+❌
+❌
+View audit logs
+❌
+❌
+❌
+❌
+✅ Own hosp
+✅ All
+Export audit CSV
+❌
+❌
+❌
+❌
+✅
+✅
+Validate chain integrity
+❌
+❌
+❌
+❌
+❌
+✅ Only
+Manage staff accounts
+❌
+❌
+❌
+❌
+✅ Own hosp
+✅ All
+Invite / create users
+❌
+❌
+❌
+❌
+✅
+✅ Hosp admin only
+SA=emergency create
+Bulk CSV import staff
+❌
+❌
+❌
+❌
+✅
+❌
+Max 500, atomic
+Facility config (wards/depts)
+❌
+❌
+❌
+❌
+✅
+❌
+RBAC role review
+❌
+❌
+❌
+❌
+✅
+✅
+90-day cycle
+Change user roles
+❌
+❌
+❌
+❌
+🔶 Limited
+✅ All
+SA=unrestricted
+Create hospitals
+❌
+❌
+❌
+❌
+❌
+✅
+Deactivate hospitals
+❌
+❌
+❌
+❌
+❌
+✅
+Typed confirmation
+View break-glass events
+❌
+❌
+❌
+❌
+✅ Own hosp
+✅ All
+View system health / AI status
+❌
+❌
+❌
+❌
+❌
+✅
+View-As hospital switch
+❌
+❌
+❌
+❌
+❌
+✅
+Teal banner required
+GPID duplicate search
+✅
+❌
+❌
+✅
+❌
+❌
+GPID merge (duplicate records)
+❌
+❌
+❌
+❌
+❌
+✅
+Patient OTP required
+Page
+Route / Purpose
+Dashboard
+/dashboard — Stat cards + queue + lab alerts + pending dispense. Auto-refresh 60s.
+Worklist
+/worklist — Filtered patient queue sorted by AI triage level then wait time.
+Encounter (SOAP)
+/patients/[id]/encounter/[id] — Full SOAP form. Most complex page in system.
+Patient Record
+/patients/[id]/records — 8-tab longitudinal record. Read-only.
+Register Patient
+/patients/register — 5-step flow with GPID duplicate check first.
+AI Insights
+/patients/[id]/ai-insights — Dedicated AI analysis history page.
+Referrals
+/referrals — Create and manage referrals to other hospitals.
+Appointments
+/appointments — Follow-up scheduling only (not full appointment management).
+Alerts
+/alerts — Clinical alerts: drug conflicts, critical vitals, overdue labs.
+Stat Card
+Data Source & Behaviour
+Patients in queue
+GET /dashboard → queue_count. Patients waiting in worklist sorted by triage.
+New lab results
+GET /dashboard → new_lab_results. Unreviewed results only. Click → Labs tab.
+Critical alerts
+GET /dashboard → critical_alerts. Active ClinicalAlerts count.
+Pending prescriptions
+GET /dashboard → pending_prescriptions. Written but not yet dispensed.
+Referrals awaiting
+GET /dashboard → referrals_awaiting. Referrals pending doctor action.
+Tab
+Content
+Overview
+Demographics · Active diagnoses (chronic highlighted) · Current medications · Known allergies · Active admissions · Last 3 encounters summary
+Encounters
+Chronological list newest first. Expand for full SOAP. [Amend] if current user is original author.
+Diagnoses
+Filter: Active / Resolved / Chronic. ICD-10 code + description + severity + onset date + recorded by.
+Prescriptions
+Filter: Pending / Dispensed / All. Dispense status badge. Allergy conflict flag inline.
+Labs
+All lab orders. Expand: result value + reference range + PDF link + verification status. Critical values in red.
+Vitals
+Table + sparklines: BP, pulse, temp, SpO2, weight. Time range: Today / 7d / 30d / All.
+Amendments
+Original value → new value · field name · reason · timestamp · author. Immutable.
+AI History
+Past analyses: timestamp · analysis_type · confidence_score. Expand for full results.
+Step
+UI & Validation
+1. GPID duplicate check
+Search by Ghana Health ID / National ID / NHIS. If GlobalPatient found → offer to link. ALWAYS first step.
+2. Demographics
+full_name (required) · DOB (required, past only) · gender · blood_group · phone (+233 validation) · national_id · nhis_number · passport (optional)
+3. Ghana Health ID
+Auto-suggest GHA-XXXXXXXXX format. Unique check before save.
+4. Pre-existing allergies
+Optional: allergen + severity + reaction_type. Inline warning if anaphylaxis.
+5. Save
+POST /patients → on success redirect to /patients/:id/encounter/new immediately
+Method
+Endpoint
+Roles
+Description
+GET
+/dashboard
+doctor
+Queue, lab results, alerts, pending prescriptions, referrals
+GET
+/worklist
+doctor
+Filtered patient queue with triage levels
+POST
+/patients/:id/encounters
+doctor
+Start encounter — body: encounter_type, chief_complaint
+PATCH
+/patients/:id/encounters/:id
+doctor
+Update encounter (draft save + close)
+POST
+/records/diagnosis
+doctor
+Add ICD-10 diagnosis — body: patient_id, icd10_code, severity, onset_date, is_chronic
+POST
+/records/prescription
+doctor
+Write prescription — returns allergy_conflict bool
+POST
+/records/lab-order
+doctor
+Order lab test — body: test_name, urgency, lab_unit_id
+POST
+/records/:id/amend
+doctor
+Amend closed record — amendment_reason required
+POST
+/ai/analysis
+doctor
+Trigger AI — body: patient_id, analysis_type
+GET
+/icd10/search?q=
+doctor
+ICD-10 autocomplete — fires on 2+ chars
+GET
+/patients/:id/vitals
+doctor
+Vitals history for sparklines
+POST
+/patients
+doctor
+Register new patient with gpid field
+GET
+/global-patients/search
+doctor
+GPID duplicate check before registration
+POST
+/referrals/create
+doctor
+Create inter-hospital referral
+POST
+/break-glass/access
+doctor
+Emergency cross-hospital — reason min 50 chars
+Page
+Route / Purpose
+Dashboard
+/dashboard (nurse view) — Ward snapshot stat cards + priority tasks + bed grid + dispense + alerts
+My Ward
+/worklist — Bed-grid view of all admitted patients in nurse's ward
+Vitals Entry
+/patients/[id]/vitals/new — Tablet-optimised form with auto-advance
+Dispense Meds
+/worklist/dispense — All pending prescriptions for ward patients
+Nursing Notes
+/records/nursing-note — Quick note entry
+Handover
+/worklist/handover — SBAR handover form triggered on End shift
+Alerts
+/alerts — Clinical alerts for ward patients only
+Stat Card
+Data & Behaviour
+Admitted patients
+GET /admissions/ward/:ward_id → admitted_count. ward_id from JWT.
+Vitals overdue
+Count where last_vitals_at < now() - 4h. Shown in red if > 0.
+Meds pending dispense
+Pending prescriptions for ward patients. Shown in amber if > 0.
+Active clinical alerts
+Unresolved alerts for ward patients. Shown in red if > 0.
+Field
+Range / Alert Threshold
+Temperature (°C)
+34.0–42.0 · Alert if >38.5 (fever) or <35.0 (hypothermia)
+Pulse (bpm)
+30–200 · Alert if >120 or <50
+Respiratory rate
+8–40 per minute
+BP systolic/diastolic
+Alert if systolic >180 or <90
+SpO2 (%)
+70–100 · Alert if <92 → generates ClinicalAlert immediately
+Weight (kg)
+Auto-calculates BMI when height on file
+Height (cm)
+Required on first admission only
+SBAR Component
+Fields
+S — Situation
+Shift date/time · Ward · Outgoing nurse · Incoming nurse · Patient count
+B — Background
+Per patient: "Admitted for [dept]" · Admission date · Current medications · Known allergies (auto-populated)
+A — Assessment
+Per patient: Current status · Last vitals summary · Events during shift · Pending results
+R — Recommendation
+Per patient: Actions needed · Pending meds to dispense · Vitals schedule
+Sign-off
+Both outgoing AND incoming nurse must acknowledge. Two-signature model. Stored as NursingNote.
+Method
+Endpoint
+Roles
+Description
+GET
+/admissions/ward/:ward_id
+nurse
+All admitted patients in ward (ward_id from JWT)
+POST
+/records/vitals
+nurse
+Record single patient vitals
+POST
+/records/vitals/batch
+nurse
+Batch vitals for multiple patients — server validates ward scope
+POST
+/records/prescription/:id/dispense
+nurse
+Mark prescription dispensed — server validates ward scope
+POST
+/records/nursing-note
+nurse
+Add nursing note / handover — handover requires incoming_nurse_id
+GET
+/worklist
+nurse
+Ward patient list with status and pending counts
+POST
+/shifts/:id/break
+nurse
+Log break — pauses shift accountability
+POST
+/shifts/:id/resume
+nurse
+Resume after break
+Page
+Route / Purpose
+Dashboard
+/dashboard (lab_technician view) — 4 stat cards + order queue + TAT panel + analytics
+Order Queue
+/lab/orders — STAT-first sorted worklist of all orders for this lab unit
+Result Entry
+/lab/orders/[id] — 6-step linear result entry workflow
+TAT Analytics
+/lab/analytics — Full TAT metrics, breach list, pending by age, throughput
+Stat Card
+Colour / Data
+STAT orders
+Red accent. GET /lab/orders → filter urgency=stat AND status!=verified. Immediate action needed.
+Urgent orders
+Amber accent. Filter urgency=urgent AND status!=verified. Due within 4h.
+Routine orders
+Gray accent. Filter urgency=routine AND status!=verified. Due within 24h.
+In progress
+Blue accent. Filter status=in_progress. Analysis currently running.
+Step
+Action & API
+1. Collect specimen
+"Mark Collected" → PATCH /lab/orders/:id { status: "collected" }. Records collection_time. Displays accession label barcode.
+2. Start analysis
+"Start Analysis" → PATCH /lab/orders/:id { status: "in_progress" }. Starts TAT timer visible to ordering doctor.
+3. Enter result value
+Text input: result value + reference range. Auto-comparison: ▲ Above / ▼ Below / ● Normal (amber border if out of range).
+4. Critical value gate
+If critical: full-screen gate. "⚠ CRITICAL VALUE — notify ordering physician immediately." Must click [I have notified the physician] to proceed. Logged as CRITICAL_VALUE_NOTIFIED. System creates ClinicalAlert for doctor.
+5. Upload PDF
+Optional. Drag-and-drop or file picker. Max 10MB, PDF only. POST /lab/attachments/upload → returns URL.
+6. Submit result
+"Post Result" → POST /lab/orders/:id/result. Status → "resulted". Doctor sees result in dashboard alerts immediately.
+Method
+Endpoint
+Roles
+Description
+GET
+/lab/orders
+lab_technician
+Worklist — lab_unit_id filter from JWT, STAT-first sort
+GET
+/lab/orders/:id
+lab_technician
+Single order detail — demographics-only patient data
+PATCH
+/lab/orders/:id
+lab_technician
+Update status: collected / in_progress
+POST
+/lab/orders/:id/result
+lab_technician
+Submit result value + reference range
+POST
+/lab/attachments/upload
+lab_technician
+Upload PDF attachment — max 10MB
+GET
+/lab/analytics/trends
+lab_technician
+TAT metrics, breach count, pending by age, throughput
+Page
+Route / Purpose
+Dashboard
+/dashboard (receptionist view) — 4 stat cards + today's appointment list + patient search + upcoming
+Appointments
+/appointments — Full appointment management: book, reschedule, cancel, check-in, no-show
+Patient Search
+/patients/search — Demographics-only search. NEVER returns clinical data.
+Today — List
+/appointments?view=list — Chronological list view for today
+Day Grid
+/appointments?view=day — Time-slot day grid
+Week Grid
+/appointments?view=week — Week overview
+Stat Card
+Colour / Data
+Today's appointments
+Teal. Total scheduled for today.
+Checked in
+Green. status=checked_in count. Sub-label: "X% of today's total".
+No-shows
+Red. status=no_show count.
+Remaining today
+Blue. scheduled - checked_in - no_show - cancelled.
+Method
+Endpoint
+Roles
+Description
+GET
+/dashboard
+receptionist
+Today's appointments, check-in count, no-show count, remaining
+GET
+/appointments?date=today
+receptionist
+Today's appointments with optional department filter
+POST
+/appointments
+receptionist
+Book appointment — validates future date and double-booking
+PATCH
+/appointments/:id
+receptionist
+Reschedule or mark no-show
+DELETE
+/appointments/:id
+receptionist
+Cancel appointment — cancellation_reason required
+POST
+/appointments/:id/check-in
+receptionist
+Check in patient — validates ±2h window
+GET
+/appointments/check-availability
+receptionist
+Double-booking prevention check before save
+GET
+/patients/search?q=
+receptionist
+Demographics-only patient search
+Page
+Route / Purpose
+Dashboard
+/dashboard (hospital admin view) — 5 stat cards + staff activity + invitations + RBAC review + wards + audit
+User Management
+/admin/users — Full staff management: invite, edit, suspend, MFA reset, password reset, bulk CSV
+RBAC Review
+/admin/rbac-review — Staff with role not reviewed in 90+ days. [Mark reviewed] per row.
+Facility Config
+/admin/facilities — Wards · Beds · Departments · Lab Units · Lab Test Types (tabs)
+Audit Logs
+/admin/audit-logs — Full hospital audit trail. Read-only. Cannot edit or delete.
+Patient Search
+/patients/search — Demographics search for administrative purposes
+Appointments
+/appointments — View scheduling for the hospital
+Admissions
+/admissions — View current admissions for the hospital
+Alerts
+/alerts — View clinical alerts for the hospital
+Referrals
+/referrals — View referrals for the hospital
+Stat Card
+Colour / Data
+Total patients
+Teal. GET /patients count for hospital.
+Active staff
+Blue. GET /admin/users?status=active count. Sub: "N pending invite".
+Encounters today
+Purple. GET /dashboard → encounters_today. Sub: "N in progress".
+Active admissions
+Amber. GET /admissions?discharged=false count. Sub: "N beds available".
+Locked accounts
+Red. GET /admin/users?status=locked count. If >0 → red accent. Sub: "Needs admin action".
+Action
+API & Behaviour
+View all staff
+GET /admin/users — Table: Name · Email · Role badge · Status badge · Last login · Actions. Filter by role/status. Search by name/email.
+Invite single user
+POST /admin/users/invite — Email + Role (excl. super_admin) + Department + Ward (if nurse) + Lab Unit (if lab tech). Sends 72h invitation email.
+Bulk CSV import
+POST /admin/users/bulk-import — CSV: email, full_name, role, department, ward_id. Max 500. Dry run first (dry_run=true). Atomic — all or nothing.
+Edit user
+PUT /admin/users/:id — Name, role, ward, lab_unit, department. Cannot change email.
+Reset password
+POST /admin/users/:id/send-password-reset — Sends reset email to user.
+Reset MFA
+POST /admin/users/:id/reset-mfa — Disables TOTP, user must re-enrol on next login.
+Suspend / reactivate
+PATCH /admin/users/:id { account_status: "suspended" } — Suspended users cannot log in.
+Resend invite
+POST /admin/users/:id/resend-invite — New token, new email. For "pending" users.
+Bulk resend expired
+POST /admin/users/bulk-resend-invites — Resends all expired pending invitations.
+Unlock account
+PATCH /admin/users/:id { account_status: "active" } — Unlocks after lockout.
+Tab
+Fields & API
+Wards
+Name · Type (general/ICU/maternity/paediatric) · Is active toggle. GET /admin/wards, POST /admin/wards/create
+Beds
+Per ward: Bed code (e.g. "3B-01") · Status (available/maintenance). Bulk add: "Add N beds". POST /admin/wards/:id/beds/bulk
+Departments
+Name (e.g. "Cardiology"). GET /admin/departments, POST /admin/departments/create
+Lab Units
+Name (e.g. "Hematology"). GET /admin/lab-units, POST /admin/lab-units/create
+Lab Test Types
+Per lab unit: test name · specimen type · reference range · TAT target (hours). Configures critical value thresholds.
+Method
+Endpoint
+Roles
+Description
+GET
+/dashboard
+hospital_admin
+Hospital metrics: patients, staff, encounters, admissions, locked
+GET
+/admin/users
+hospital_admin
+All staff with status, role, last_login
+POST
+/admin/users/invite
+hospital_admin
+Invite single staff member
+POST
+/admin/users/bulk-import
+hospital_admin
+Bulk CSV import — atomic, dry_run supported
+PUT
+/admin/users/:id
+hospital_admin
+Edit user details
+POST
+/admin/users/:id/send-password-reset
+hospital_admin
+Send password reset email
+POST
+/admin/users/:id/reset-mfa
+hospital_admin
+Reset MFA — user must re-enrol
+POST
+/admin/users/:id/resend-invite
+hospital_admin
+Resend invitation email
+POST
+/admin/users/bulk-resend-invites
+hospital_admin
+Bulk resend all expired invitations
+GET
+/admin/rbac-review
+hospital_admin
+Staff with overdue role reviews
+PATCH
+/admin/users/:id/role
+hospital_admin
+Change role + update last_role_reviewed_at
+GET
+/admin/wards
+hospital_admin
+Ward list with bed counts
+POST
+/admin/wards/create
+hospital_admin
+Create new ward
+POST
+/admin/wards/:id/beds/bulk
+hospital_admin
+Bulk add beds to ward
+GET
+/admin/audit-logs
+hospital_admin
+Hospital-scoped audit trail
+POST
+/audit/export
+hospital_admin
+Export audit CSV — PHI-stripped
+Page
+Route / Purpose
+Dashboard
+/superadmin — 6 stat cards + system health + AI panel + compliance alerts + onboarding + pending admin assignments
+Hospitals
+/superadmin/hospitals — Create, view, deactivate all hospitals. Onboarding checklist per hospital.
+Cross-Facility Monitor
+/superadmin/cross-facility-activity-log — Active consents, referrals, break-glass timeline
+Break-Glass Review
+/superadmin/break-glass-review — All break-glass events. Mark reviewed. Flag abuse.
+System Health
+/superadmin/system-health — Full service status: API, DB, Redis, AI inference, KMS, audit chain, backup
+AI Integration
+/superadmin/ai-integration — Module toggles, response targets, 7d usage chart
+Audit Logs
+/audit/global-logs — System-wide audit across ALL hospitals
+User Management
+/superadmin/user-management — View/manage all users across all hospitals
+Compliance Alerts
+/superadmin/compliance-alerts — Break-glass overuse, expired consents, stale referrals
+Stat Card
+Colour / Data
+Total hospitals
+Teal. GET /superadmin/hospitals count. Sub: "N onboarding".
+Total active users
+Blue. Sum of staff across all hospitals.
+Total patients
+Purple. Sum of patients across all hospitals.
+Break-glass events (7d)
+Amber. GET /superadmin/break-glass-list-global filtered last 7d. Sub: "N need review".
+Backend API
+Green. GET /health → api_status + api_latency_ms. Red if down.
+AI service
+Green. GET /health → ai_status + ai_uptime_7d. Amber if slow.
+Service
+Status / Metrics
+Django API
+Latency ms · Running / Degraded / Down
+PostgreSQL
+Latency ms · OK / Slow / Down
+Redis / Celery
+Latency ms · Running / Degraded / Down
+AI inference
+Response ms · Online / Slow (>800ms) / Offline
+KMS / Encryption
+OK / Error
+Audit chain
+Valid / Tampered — last validated timestamp
+Backup (last run)
+Time since last backup · OK / Overdue / Failed
+Method
+Endpoint
+Roles
+Description
+GET
+/superadmin/hospitals
+super_admin
+All hospitals: id, name, region, nhis_code, is_active, staff_count, patient_count
+POST
+/superadmin/hospitals
+super_admin
+Create hospital: name (unique), region, nhis_code (unique), address, phone, email
+PATCH
+/superadmin/hospitals/:id
+super_admin
+Deactivate hospital — typed name confirmation required
+GET
+/superadmin/hospital-onboarding
+super_admin
+Onboarding completion % per hospital
+POST
+/superadmin/grant-hospital-access
+super_admin
+Grant another super_admin access to specific hospital
+POST
+/superadmin/emergency-user-create
+super_admin
+Emergency user creation — reason min 30 chars, logged HIGH severity
+GET
+/superadmin/break-glass-list-global
+super_admin
+All break-glass events — flags excessive_usage per user
+GET
+/superadmin/cross-facility-activity-log
+super_admin
+Consents, referrals, break-glass timeline
+GET
+/superadmin/compliance-alerts
+super_admin
+Auto-generated: break-glass abuse, expired consents, stale referrals
+GET
+/audit/global-logs
+super_admin
+All audit events across all hospitals with chain_hash
+POST
+/audit/validate-chain
+super_admin
+Re-compute chain hashes — CHAIN_INTEGRITY_FAILURE alert if mismatch
+GET
+/health
+super_admin
+Full system health: all 7 services with latency
+GET
+/ai/status
+super_admin
+AI service health, 24h analysis count, module status
+GET
+/global-patients/search
+super_admin
+Search GPID across network (via View-As)
+POST
+/global-patients/merge
+super_admin
+Merge duplicate GPIDs — patient OTP required
+Analysis Type
+Description & Output
+comprehensive
+Full analysis: risk scores + diagnosis suggestions + triage level + similar cases. Used on encounter form.
+risk_prediction
+Risk scores only: sepsis risk, cardiac risk, deterioration risk. Percentage values.
+triage
+Triage level 1-5 only. Used for worklist prioritisation.
+similarity_search
+Similar past cases based on chief complaint + vitals + demographics. Anonymised.
+Method
+Endpoint
+Roles
+Description
+POST
+/ai/analysis
+doctor
+Trigger analysis — body: patient_id, analysis_type
+GET
+/ai/status
+super_admin
+Service health, 24h analysis count, module status, avg response
+Layer
+Implementation
+Identity
+Unique user_id — never recycled. Tied to all audit events.
+Authentication
+Password: min 12 chars, upper+lower+digit+symbol. bcrypt cost factor 12. Last 5 hashes tracked — no reuse. MFA: TOTP mandatory for all PHI roles. 8 backup codes. No skip option.
+Authorisation
+JWT RS256: user_id · role · hospital_id · ward_id (nurses) · issued_at · expires_at (15 min). Refresh token (7 days) in HttpOnly cookie.
+Session
+Access token expires 15 min inactivity. Clinical workstations auto-lock after 5 min. Session token revocation list for immediate logout.
+Inter-hospital
+X-Consent-Token (JWT RS256) signed by central platform. Hospital nodes hold only public key — cannot forge tokens.
+Tier
+Flow
+Tier 1 — Self-service
+POST /auth/forgot-password { email } → reset link valid 1h. Always returns 200 (anti-enumeration). POST /auth/reset-password { token, new_password }. Validates last 5 hashes.
+Tier 2 — Admin reset
+POST /admin/users/:id/send-password-reset (Hospital Admin → their staff). Sends reset email. Logged as PASSWORD_RESET_INITIATED.
+Tier 3 — Force reset
+POST /superadmin/users/:id/force-password-reset (Super Admin → any user). Immediately invalidates password. Logged as FORCE_PASSWORD_RESET.
+Step
+Detail
+1. Doctor initiates
+POST /consent/request { patient_gpid, granting_hospital_id, scope, reason, expires_in_hours }. Status: pending_patient_approval.
+2. OTP to patient
+SMS: "Dr. [Name] at [Hospital B] is requesting access to your records from [Hospital A]. Enter OTP [XXXXXX] to approve. Expires in [X hours]."
+3. Patient responds
+PATCH /consent/request/:id/respond { otp, decision }. No login required — OTP is the auth. Status: active or denied.
+4. Token issued
+Signed X-Consent-Token (JWT RS256): patient GPID · granting hospital · receiving hospital · scope · expiry. Sent to doctor's session.
+5. Scoped access
+Each cross-hospital request carries X-Consent-Token. Receiving hospital verifies signature and scope before returning any records.
+6. Expiry/revoke
+Token auto-expires. Patient can revoke early via SMS portal. Revocation invalidates token in central revocation list within seconds.
+Method
+Endpoint
+Roles
+Description
+POST
+/consent/request
+doctor
+Create consent request — sends OTP to patient
+PATCH
+/consent/request/:id/respond
+(patient OTP)
+Patient approves or denies — OTP verified
+POST
+/consent/:id/revoke
+(patient OTP)
+Patient revokes active consent — OTP re-verification
+Event
+Visible To
+LOGIN / LOGOUT
+Hospital Admin, Super Admin
+MFA_VERIFY
+Hospital Admin, Super Admin
+RECORD_ACCESSED
+Hospital Admin, Super Admin
+RECORD_CREATED
+Hospital Admin, Super Admin
+RECORD_AMENDED
+Doctor (own), Hospital Admin, Super Admin
+DIAGNOSIS_ADDED
+Hospital Admin, Super Admin
+PRESCRIPTION_CREATED
+Hospital Admin, Super Admin
+ALLERGY_OVERRIDE
+Hospital Admin, Super Admin
+BREAK_GLASS_ACCESS
+Both hospital admins, Super Admin — review required within 24h
+CROSS_HOSPITAL_RECORD_ACCESSED
+Both hospital admins, Super Admin
+CONSENT_GRANTED / REVOKED
+Both hospital admins, Super Admin
+ACCOUNT_LOCKOUT
+Hospital Admin, Super Admin
+VIEW_AS_HOSPITAL
+Super Admin only
+ROLE_CHANGED
+Hospital Admin, Super Admin
+EMERGENCY_USER_CREATE
+Super Admin only — HIGH severity
+CRITICAL_VITALS_CONFIRMED
+Hospital Admin, Super Admin
+BACKUP_CODE_USED
+Hospital Admin, Super Admin
+CHAIN_INTEGRITY_FAILURE
+Super Admin only — system alert
+Layer
+Method & Detail
+At rest — DB level
+Transparent Database Encryption (TDE) — AES-256 encrypts entire DB at storage layer. Raw files unreadable without TDE master key.
+At rest — field level
+Application-layer AES-256 on: national_id · nhis_number · phone_number · allergy details · HIV/mental health flags. Per-record key. Defence-in-depth.
+In transit — external
+TLS 1.3. TLS 1.0 and 1.1 disabled. HSTS headers. Internal service-to-service uses mutual TLS (mTLS).
+Consent tokens
+RS256 JWT. Private key in central KMS only. Hospital nodes hold public key only — cannot forge tokens.
+Backups
+AES-256 with separate backup key. Stored off-site. Recovery test monthly. Failed recovery = critical incident.
+Key management
+Centralised KMS. App servers never have direct KMS access — request operations via authenticated API. Key rotation annually or on suspected compromise.
+Data Field
+Access Requires
+Patient name, DOB, gender
+Valid JWT + role with patient access
+National ID, NHIS, phone
+Valid JWT + role with demographic access + KMS decryption call
+Diagnosis (ICD-10 codes)
+Doctor role JWT only
+HIV+ / mental health flags
+Doctor role JWT + explicit sensitivity flag permission
+Prescription details
+Doctor, nurse (own ward)
+Lab results
+Doctor (ordered), lab tech (own unit)
+Audit log records
+Hospital Admin, Super Admin — NOT clinical roles
+Cross-hospital records
+Valid consent token + doctor role + active consent
+Backups
+Super Admin + backup service account — never app servers
+Phase
+Steps
+Phase 1 — Super Admin setup
+POST /superadmin/onboard-hospital (name, region, NHIS code). POST /admin/users/invite { email, role: hospital_admin, hospital_id }. 72h token generated. TOTP secret created.
+Phase 2 — Hospital Admin activation
+GET /auth/activate-setup?token= → TOTP QR code. Scan with Google Authenticator or Authy. Set password (12+ chars). POST /auth/activate { token, password, totp_code }. Returns JWT. 8 backup codes issued.
+Phase 3 — Staff creation
+Single: POST /admin/users/invite { email, role, department, ward, lab_unit }. Bulk: POST /admin/users/bulk-import (CSV, max 500, atomic). 72h tokens. Auto-scoped to admin's hospital.
+Phase 4 — Staff activation
+Identical to Phase 2. Mandatory TOTP for all roles. No skip option. Daily login: email + password + 6-digit TOTP → JWT access (15 min) + refresh (7 days HttpOnly).
+Step
+System Action
+1. Patient lookup
+GET /cross-facility/patient-lookup?gpid= — returns masked name + hospital list. No clinical data.
+2. Consent request
+POST /consent/request — doctor selects hospital + scope. Patient receives OTP.
+3. RBAC verification
+Platform verifies: requesting user is doctor + account active + hospital in good standing.
+4. Consent-gated query
+GET /cross-facility/records with X-Consent-Token header. Platform routes to source hospital, returns normalised data.
+5. Unified display
+Cross-hospital records shown alongside local records. Labelled with source hospital. Read-only.
+6. Dual audit
+CROSS_HOSPITAL_RECORD_ACCESSED event at BOTH hospitals. Includes: requesting user, record type, consent token ID, timestamp.

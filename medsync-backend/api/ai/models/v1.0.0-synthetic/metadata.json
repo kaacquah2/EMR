@@ -1,0 +1,8 @@
+{
+  "model_version": "1.0.0-synthetic",
+  "training_date": "2026-04-20T14:27:52.440582",
+  "data_source": "synthetic",
+  "data_size": 2000,
+  "n_features": 26,
+  "readmission_rate": 0.108
+}

@@ -3,6 +3,7 @@ import hmac
 import uuid
 from django.db import models
 from django.contrib.auth.models import AbstractBaseUser, BaseUserManager, PermissionsMixin
+from django_cryptography.fields import encrypt
 
 
 class UserManager(BaseUserManager):
@@ -36,10 +37,79 @@ class Hospital(models.Model):
     email = models.EmailField(blank=True)
     head_of_facility = models.CharField(max_length=200, blank=True)
     is_active = models.BooleanField(default=True)
+    ai_enabled = models.BooleanField(default=True, help_text="Enable/disable AI features for this hospital")
     onboarded_at = models.DateTimeField(auto_now_add=True)
     onboarded_by = models.ForeignKey(
         "User", null=True, blank=True, on_delete=models.SET_NULL, related_name="+"
     )
+    # Soft-delete and archival fields
+    is_archived = models.BooleanField(default=False, help_text="Soft-delete: hospital marked for archival but not hard-deleted")
+    archived_at = models.DateTimeField(null=True, blank=True, help_text="When hospital was archived")
+    archived_by = models.ForeignKey(
+        "User", null=True, blank=True, on_delete=models.SET_NULL, related_name="+", 
+        help_text="Super admin who initiated archival"
+    )
+    archive_reason = models.CharField(max_length=500, blank=True, help_text="Reason for archival")
+
+    class Meta:
+        indexes = [
+            models.Index(fields=['is_archived', 'is_active']),
+        ]
+
+    def __str__(self):
+        return f"{self.name} ({self.nhis_code})"
+
+    def archive(self, archived_by, reason=""):
+        """Soft-delete: mark hospital as archived without deleting data.
+        
+        This preserves all patient data and audit history while marking
+        the hospital as no longer operational.
+        """
+        from django.utils import timezone
+        from django.db import transaction
+        
+        with transaction.atomic():
+            self.is_archived = True
+            self.is_active = False
+            self.archived_at = timezone.now()
+            self.archived_by = archived_by
+            self.archive_reason = reason
+            self.save(update_fields=[
+                'is_archived', 'is_active', 'archived_at', 'archived_by', 'archive_reason'
+            ])
+            
+            # Audit log the archival
+            AuditLog.log_action(
+                user=archived_by,
+                action="ARCHIVE_HOSPITAL",
+                resource_type="Hospital",
+                resource_id=str(self.id),
+                hospital=self,
+                extra_data={"reason": reason}
+            )
+
+    def can_delete_safely(self):
+        """Check if hospital can be safely deleted (no active patients/records)."""
+        from patients.models import Patient, PatientAdmission
+        from records.models import MedicalRecord, Encounter
+        
+        active_patients = Patient.objects.filter(
+            registered_at=self,
+            is_archived=False
+        ).exists()
+        
+        active_admissions = PatientAdmission.objects.filter(
+            hospital=self,
+            discharged_at__isnull=True
+        ).exists()
+        
+        active_encounters = Encounter.objects.filter(
+            hospital=self,
+            status__in=['pending', 'in_progress', 'draft']
+        ).exists()
+        
+        return not (active_patients or active_admissions or active_encounters)
+
 
 
 class Ward(models.Model):
@@ -114,7 +184,7 @@ class User(AbstractBaseUser, PermissionsMixin):
         ("nurse", "Nurse"),
         ("receptionist", "Receptionist"),
         ("lab_technician", "Lab Technician"),
-        ("pharmacist", "Pharmacist"),
+        ("pharmacy_technician", "Pharmacy Technician"),
         ("radiology_technician", "Radiology Technician"),
         ("billing_staff", "Billing Staff"),
         ("ward_clerk", "Ward Clerk"),
@@ -148,8 +218,8 @@ class User(AbstractBaseUser, PermissionsMixin):
     )
     activated_at = models.DateTimeField(null=True, blank=True)
     is_mfa_enabled = models.BooleanField(default=False)
-    totp_secret = models.CharField(max_length=32, blank=True, null=True)
-    mfa_backup_codes = models.TextField(blank=True, null=True)
+    totp_secret = encrypt(models.CharField(max_length=32, blank=True, null=True))
+    mfa_backup_codes = encrypt(models.TextField(blank=True, null=True))
     gmdc_licence_number = models.CharField(max_length=30, blank=True, null=True)
     licence_verified = models.BooleanField(default=False)
     is_staff = models.BooleanField(default=False)
@@ -170,12 +240,102 @@ class User(AbstractBaseUser, PermissionsMixin):
 
     last_role_reviewed_at = models.DateTimeField(null=True, blank=True)
 
+    class Meta:
+        indexes = [
+            models.Index(fields=["hospital", "role", "account_status"]),
+            models.Index(fields=["role"]),
+        ]
+
     objects = UserManager()
     USERNAME_FIELD = "email"
     REQUIRED_FIELDS = []
 
     def __str__(self):
         return self.email
+
+    def deactivate(self, reason="manual_deactivation"):
+        """
+        Deactivate user account: invalidate tokens, revoke sessions, reset MFA.
+        
+        Args:
+            reason: Why the user was deactivated (for audit logging)
+        
+        This is called when:
+        - Admin deactivates/suspends/locks the user
+        - User is deleted (soft-delete via account_status="inactive")
+        """
+        from django.utils import timezone
+        from django.db import transaction
+        
+        with transaction.atomic():
+            # Mark account as inactive
+            self.account_status = "inactive"
+            self.save()
+            
+            # Invalidate MFA
+            self.is_mfa_enabled = False
+            self.totp_secret = None
+            self.mfa_backup_codes = None
+            
+            # Clear all passkeys
+            UserPasskey.objects.filter(user=self).delete()
+            
+            # Clear MFA sessions (MFASession is in same file, safe to use directly)
+            MFASession.objects.filter(user=self).delete()
+            
+            # Blacklist all active tokens
+            try:
+                from rest_framework_simplejwt.token_blacklist.models import OutstandingToken, BlacklistedToken
+                
+                # Find all outstanding tokens for this user
+                tokens = OutstandingToken.objects.filter(user=self)
+                for token in tokens:
+                    # Blacklist each token
+                    BlacklistedToken.objects.get_or_create(token=token)
+            except ImportError:
+                pass
+            
+            # Log audit trail
+            AuditLog.objects.create(
+                user=self,
+                action='USER_DEACTIVATED',
+                resource_type='User',
+                resource_id=str(self.id),
+                hospital=self.hospital,
+                extra_data={'reason': reason}
+            )
+            
+            self.save()
+
+
+
+class UserPushSubscription(models.Model):
+    """
+    Web Push notification subscription for a user.
+    Stores VAPID subscription data from the browser.
+    """
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='push_subscriptions')
+    
+    # VAPID subscription data
+    endpoint = models.URLField(max_length=500, unique=True)
+    p256dh = models.CharField(max_length=100, help_text="Client public key")
+    auth = models.CharField(max_length=50, help_text="Auth secret")
+    
+    # Metadata
+    user_agent = models.CharField(max_length=255, blank=True)
+    is_active = models.BooleanField(default=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    
+    class Meta:
+        db_table = 'user_push_subscription'
+        indexes = [
+            models.Index(fields=['user', 'is_active']),
+        ]
+    
+    def __str__(self):
+        return f"Push subscription for {self.user.email}"
 
 
 class AuditLog(models.Model):
@@ -198,6 +358,14 @@ class AuditLog(models.Model):
         ("BULK_IMPORT", "Bulk Import"),
         ("VIEW_AS_HOSPITAL", "View As Hospital"),
         ("permission_denied", "Permission Denied"),
+        ("PUSH_SUBSCRIBE", "Push Subscribe"),
+        ("PUSH_RESUBSCRIBE", "Push Resubscribe"),
+        ("PUSH_UNSUBSCRIBE", "Push Unsubscribe"),
+        ("PASSKEY_REGISTERED", "Passkey Registered"),
+        ("PASSKEY_RENAMED", "Passkey Renamed"),
+        ("PASSKEY_REMOVED", "Passkey Removed"),
+        ("PASSKEY_AUTH_SUCCESS", "Passkey Authentication Success"),
+        ("PASSKEY_RESET_BY_ADMIN", "Passkey Reset by Admin"),
     ]
     user = models.ForeignKey(User, on_delete=models.CASCADE)
     action = models.CharField(max_length=30, choices=ACTIONS)
@@ -207,8 +375,8 @@ class AuditLog(models.Model):
     ip_address = models.GenericIPAddressField()
     user_agent = models.TextField(blank=True, null=True)
     extra_data = models.JSONField(null=True, blank=True)
-    chain_hash = models.CharField(max_length=64, editable=False)
-    signature = models.CharField(max_length=64, editable=False, null=True, blank=True)
+    chain_hash = models.CharField(max_length=64, editable=False, unique=True)
+    signature = models.CharField(max_length=64, editable=False, default="")
     timestamp = models.DateTimeField(auto_now_add=True, db_index=True)
 
     def save(self, *args, **kwargs):
@@ -227,8 +395,8 @@ class AuditLog(models.Model):
             # HMAC signature for authenticity
             from django.conf import settings
 
-            key = getattr(settings, "AUDIT_LOG_SIGNING_KEY", "dev-key-change-in-production").encode()
-            self.signature = hmac.new(key, data.encode(), hashlib.sha256).hexdigest()
+            key = getattr(settings, "AUDIT_LOG_SIGNING_KEY", None) or "dev-key-change-in-production"
+            self.signature = hmac.new(key.encode(), data.encode(), hashlib.sha256).hexdigest()
         super().save(*args, **kwargs)
 
     class Meta:
@@ -237,6 +405,7 @@ class AuditLog(models.Model):
             models.Index(fields=["hospital", "-timestamp"]),
             models.Index(fields=["action", "-timestamp"]),
             models.Index(fields=["action", "hospital", "-timestamp"]),
+            models.Index(fields=['resource_type', 'resource_id'], name='audit_resource_idx'),
         ]
 
 
@@ -477,9 +646,14 @@ class BackupCodeRateLimit(models.Model):
         
         Returns:
             (allowed: bool, remaining: int)
+            
+        SECURITY: Uses atomic F() expressions to prevent race conditions where
+        concurrent requests could both increment counter without seeing each other's
+        updates, allowing more attempts than the limit.
         """
         from django.utils import timezone
         from datetime import timedelta
+        from django.db.models import F
         
         now = timezone.now()
         window_start = now - timedelta(minutes=window_minutes)
@@ -491,16 +665,21 @@ class BackupCodeRateLimit(models.Model):
         if rate_limit.first_attempt_at < window_start:
             rate_limit.attempt_count = 0
             rate_limit.first_attempt_at = now
+            rate_limit.save(update_fields=['attempt_count', 'first_attempt_at'])
         
         # Check if limit exceeded
         if rate_limit.attempt_count >= max_attempts:
             return False, 0
         
-        # Increment attempt counter
-        rate_limit.attempt_count += 1
-        rate_limit.last_attempt_at = now
-        rate_limit.save()
+        # CRITICAL FIX: Use atomic F() expression to prevent race condition
+        # Two concurrent requests will not both increment and bypass the limit
+        cls.objects.filter(id=rate_limit.id).update(
+            attempt_count=F('attempt_count') + 1,
+            last_attempt_at=now
+        )
         
+        # Refresh to get the updated count
+        rate_limit.refresh_from_db()
         remaining = max_attempts - rate_limit.attempt_count
         return True, remaining
 
@@ -547,3 +726,101 @@ class TaskSubmission(models.Model):
     
     def __str__(self):
         return f"{self.task_type} - {self.user.email} - {self.celery_task_id}"
+
+
+class Announcement(models.Model):
+    """
+    Hospital-wide announcement broadcast.
+    """
+    PRIORITY_CHOICES = [
+        ('low', 'Low'),
+        ('normal', 'Normal'),
+        ('high', 'High'),
+        ('urgent', 'Urgent'),
+    ]
+    
+    TARGET_CHOICES = [
+        ('all', 'All Staff'),
+        ('doctors', 'Doctors Only'),
+        ('nurses', 'Nurses Only'),
+        ('clinical', 'Clinical Staff'),
+        ('admin', 'Admin Staff'),
+    ]
+    
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    hospital = models.ForeignKey('Hospital', on_delete=models.CASCADE)
+    
+    title = models.CharField(max_length=255)
+    content = models.TextField()
+    priority = models.CharField(max_length=20, choices=PRIORITY_CHOICES, default='normal')
+    target_audience = models.CharField(max_length=20, choices=TARGET_CHOICES, default='all')
+    
+    created_by = models.ForeignKey('User', on_delete=models.SET_NULL, null=True)
+    
+    is_active = models.BooleanField(default=True)
+    expires_at = models.DateTimeField(null=True, blank=True)
+    
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    
+    class Meta:
+        ordering = ['-created_at']
+    
+    def __str__(self):
+        return f"{self.title} - {self.hospital.name}"
+
+
+class UserPasskey(models.Model):
+    """
+    WebAuthn/Passkey credential storage per user.
+    Stores public key information needed to verify passkey signatures during authentication.
+    Includes platform detection for multi-device support (desktop, mobile).
+    
+    Fields:
+    - credential_id: Unique WebAuthn credential identifier (binary)
+    - public_key: Public key bytes for signature verification
+    - sign_count: Counter to detect replayed assertions (must increase monotonically)
+    - device_name: User-friendly device identifier (e.g. "iPhone 15", "Ward Tablet")
+    - platform: Detected OS (windows, macos, linux, android, ios, unknown)
+    - transports: JSON array of transports (e.g. ["internal"], ["hybrid"], etc.)
+    - last_ip_address: IP address when passkey was last used
+    - is_synced: True if passkey synced across devices (Apple/Google/Microsoft)
+    - created_at: When the passkey was registered
+    - last_used_at: When the passkey was last used successfully for authentication
+    """
+    PLATFORM_CHOICES = [
+        ('windows', 'Windows'),
+        ('macos', 'macOS'),
+        ('linux', 'Linux'),
+        ('android', 'Android'),
+        ('ios', 'iOS'),
+        ('unknown', 'Unknown'),
+    ]
+    
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='passkeys')
+    
+    credential_id = models.BinaryField(unique=True, db_index=True)
+    public_key = models.BinaryField()
+    sign_count = models.IntegerField(default=0)
+    
+    device_name = models.CharField(max_length=100, blank=True, default='')
+    platform = models.CharField(max_length=20, choices=PLATFORM_CHOICES, default='unknown')
+    transports = models.JSONField(default=list, blank=True)
+    last_ip_address = models.GenericIPAddressField(null=True, blank=True)
+    is_synced = models.BooleanField(default=False, help_text="True if synced via Apple/Google/Microsoft")
+    
+    created_at = models.DateTimeField(auto_now_add=True)
+    last_used_at = models.DateTimeField(null=True, blank=True)
+    
+    class Meta:
+        indexes = [
+            models.Index(fields=['user', 'credential_id']),
+            models.Index(fields=['user', '-last_used_at']),
+            models.Index(fields=['user', 'platform']),
+        ]
+        verbose_name = "User Passkey"
+        verbose_name_plural = "User Passkeys"
+    
+    def __str__(self):
+        return f"Passkey for {self.user.email} ({self.device_name or 'Unknown device'}) - {self.get_platform_display()}"

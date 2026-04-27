@@ -7,7 +7,9 @@ import { useApi } from "@/hooks/use-api";
 import { isBenignApiNetworkFailure } from "@/lib/api-client";
 import { useToast } from "@/lib/toast-context";
 import { Button } from "@/components/ui/button";
+import { ConnectionStatusIndicator } from "@/components/ui/ConnectionStatusIndicator";
 import { API_BASE } from "@/lib/api-base";
+import { Search } from "lucide-react";
 
 function getBreadcrumb(pathname: string): string[] {
   const parts = pathname.split("/").filter(Boolean);
@@ -138,37 +140,60 @@ export function TopBar() {
 
   return (
     <>
-      {user?.role === "super_admin" && viewAsHospitalId && (
-        <div className="flex w-full items-center gap-2 border-b border-[#5DCAA5] bg-[#E1F5EE] px-6 py-2 text-[13px] text-[#085041]">
-          <span aria-hidden className="inline-flex h-5 w-5 items-center justify-center rounded-full bg-[#BFECDD] text-[#085041]">
-            i
-          </span>
-          <span className="flex-1 truncate">
-            Viewing as: <strong>{viewAsHospitalName ?? viewAsHospitalId}</strong> — all actions are scoped to this hospital
-          </span>
+      <header className="flex h-14 items-center justify-between border-b-2 border-[var(--teal-500)]/20 bg-white dark:bg-[#1E293B] px-4 md:px-6 shadow-sm">
+        <div className="flex items-center gap-2">
+          {/* UX-24: Hamburger button for mobile sidebar */}
           <button
-            type="button"
-            onClick={() => setViewAs(null, null)}
-            className="rounded-md px-3 py-1 text-[13px] font-semibold text-[#085041] hover:bg-[#BFECDD] focus:outline-none focus:ring-2 focus:ring-[#5DCAA5]"
+            className="lg:hidden mr-1 flex h-8 w-8 items-center justify-center rounded-lg hover:bg-[var(--gray-100)] transition-colors"
+            aria-label="Open navigation menu"
+            onClick={() => {
+              // Dispatch a custom event that the Sidebar listens for
+              document.dispatchEvent(new CustomEvent('sidebar:open'));
+            }}
           >
-            Return to system view ×
+            <svg className="h-5 w-5 text-[var(--gray-700)]" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
+            </svg>
           </button>
-        </div>
-      )}
-      <header className="flex h-14 items-center justify-between border-b-2 border-[#0B8A96]/20 bg-white px-6 shadow-sm">
-        <nav className="flex items-center gap-2 text-sm">
-          {breadcrumb.map((label, i) => (
-            <React.Fragment key={i}>
-              {i > 0 && (
+
+          <nav className="flex items-center gap-2 text-sm" aria-label="Breadcrumb">
+            {breadcrumb.map((label, i) => (
+              <React.Fragment key={i}>
+                {i > 0 && <span className="text-[var(--gray-500)]" aria-hidden="true">/</span>}
+                <span className={i === breadcrumb.length - 1 ? "font-medium text-[var(--gray-900)]" : "text-[var(--gray-500)]"}>{label}</span>
+              </React.Fragment>
+            ))}
+            {/* Ward context pill for nurses */}
+            {user?.role === "nurse" && user?.ward_name && (
+              <>
                 <span className="text-[#475569]">/</span>
-              )}
-              <span className={i === breadcrumb.length - 1 ? "font-medium text-[#0F172A]" : "text-[#475569]"}>
-                {label}
-              </span>
-            </React.Fragment>
-          ))}
-        </nav>
-        <div className="flex items-center gap-4">
+                <span className="rounded-full bg-[#059669]/10 px-3 py-1 text-xs font-medium text-[#059669]">
+                  Ward {user.ward_name}
+                </span>
+              </>
+            )}
+          </nav>
+        </div>
+        <div className="flex items-center gap-2 md:gap-4 flex-wrap justify-end">
+          {/* UX-25: OS-aware keyboard shortcut hint */}
+          <button
+            onClick={() => {
+              const event = new KeyboardEvent('keydown', { key: 'k', metaKey: true, bubbles: true });
+              document.dispatchEvent(event);
+            }}
+            className="hidden md:flex items-center gap-2 px-3 py-1.5 text-sm text-muted-foreground hover:text-foreground border rounded-lg hover:bg-muted transition-colors"
+            title="Open command palette"
+            aria-label="Open command palette"
+          >
+            <Search className="h-4 w-4" />
+            <span>Search</span>
+            <kbd
+              className="ml-2 px-1.5 py-0.5 text-xs bg-muted rounded font-mono"
+              aria-label={typeof navigator !== 'undefined' && /Mac/.test(navigator.platform) ? 'Command K' : 'Control K'}
+            >
+              {typeof navigator !== 'undefined' && /Mac/.test(navigator.platform) ? '⌘K' : 'Ctrl+K'}
+            </kbd>
+          </button>
           {user?.role === "hospital_admin" && (
             <>
               <Button
@@ -234,6 +259,7 @@ export function TopBar() {
               {validatingChain ? "Validating…" : "Validate chain"}
             </Button>
           )}
+          <ConnectionStatusIndicator />
           <span className="font-mono text-sm text-[#475569]">{timeStr}</span>
         </div>
       </header>

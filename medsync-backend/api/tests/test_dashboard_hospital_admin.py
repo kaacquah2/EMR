@@ -88,3 +88,5 @@ class HospitalAdminDashboardMetricsTests(TestCase):
         self.assertEqual(response.status_code, 200)
         emails = {row["email"] for row in response.data["pending_invitations_list"]}
         self.assertIn("nopexpire@dash.test", emails)
+
+

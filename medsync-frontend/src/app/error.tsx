@@ -12,7 +12,9 @@ export default function Error({
   reset: () => void;
 }) {
   useEffect(() => {
-    console.error("Route error:", error);
+    if (process.env.NODE_ENV === "development") {
+      console.error("Route error:", error);
+    }
   }, [error]);
 
   return (

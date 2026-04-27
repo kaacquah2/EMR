@@ -6,6 +6,7 @@ import { useApi } from "@/hooks/use-api";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { useToast } from "@/lib/toast-context";
+import { hasRole, ALL_ADMIN_ROLES } from "@/lib/permissions";
 
 type RbacRow = {
   user_id: string;
@@ -54,7 +55,8 @@ export default function RbacReviewPage() {
     }
   };
 
-  if (!user || user.role !== "hospital_admin") {
+  // RBAC-03: both hospital_admin AND super_admin can access this page
+  if (!user || !hasRole(user.role, ALL_ADMIN_ROLES)) {
     return (
       <div className="p-8">
         <p className="text-[#64748B]">Access denied.</p>

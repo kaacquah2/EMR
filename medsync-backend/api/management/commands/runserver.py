@@ -5,7 +5,7 @@ This command wraps Django's default runserver but ensures Daphne (the ASGI serve
 used for WebSocket support) is configured with proper timeout settings for graceful
 shutdown during file reloads.
 
-Without this configuration, rapid file reloads cause "took too long to shut down" 
+Without this configuration, rapid file reloads cause "took too long to shut down"
 errors because Daphne's default 2-second application close timeout is too short for
 pending requests to complete gracefully.
 
@@ -26,12 +26,12 @@ class Command(BaseCommand):
     def handle(self, *args, **options):
         """
         Override handle to set Daphne timeout before starting server.
-        
-        The DAPHNE_APPLICATION_CLOSE_TIMEOUT from settings.py is passed to 
+
+        The DAPHNE_APPLICATION_CLOSE_TIMEOUT from settings.py is passed to
         the ASGI server via environment variable for daphne to pick up.
         """
         timeout = getattr(settings, 'DAPHNE_APPLICATION_CLOSE_TIMEOUT', 5)
-        
+
         if settings.DEBUG:
             self.stdout.write(
                 self.style.SUCCESS(
@@ -44,7 +44,7 @@ class Command(BaseCommand):
                     "   This allows pending requests to complete gracefully during hot-reload.\n"
                 )
             )
-        
+
         os.environ.setdefault('DAPHNE_APPLICATION_CLOSE_TIMEOUT', str(timeout))
-        
+
         return super().handle(*args, **options)

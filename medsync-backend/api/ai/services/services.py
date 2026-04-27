@@ -17,7 +17,7 @@ from decimal import Decimal
 from django.core.cache import cache
 from core.models import Hospital, User, Bed, Ward, Department
 from patients.models import Patient
-from records.models import MedicalRecord, LabOrder
+from records.models import MedicalRecord
 from api.ai.data_processor import DataProcessor
 from api.ai.feature_engineering import FeatureEngineer
 from api.ai.ml_models import (
@@ -33,7 +33,6 @@ logger = logging.getLogger(__name__)
 
 class AIServiceException(Exception):
     """Raised when AI service encounters an error."""
-    pass
 
 
 class BaseAIService:
@@ -42,7 +41,7 @@ class BaseAIService:
     def __init__(self, user: User):
         """
         Initialize service with user context.
-        
+
         Args:
             user: User making the request (enforces hospital scoping)
         """
@@ -54,9 +53,9 @@ class BaseAIService:
     def _get_patient_or_raise(self, patient_id: str) -> Patient:
         """
         Get patient by ID, checking access permissions via hospital scoping.
-        
+
         Uses data_processor to enforce full RBAC + hospital multi-tenancy rules.
-        
+
         Raises:
             AIServiceException if patient not found or access denied
         """
@@ -75,7 +74,7 @@ class BaseAIService:
     def _extract_and_engineer_features(self, patient: Patient) -> Dict[str, Any]:
         """
         Extract patient data and engineer features.
-        
+
         Returns: Feature vector ready for ML models
         """
         patient_data = self.data_processor.extract_complete_patient_data(patient)
@@ -86,7 +85,7 @@ class BaseAIService:
 class RiskPredictionService(BaseAIService):
     """
     Disease risk prediction service.
-    
+
     Predicts 5-year risk for heart disease, diabetes, stroke, pneumonia, hypertension.
     """
 
@@ -95,10 +94,10 @@ class RiskPredictionService(BaseAIService):
     def predict_risk(self, patient_id: str) -> Dict[str, Any]:
         """
         Predict disease risk for a patient.
-        
+
         Args:
             patient_id: UUID of patient
-        
+
         Returns:
             {
                 'patient_id': str,
@@ -121,11 +120,11 @@ class RiskPredictionService(BaseAIService):
             if cached:
                 cached['cached'] = True
                 return cached
-            
+
             # Get patient and extract features
             patient = self._get_patient_or_raise(patient_id)
             features = self._extract_and_engineer_features(patient)
-            
+
             # Run prediction
             predictor = get_risk_predictor()
             prediction = predictor.predict_risk(features)
@@ -137,11 +136,11 @@ class RiskPredictionService(BaseAIService):
                     raise AIServiceException(f"Invalid confidence score type for {name}: {type(score)}")
                 if not (0 <= float(score) <= 100):
                     raise AIServiceException(f"Confidence score out of range for {name}: {score}")
-            
+
             # Add contributing factors and recommendations
             top_disease = prediction['top_risk_disease']
             contributing = predictor.get_contributing_factors(top_disease, features)
-            
+
             result = {
                 'patient_id': str(patient_id),
                 'risk_predictions': prediction['predictions'],
@@ -152,13 +151,15 @@ class RiskPredictionService(BaseAIService):
                 'cached': False,
                 'timestamp': datetime.now().isoformat(),
             }
-            
+
             # Cache result
             cache.set(cache_key, result, self.CACHE_TTL)
-            
-            logger.info(f"Risk prediction for patient {patient_id}: {top_disease} ({prediction['top_risk_score']:.0f}%)")
+
+            logger.info(
+                f"Risk prediction for patient {patient_id}: {top_disease} ({
+                    prediction['top_risk_score']:.0f}%)")
             return result
-        
+
         except AIServiceException:
             raise
         except Exception as e:
@@ -168,25 +169,25 @@ class RiskPredictionService(BaseAIService):
     def _generate_recommendations(self, disease: str, prediction: Dict) -> List[str]:
         """Generate clinical recommendations based on risk."""
         recommendations = []
-        
+
         if disease == 'heart_disease' and prediction['top_risk_score'] > 60:
             recommendations.append('Consider cardiology referral')
             recommendations.append('Monitor blood pressure regularly')
             recommendations.append('Recommend stress testing')
-        
+
         elif disease == 'diabetes' and prediction['top_risk_score'] > 60:
             recommendations.append('Order HbA1c and fasting glucose')
             recommendations.append('Lifestyle counseling (diet, exercise)')
             recommendations.append('Consider endocrinology referral')
-        
+
         elif disease == 'stroke' and prediction['top_risk_score'] > 60:
             recommendations.append('Strict BP control')
             recommendations.append('Consider antiplatelet therapy')
             recommendations.append('Neurology consultation')
-        
+
         if prediction['top_risk_score'] > 80:
             recommendations.insert(0, '⚠️ URGENT: High risk detected - expedite evaluation')
-        
+
         return recommendations
 
     def batch_predict_risk(self, patient_ids: List[str]) -> List[Dict[str, Any]]:
@@ -217,12 +218,12 @@ class DiagnosisService(BaseAIService):
     ) -> Dict[str, Any]:
         """
         Get differential diagnosis suggestions for a patient.
-        
+
         Args:
             patient_id: UUID of patient
             chief_complaint: Chief complaint (if not in recent encounter)
             top_n: Number of suggestions to return
-        
+
         Returns:
             {
                 'patient_id': str,
@@ -246,10 +247,10 @@ class DiagnosisService(BaseAIService):
         try:
             # Get patient
             patient = self._get_patient_or_raise(patient_id)
-            
+
             # Extract features
             features = self._extract_and_engineer_features(patient)
-            
+
             # Get latest encounter for chief complaint if not provided
             if not chief_complaint:
                 from api.models import Encounter
@@ -257,16 +258,16 @@ class DiagnosisService(BaseAIService):
                     patient=patient,
                     hospital=self.effective_hospital
                 ).order_by('-created_at').first()
-                
+
                 if latest_encounter:
                     chief_complaint = latest_encounter.chief_complaint or ''
                 else:
                     chief_complaint = ''
-            
+
             # Extract symptoms from patient data
             diagnoses_data = self.data_processor.extract_patient_diagnoses(patient)
             symptoms = [d['icd10_description'] for d in diagnoses_data[-5:]]  # Last 5 diagnoses as symptoms
-            
+
             # Run classifier
             classifier = get_diagnosis_classifier()
             suggestions = classifier.suggest_diagnoses(
@@ -276,10 +277,12 @@ class DiagnosisService(BaseAIService):
                 features,
                 top_n=top_n,
             )
-            
-            logger.info(f"CDS for patient {patient_id}: {suggestions['suggestions'][0]['diagnosis'] if suggestions['suggestions'] else 'None'}")
+
+            logger.info(
+                f"CDS for patient {patient_id}: {
+                    suggestions['suggestions'][0]['diagnosis'] if suggestions['suggestions'] else 'None'}")
             return suggestions
-        
+
         except AIServiceException:
             raise
         except Exception as e:
@@ -299,11 +302,11 @@ class TriageService(BaseAIService):
     ) -> Dict[str, Any]:
         """
         Triage a patient by severity.
-        
+
         Args:
             patient_id: UUID of patient
             chief_complaint: Chief complaint/reason for visit
-        
+
         Returns:
             {
                 'patient_id': str,
@@ -319,10 +322,10 @@ class TriageService(BaseAIService):
         try:
             # Get patient
             patient = self._get_patient_or_raise(patient_id)
-            
+
             # Extract features
             features = self._extract_and_engineer_features(patient)
-            
+
             # Extract latest vitals
             vitals_data = self.data_processor.extract_patient_vitals(patient, days_back=1)
             vitals = {}
@@ -336,14 +339,14 @@ class TriageService(BaseAIService):
                     'temperature_c': latest_vital.get('temperature_c'),
                     'resp_rate': latest_vital.get('resp_rate'),
                 }
-            
+
             # Run triage
             classifier = get_triage_classifier()
             triage_result = classifier.classify_patient(chief_complaint, vitals, features)
-            
+
             logger.info(f"Triage for patient {patient_id}: {triage_result['triage_level'].upper()}")
             return triage_result
-        
+
         except AIServiceException:
             raise
         except Exception as e:
@@ -363,17 +366,17 @@ class SimilaritySearchService(BaseAIService):
     ) -> Dict[str, Any]:
         """
         **CRITICAL FIX #5:** Find similar patients for comparison/benchmarking.
-        
+
         Uses k-NN with cosine similarity to find comparable cases based on:
         - Demographics (age, gender)
         - Vitals (BP, pulse, O2, temperature, weight, BMI)
         - Medical conditions (comorbidities)
         - Active medications
-        
+
         Args:
             patient_id: UUID of query patient
             k: Number of similar patients to return (max 50)
-        
+
         Returns:
             {
                 'patient_id': str,
@@ -400,20 +403,20 @@ class SimilaritySearchService(BaseAIService):
             # Get query patient and extract features
             query_patient = self._get_patient_or_raise(patient_id)
             query_features = self._extract_and_engineer_features(query_patient)
-            
+
             # Get similarity matcher
             matcher = get_similarity_matcher()
-            
+
             # Build index of all hospital patients (or cached patients)
             # Query patients in same hospital (or all if super_admin)
             from patients.models import Patient as PatientModel
-            
+
             hospital_query = PatientModel.objects.all() if self.user.role == 'super_admin' else \
-                              PatientModel.objects.filter(registered_at=self.effective_hospital)
-            
+                PatientModel.objects.filter(registered_at=self.effective_hospital)
+
             # Extract features for all hospital patients for indexing
             all_patients = hospital_query.values_list('id', flat=True)[:1000]  # Cap at 1000 for performance
-            
+
             if not all_patients or patient_id not in [str(p) for p in all_patients]:
                 return {
                     'patient_id': str(patient_id),
@@ -424,7 +427,7 @@ class SimilaritySearchService(BaseAIService):
                     'model_version': '1.0.0',
                     'timestamp': datetime.now().isoformat(),
                 }
-            
+
             # Extract features for all patients for indexing
             all_patient_features = []
             for pid in all_patients:
@@ -436,7 +439,7 @@ class SimilaritySearchService(BaseAIService):
                 except Exception as e:
                     logger.warning(f"Could not extract features for patient {pid}: {e}")
                     continue
-            
+
             if not all_patient_features:
                 return {
                     'patient_id': str(patient_id),
@@ -447,19 +450,22 @@ class SimilaritySearchService(BaseAIService):
                     'model_version': '1.0.0',
                     'timestamp': datetime.now().isoformat(),
                 }
-            
+
             # Index all patients
             matcher.index_patients(all_patient_features)
-            
+
             # Add patient_id to query features for self-filtering
             query_features['patient_id'] = str(patient_id)
-            
+
             # Find similar patients
             similarity_results = matcher.find_similar_patients(query_features, k=k)
-            
-            logger.info(f"Found {len(similarity_results.get('similar_patients', []))} similar patients for {patient_id}")
+
+            logger.info(
+                f"Found {len(similarity_results.get('similar_patients', []))} "
+                f"similar patients for {patient_id}"
+            )
             return similarity_results
-        
+
         except AIServiceException:
             raise
         except Exception as e:
@@ -479,11 +485,11 @@ class ReferralRecommendationService(BaseAIService):
     ) -> Dict[str, Any]:
         """
         Recommend best hospital for referral.
-        
+
         Args:
             patient_id: UUID of patient
             required_specialty: Specialty needed (cardiology, orthopedics, etc.)
-        
+
         Returns:
             {
                 'patient_id': str,
@@ -577,7 +583,7 @@ class ReferralRecommendationService(BaseAIService):
                 "recommended_hospitals": recommendations[:3],
                 "timestamp": datetime.now().isoformat(),
             }
-        
+
         except AIServiceException:
             raise
         except Exception as e:

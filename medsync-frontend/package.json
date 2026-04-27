@@ -16,14 +16,20 @@
     "test:e2e:ui": "playwright test --ui"
   },
   "dependencies": {
+    "@types/react-window": "^1.8.8",
     "lucide-react": "^1.6.0",
     "next": "16.2.1",
+    "next-pwa": "^5.6.0",
+    "qrcode.react": "^4.0.1",
     "react": "19.2.3",
-    "react-dom": "19.2.3"
+    "react-dom": "19.2.3",
+    "react-window": "^2.2.7",
+    "swr": "^2.4.1"
   },
   "devDependencies": {
     "@playwright/test": "^1.58.2",
     "@tailwindcss/postcss": "^4",
+    "@testing-library/react": "^16.3.2",
     "@types/node": "^20",
     "@types/react": "^19",
     "@types/react-dom": "^19",

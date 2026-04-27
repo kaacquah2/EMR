@@ -5,7 +5,6 @@ Tests the fallback mechanism that allows tasks to execute synchronously
 when the Celery broker is unavailable.
 """
 
-import logging
 from unittest.mock import Mock, patch, MagicMock
 from django.test import TestCase, override_settings
 from celery import shared_task
@@ -37,9 +36,9 @@ class CeleryFallbackTestCase(TestCase):
         mock_conn = MagicMock()
         mock_conn.__enter__.side_effect = OperationalError("Connection failed")
         mock_celery.connection.return_value = mock_conn
-        
+
         result = can_use_celery()
-        
+
         self.assertFalse(result)
 
     @patch('api.tasks.fallback.celery_app')
@@ -50,16 +49,16 @@ class CeleryFallbackTestCase(TestCase):
         mock_conn.__enter__.return_value = mock_conn
         mock_conn.connect.return_value = None
         mock_celery.connection.return_value = mock_conn
-        
+
         result = can_use_celery()
-        
+
         self.assertTrue(result)
 
     @patch('api.tasks.fallback.celery_app', None)
     def test_can_use_celery_returns_false_when_celery_not_available(self):
         """Test can_use_celery returns False when Celery is not installed."""
         result = can_use_celery()
-        
+
         self.assertFalse(result)
 
     @override_settings(CELERY_ALWAYS_EAGER=True, CELERY_EAGER_PROPAGATES_EXCEPTIONS=True)
@@ -67,7 +66,7 @@ class CeleryFallbackTestCase(TestCase):
     def test_execute_task_sync_or_async_uses_async_when_available(self, mock_can_use):
         """Test execute_task_sync_or_async uses async when Celery is available."""
         result = execute_task_sync_or_async(simple_task_success, 42)
-        
+
         # In eager mode with Celery available, should get async result
         self.assertIsNotNone(result)
         # Note: In eager mode, the task is executed synchronously but via the async path
@@ -76,7 +75,7 @@ class CeleryFallbackTestCase(TestCase):
     def test_execute_task_sync_or_async_uses_sync_when_unavailable(self, mock_can_use):
         """Test execute_task_sync_or_async uses sync when Celery unavailable."""
         result = execute_task_sync_or_async(simple_task_success, 42)
-        
+
         # Should execute synchronously and return result
         self.assertEqual(result["status"], "success")
         self.assertEqual(result["value"], 42)
@@ -86,9 +85,9 @@ class CeleryFallbackTestCase(TestCase):
         """Test execute_task_sync_or_async passes kwargs correctly."""
         # Mock a task function
         mock_task = Mock(return_value={"status": "success", "key": "value"})
-        
+
         result = execute_task_sync_or_async(mock_task, 1, 2, key1="val1", key2="val2")
-        
+
         # Verify task was called with correct args and kwargs
         mock_task.assert_called_once_with(1, 2, key1="val1", key2="val2")
         self.assertEqual(result["status"], "success")
@@ -97,10 +96,10 @@ class CeleryFallbackTestCase(TestCase):
     def test_execute_task_sync_or_async_logs_sync_execution(self, mock_can_use):
         """Test fallback logs warning when falling back to sync."""
         mock_task = Mock(return_value={"status": "success"})
-        
+
         with self.assertLogs('api.tasks.fallback', level='INFO') as log:
             execute_task_sync_or_async(mock_task, 1, 2)
-            
+
             # Should log info about synchronous execution
             log_output = ' '.join(log.output)
             self.assertIn('synchronously', log_output.lower())
@@ -110,9 +109,9 @@ class CeleryFallbackTestCase(TestCase):
         """Test execute_task_sync_or_async returns correct result in sync mode."""
         expected_result = {"status": "success", "data": "test"}
         mock_task = Mock(return_value=expected_result)
-        
+
         result = execute_task_sync_or_async(mock_task, 1)
-        
+
         self.assertEqual(result, expected_result)
 
     @patch('api.tasks.fallback.can_use_celery')
@@ -121,14 +120,14 @@ class CeleryFallbackTestCase(TestCase):
         mock_can_use.return_value = True
         mock_task = Mock(name="test_task")
         mock_task.name = "api.tasks.test_task"
-        
+
         # Make apply_async return a result that can be .get()
         mock_result = Mock()
         mock_result.get.return_value = {"status": "success"}
         mock_task.apply_async.return_value = mock_result
-        
+
         result = execute_task_sync_or_async(mock_task, 1)
-        
+
         # Should have called apply_async (async attempt)
         mock_task.apply_async.assert_called_once()
         self.assertEqual(result["status"], "success")
@@ -138,14 +137,14 @@ class CeleryFallbackTestCase(TestCase):
         """Test execute_task_sync_or_async falls back to sync if async fails."""
         mock_task = Mock(name="test_task")
         mock_task.name = "api.tasks.test_task"
-        
+
         # Make apply_async fail, then sync works
         mock_task.apply_async.side_effect = Exception("Connection failed")
         mock_task.side_effect = None  # Sync execution succeeds
         mock_task.return_value = {"status": "success", "fallback": True}
-        
+
         result = execute_task_sync_or_async(mock_task, 1)
-        
+
         # Should have tried async then fallen back to sync
         mock_task.apply_async.assert_called_once()
         # Sync execution should have been called as fallback
@@ -163,7 +162,7 @@ class CeleryFallbackTestCase(TestCase):
     def test_execute_task_sync_or_async_with_exception_in_sync_task(self, mock_can_use):
         """Test execute_task_sync_or_async propagates exceptions in sync mode."""
         mock_task = Mock(side_effect=ValueError("Task execution failed"))
-        
+
         with self.assertRaises(ValueError):
             execute_task_sync_or_async(mock_task, 1)
 
@@ -172,7 +171,7 @@ class CeleryFallbackTestCase(TestCase):
         """Test fallback with actual task in eager mode using valid UUID."""
         import uuid
         from api.tasks import comprehensive_analysis_task
-        
+
         # Use a valid UUID format but for a non-existent patient
         valid_uuid = str(uuid.uuid4())
         result = execute_task_sync_or_async(
@@ -180,7 +179,7 @@ class CeleryFallbackTestCase(TestCase):
             valid_uuid,
             timeout=10
         )
-        
+
         # Task should execute and return a result (error expected due to missing patient)
         self.assertIn("status", result)
 
@@ -189,7 +188,7 @@ class CeleryFallbackTestCase(TestCase):
         """Test fallback with PDF export task using valid UUID."""
         import uuid
         from api.tasks import export_patient_pdf_task
-        
+
         # Use a valid UUID format but for a non-existent patient
         valid_uuid = str(uuid.uuid4())
         result = execute_task_sync_or_async(
@@ -197,7 +196,7 @@ class CeleryFallbackTestCase(TestCase):
             valid_uuid,
             timeout=30
         )
-        
+
         # Task should handle missing patient gracefully
         self.assertIn("status", result)
 
@@ -210,10 +209,10 @@ class CeleryFallbackIntegrationTestCase(TestCase):
         """Test multiple tasks can be executed in sequence with fallback."""
         mock_task1 = Mock(return_value={"status": "success", "id": 1})
         mock_task2 = Mock(return_value={"status": "success", "id": 2})
-        
+
         result1 = execute_task_sync_or_async(mock_task1, 1)
         result2 = execute_task_sync_or_async(mock_task2, result1["id"])
-        
+
         self.assertEqual(result1["id"], 1)
         self.assertEqual(result2["id"], 2)
 
@@ -227,13 +226,15 @@ class CeleryFallbackIntegrationTestCase(TestCase):
         mock_result1 = Mock()
         mock_result1.get.return_value = {"status": "success", "task": 1}
         mock_task1.apply_async.return_value = mock_result1
-        
+
         result1 = execute_task_sync_or_async(mock_task1, 1)
         self.assertEqual(result1["task"], 1)
-        
+
         # Second call: Celery unavailable
         mock_can_use.return_value = False
         mock_task2 = Mock(return_value={"status": "success", "task": 2})
-        
+
         result2 = execute_task_sync_or_async(mock_task2, 1)
         self.assertEqual(result2["task"], 2)
+
+

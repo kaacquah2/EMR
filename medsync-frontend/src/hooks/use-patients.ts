@@ -1,68 +1,68 @@
 "use client";
 
-import { useState, useCallback } from "react";
+import useSWR from 'swr';
+import { useCallback } from "react";
 import { useApi } from "./use-api";
 import type { Patient, PaginatedResponse } from "@/lib/types";
 
 export function usePatientSearch() {
   const api = useApi();
-  const [results, setResults] = useState<Patient[]>([]);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  
+  // UX-01: memoize fetcher to prevent React Compiler skip
+  const fetcher = useCallback((url: string) => api.get<PaginatedResponse<Patient>>(url), [api]);
+  
+  const { data, error, isLoading, mutate } = useSWR<PaginatedResponse<Patient>>(
+    undefined, 
+    fetcher,
+    { revalidateOnFocus: false }
+  );
 
   const search = useCallback(
     async (query: string, type: "ghana_id" | "name" | "dob" = "name") => {
       if (!query.trim()) {
-        setResults([]);
+        mutate({ data: [], next_cursor: undefined, has_more: false }, false);
         return;
       }
-      setLoading(true);
-      setError(null);
-      try {
-        const params = new URLSearchParams();
-        if (type === "ghana_id") params.set("ghana_health_id", query);
-        else if (type === "dob") params.set("dob", query);
-        else params.set("name", query);
-        const data = await api.get<PaginatedResponse<Patient>>(
-          `/patients/search?${params}`
-        );
-        setResults(data.data || []);
-      } catch (err) {
-        setError(err instanceof Error ? err.message : "Search failed");
-        setResults([]);
-      } finally {
-        setLoading(false);
-      }
+      
+      const params = new URLSearchParams();
+      if (type === "ghana_id") params.set("ghana_health_id", query);
+      else if (type === "dob") params.set("dob", query);
+      else params.set("name", query);
+      
+      const url = `/patients/search?${params}`;
+      await mutate(fetcher(url), {
+        revalidate: false,
+        populateCache: true,
+      });
     },
-    [api]
+    [mutate, fetcher]
   );
 
-  return { results, loading, error, search };
+  return { 
+    results: data?.data || [], 
+    loading: isLoading, 
+    error: error?.message || null, 
+    search 
+  };
 }
 
 export function usePatient(id: string | null) {
   const api = useApi();
-  const [patient, setPatient] = useState<Patient | null>(null);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-
-  const fetch = useCallback(async () => {
-    if (!id) {
-      setPatient(null);
-      return;
+  
+  const { data, error, isLoading, mutate } = useSWR<Patient>(
+    id ? `/patients/${id}` : undefined,
+    (url: string) => api.get<Patient>(url),
+    {
+      dedupingInterval: 60000, // SWR uses dedupingInterval for "stale time"
+      revalidateOnFocus: true,
     }
-    setLoading(true);
-    setError(null);
-    try {
-      const data = await api.get<Patient>(`/patients/${id}`);
-      setPatient(data);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to load patient");
-      setPatient(null);
-    } finally {
-      setLoading(false);
-    }
-  }, [api, id]);
+  );
 
-  return { patient, loading, error, fetch };
+  return { 
+    patient: data || null, 
+    loading: isLoading, 
+    error: error?.message || null, 
+    fetch: mutate 
+  };
 }
+

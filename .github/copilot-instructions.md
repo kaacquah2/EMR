@@ -25,7 +25,7 @@ python manage.py migrate
 python manage.py setup_dev  # Load seed data
 python manage.py runserver
 
-Created super admin: admin@medsync.gh / Admin123!@#
+Created super admin: admin@medsync.gh/ Admin123!@#Admin123!@#
 Created doctor: doctor@medsync.gh / Doctor123!
 Created doctor2: doctor2@medsync.gh / Doctor234!
 Created hospital admin: hospital_admin@medsync.gh / HospitalAdmin123!

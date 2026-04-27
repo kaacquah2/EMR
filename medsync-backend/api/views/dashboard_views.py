@@ -1,6 +1,6 @@
 from django.utils import timezone
 from django.utils.dateparse import parse_date
-from django.db.models import Count, Max, Q, Case, When, OuterRef, Subquery, DateTimeField
+from django.db.models import Count, Q, Case, When, OuterRef, Subquery, DateTimeField
 from django.db import connection
 from rest_framework import status
 from rest_framework.decorators import api_view, permission_classes
@@ -87,7 +87,14 @@ def dashboard_metrics(request):
             "new_lab_results": new_results,
             "critical_alerts": active_alerts,
             "pending_prescriptions": active_rx,
-            "referrals_awaiting": Referral.objects.filter(to_facility=hospital, status=Referral.STATUS_PENDING).count() if hospital else 0,
+            "referrals_awaiting": (
+                Referral.objects.filter(
+                    to_facility=hospital,
+                    status=Referral.STATUS_PENDING
+                ).count()
+                if hospital
+                else 0
+            ),
         }
         return Response(dashboard_payload)
 
@@ -99,7 +106,14 @@ def dashboard_metrics(request):
                 "admission_count": 0,
                 "vitals_overdue": 0,
                 "ward_patients": [],
-                "active_alerts": ClinicalAlert.objects.filter(hospital=hospital, status="active").count() if hospital else 0,
+                "active_alerts": (
+                    ClinicalAlert.objects.filter(
+                        hospital=hospital,
+                        status="active"
+                    ).count()
+                    if hospital
+                    else 0
+                ),
             })
         latest_vital_sub = (
             MedicalRecord.objects.filter(

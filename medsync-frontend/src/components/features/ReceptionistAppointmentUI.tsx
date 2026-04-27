@@ -7,6 +7,7 @@ import { useApi } from "@/hooks/use-api";
 import { usePollWhenVisible } from "@/hooks/use-poll-when-visible";
 import { isBenignApiNetworkFailure } from "@/lib/api-client";
 import { useToast } from "@/lib/toast-context";
+import { Clock, AlertCircle, CheckCircle2 } from "lucide-react";
 
 interface ReceptionistAppointmentRow {
   id: string;
@@ -81,11 +82,34 @@ export function ReceptionistAppointmentUI() {
     if (status === "no_show") return "bg-red-100 text-red-800";
     if (status === "cancelled") return "bg-slate-200 text-slate-600 line-through";
     if (status === "completed") return "bg-blue-100 text-blue-800";
-    return "bg-slate-100 text-slate-700";
+    return "bg-amber-100 text-amber-800";
   };
 
   const formatTime24 = (iso: string) =>
     new Date(iso).toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit", hour12: false });
+
+  // Get arrival status breakdown
+  const waitingCount = metrics.appointments.filter((a) => a.status === "scheduled").length;
+  const beingSeenCount = metrics.appointments.filter((a) => a.status === "checked_in").length;
+
+  // Get next 5 appointments for timeline
+  const nextAppointments = metrics.appointments
+    .filter((a) => a.status === "scheduled")
+    .sort((a, b) => new Date(a.scheduled_at).getTime() - new Date(b.scheduled_at).getTime())
+    .slice(0, 5);
+
+  const timeUntilAppointment = (scheduledAt: string): string => {
+    const now = new Date();
+    const apptTime = new Date(scheduledAt);
+    const diffMinutes = Math.round((apptTime.getTime() - now.getTime()) / (1000 * 60));
+
+    if (diffMinutes < 0) return "Overdue";
+    if (diffMinutes === 0) return "Now";
+    if (diffMinutes < 60) return `In ${diffMinutes}m`;
+    const hours = Math.floor(diffMinutes / 60);
+    const mins = diffMinutes % 60;
+    return `In ${hours}h ${mins}m`;
+  };
 
   return (
     <div className="space-y-6">
@@ -136,6 +160,105 @@ export function ReceptionistAppointmentUI() {
         </Card>
       </div>
 
+      {/* Queue Status Section */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-lg">Queue Status</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="grid gap-4 md:grid-cols-3">
+            <div className="p-4 border border-slate-200 rounded-lg bg-amber-50">
+              <div className="flex items-center gap-2 mb-2">
+                <Clock className="h-5 w-5 text-amber-600" />
+                <p className="font-medium text-amber-900">Waiting</p>
+              </div>
+              <p className="text-3xl font-bold text-amber-900">{waitingCount}</p>
+              <p className="text-xs text-amber-700 mt-1">Patients awaiting check-in</p>
+            </div>
+
+            <div className="p-4 border border-slate-200 rounded-lg bg-green-50">
+              <div className="flex items-center gap-2 mb-2">
+                <CheckCircle2 className="h-5 w-5 text-green-600" />
+                <p className="font-medium text-green-900">Being Seen</p>
+              </div>
+              <p className="text-3xl font-bold text-green-900">{beingSeenCount}</p>
+              <p className="text-xs text-green-700 mt-1">Patients with provider</p>
+            </div>
+
+            <div className="p-4 border border-slate-200 rounded-lg bg-blue-50">
+              <div className="flex items-center gap-2 mb-2">
+                <AlertCircle className="h-5 w-5 text-blue-600" />
+                <p className="font-medium text-blue-900">No-Shows</p>
+              </div>
+              <p className="text-3xl font-bold text-blue-900">{metrics.no_show_count}</p>
+              <p className="text-xs text-blue-700 mt-1">Did not arrive</p>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* Arrival Timeline Section */}
+      {nextAppointments.length > 0 && (
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-lg">Next Appointments</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-3">
+              {nextAppointments.map((apt, idx) => {
+                const timeLeft = timeUntilAppointment(apt.scheduled_at);
+                const isOverdue = timeLeft === "Overdue";
+                const isImminient = !isOverdue && (timeLeft === "Now" || timeLeft.startsWith("In") && parseInt(timeLeft.match(/\d+/)?.[0] || "0") < 15);
+
+                return (
+                  <div
+                    key={apt.id}
+                    className={`p-3 border rounded-lg flex items-center justify-between ${
+                      isOverdue
+                        ? "border-red-300 bg-red-50"
+                        : isImminient
+                          ? "border-amber-300 bg-amber-50"
+                          : "border-slate-200 bg-slate-50"
+                    }`}
+                  >
+                    <div className="flex items-start gap-3 flex-1">
+                      <div className={`mt-1 w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold ${
+                        isOverdue
+                          ? "bg-red-200 text-red-800"
+                          : isImminient
+                            ? "bg-amber-200 text-amber-800"
+                            : "bg-slate-200 text-slate-800"
+                      }`}>
+                        {idx + 1}
+                      </div>
+                      <div>
+                        <p className="font-medium text-slate-900">{apt.patient_name}</p>
+                        <p className="text-sm text-slate-600">{apt.appointment_with_department ?? "Appointment"}</p>
+                        {apt.appointment_with_doctor && (
+                          <p className="text-xs text-slate-500">{apt.appointment_with_doctor}</p>
+                        )}
+                      </div>
+                    </div>
+                    <div className="text-right">
+                      <p className={`font-semibold text-sm ${
+                        isOverdue ? "text-red-700" : isImminient ? "text-amber-700" : "text-slate-700"
+                      }`}>
+                        {formatTime24(apt.scheduled_at)}
+                      </p>
+                      <p className={`text-xs font-medium ${
+                        isOverdue ? "text-red-600" : isImminient ? "text-amber-600" : "text-slate-500"
+                      }`}>
+                        {timeLeft}
+                      </p>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
       <Card>
         <CardHeader>
           <CardTitle>Today&apos;s Appointments</CardTitle>
@@ -170,6 +293,7 @@ export function ReceptionistAppointmentUI() {
                     {apt.status === "scheduled" && (
                       <Button
                         size="sm"
+                        data-testid={`checkin-button-${apt.id}`}
                         onClick={() => handleCheckIn(apt.id)}
                         disabled={!!checkingIn[apt.id]}
                       >

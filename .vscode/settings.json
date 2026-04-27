@@ -1,0 +1,19 @@
+{
+  // Disable the built-in CSS validator for files that use Tailwind v4.
+  // @theme, @import "tailwindcss", @utility, @variant etc. are valid Tailwind v4
+  // at-rules that the standard CSS language server does not know about.
+  // The Tailwind IntelliSense extension provides correct validation instead.
+  "css.validate": false,
+  "scss.validate": false,
+
+  // Tell the CSS language server to ignore unknown at-rules (Tailwind v4).
+  "css.lint.unknownAtRules": "ignore",
+
+  // Tailwind IntelliSense: point at the project config
+  "tailwindCSS.experimental.configFile": "medsync-frontend/tailwind.config.ts",
+
+  // Associate .css files with the Tailwind language service
+  "files.associations": {
+    "*.css": "tailwindcss"
+  }
+}

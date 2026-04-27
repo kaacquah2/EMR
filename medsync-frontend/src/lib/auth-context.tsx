@@ -3,6 +3,7 @@
 import React, { createContext, useCallback, useContext, useEffect, useRef, useState } from "react";
 import type { AuthTokens, User } from "./types";
 import { API_BASE } from "./api-base";
+import { createApiClient } from "./api-client";
 import { InactivityModal } from "@/components/ui/InactivityModal";
 
 const AUTH_STORAGE_KEY = "medsync_auth";
@@ -158,19 +159,47 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     let cancelled = false;
     (async () => {
       try {
-        const res = await fetch(`${API_BASE}/auth/me`, {
-          headers: { Authorization: `Bearer ${state.accessToken}` },
-        });
-        if (cancelled) return;
-        if (!res.ok) {
-          if (res.status === 401) {
-            sessionStorage.removeItem(AUTH_STORAGE_KEY);
-            setState({ accessToken: null, refreshToken: null, user: null, isAuthenticated: false });
-            if (typeof window !== "undefined") window.location.href = "/login";
-          }
-          return;
-        }
-        const profile = await res.json();
+        // Create a temporary API client for this hydration request
+        // This ensures 401 triggers token refresh automatically
+        // Use callbacks to avoid referencing functions before they're defined
+        const apiClient = createApiClient(
+          () => state.accessToken,
+          async () => {
+            // Inline refresh logic to avoid circular dependency
+            const refresh = state.refreshToken;
+            if (!refresh) {
+              return false;
+            }
+            try {
+              const res = await fetch(`${API_BASE}/auth/refresh`, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ refresh_token: refresh }),
+              });
+              const data = await res.json();
+              if (!res.ok) {
+                return false;
+              }
+              setState((s) => {
+                const next = {
+                  ...s,
+                  accessToken: data.access_token,
+                  refreshToken: data.refresh_token ?? refresh,
+                };
+                if (typeof window !== "undefined") saveStoredAuth(next, undefined);
+                return next;
+              });
+              return true;
+            } catch {
+              return false;
+            }
+          },
+          () => {
+            lastActivityRef.current = Date.now();
+          },
+          getViewAsHeader
+        );
+        const profile = await apiClient.get<User>("/auth/me");
         if (cancelled) return;
         setState((s) =>
           s.accessToken === state.accessToken && !s.user
@@ -191,14 +220,29 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             }
           }
         }
-      } catch {
-        /* ignore */
+      } catch (err) {
+        if (cancelled) return;
+        // Handle auth failure: on 401 after refresh attempt, or persistent network errors
+        const error = err as { statusCode?: number; detail?: { error?: string } };
+        const is401 = error?.statusCode === 401;
+        const isNetworkError = error?.detail?.error === "TIMEOUT_OR_ABORT";
+        if (is401 || isNetworkError) {
+          // Clear auth state and don't leave user in loading state
+          sessionStorage.removeItem(AUTH_STORAGE_KEY);
+          setState({ accessToken: null, refreshToken: null, user: null, isAuthenticated: false });
+          // Redirect to login if we're in browser context
+          if (typeof window !== "undefined") {
+            window.location.href = "/login";
+          }
+        }
+        // For other errors, just silently fail and don't set hydrated state
+        // This allows the app to load without user data rather than getting stuck
       }
     })();
     return () => {
       cancelled = true;
     };
-  }, [hydrated, state.accessToken, state.user]);
+  }, [hydrated, state.accessToken, state.refreshToken, state.user, getViewAsHeader]);
 
   const logout = useCallback(async () => {
     const accessToken = state.accessToken;

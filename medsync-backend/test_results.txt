@@ -1,0 +1,308 @@
+============================= test session starts =============================
+platform win32 -- Python 3.13.2, pytest-9.0.2, pluggy-1.6.0 -- C:\Users\OSCARPACK\Downloads\EMR\.venv\Scripts\python.exe
+cachedir: .pytest_cache
+django: version: 4.2.29
+rootdir: C:\Users\OSCARPACK\Downloads\EMR\medsync-backend
+configfile: pytest.ini
+plugins: anyio-4.12.1, django-4.12.0
+collecting ... collected 36 items
+
+api/tests/test_webauthn_passkey.py::WebAuthnConfigTestCase::test_webauthn_challenge_ttl_set PASSED [  2%]
+api/tests/test_webauthn_passkey.py::WebAuthnConfigTestCase::test_webauthn_enabled PASSED [  5%]
+api/tests/test_webauthn_passkey.py::WebAuthnConfigTestCase::test_webauthn_origin_has_scheme PASSED [  8%]
+api/tests/test_webauthn_passkey.py::WebAuthnConfigTestCase::test_webauthn_origin_https_in_production PASSED [ 11%]
+api/tests/test_webauthn_passkey.py::WebAuthnConfigTestCase::test_webauthn_rp_id_no_protocol PASSED [ 13%]
+api/tests/test_webauthn_passkey.py::WebAuthnConfigTestCase::test_webauthn_rp_id_no_trailing_slash PASSED [ 16%]
+api/tests/test_webauthn_passkey.py::PasskeyRegistrationBeginTestCase::test_passkey_register_begin_authenticated_only PASSED [ 19%]
+api/tests/test_webauthn_passkey.py::PasskeyRegistrationBeginTestCase::test_passkey_register_begin_challenge_stored_in_session FAILED [ 22%]
+api/tests/test_webauthn_passkey.py::PasskeyRegistrationBeginTestCase::test_passkey_register_begin_returns_challenge FAILED [ 25%]
+api/tests/test_webauthn_passkey.py::PasskeyRegistrationBeginTestCase::test_passkey_register_begin_rp_id_correct FAILED [ 27%]
+api/tests/test_webauthn_passkey.py::PasskeyRegistrationBeginTestCase::test_passkey_register_begin_user_id_encoded FAILED [ 30%]
+api/tests/test_webauthn_passkey.py::PasskeyRegistrationCompleteTestCase::test_passkey_register_complete_audit_log FAILED [ 33%]
+api/tests/test_webauthn_passkey.py::PasskeyRegistrationCompleteTestCase::test_passkey_register_complete_platform_detection FAILED [ 36%]
+api/tests/test_webauthn_passkey.py::PasskeyRegistrationCompleteTestCase::test_passkey_register_complete_requires_challenge FAILED [ 38%]
+api/tests/test_webauthn_passkey.py::PasskeyRegistrationCompleteTestCase::test_passkey_register_complete_requires_device_name FAILED [ 41%]
+api/tests/test_webauthn_passkey.py::PasskeyRegistrationCompleteTestCase::test_passkey_register_complete_stores_credential FAILED [ 44%]
+api/tests/test_webauthn_passkey.py::PasskeyAuthenticationBeginTestCase::test_passkey_auth_begin_public_endpoint FAILED [ 47%]
+api/tests/test_webauthn_passkey.py::PasskeyAuthenticationBeginTestCase::test_passkey_auth_begin_requires_email PASSED [ 50%]
+api/tests/test_webauthn_passkey.py::PasskeyAuthenticationBeginTestCase::test_passkey_auth_begin_returns_challenge FAILED [ 52%]
+api/tests/test_webauthn_passkey.py::PasskeyAuthenticationBeginTestCase::test_passkey_auth_begin_user_not_found PASSED [ 55%]
+api/tests/test_webauthn_passkey.py::PasskeyAuthenticationCompleteTestCase::test_passkey_auth_complete_detects_replay_attack FAILED [ 58%]
+api/tests/test_webauthn_passkey.py::PasskeyAuthenticationCompleteTestCase::test_passkey_auth_complete_issuesjwt FAILED [ 61%]
+api/tests/test_webauthn_passkey.py::PasskeyAuthenticationCompleteTestCase::test_passkey_auth_complete_requires_challenge FAILED [ 63%]
+api/tests/test_webauthn_passkey.py::PasskeyAuthenticationCompleteTestCase::test_passkey_auth_complete_updates_sign_count FAILED [ 66%]
+api/tests/test_webauthn_passkey.py::PasskeyManagementTestCase::test_cannot_access_others_passkeys FAILED [ 69%]
+api/tests/test_webauthn_passkey.py::PasskeyManagementTestCase::test_delete_passkey_not_found PASSED [ 72%]
+api/tests/test_webauthn_passkey.py::PasskeyManagementTestCase::test_delete_passkey_success PASSED [ 75%]
+api/tests/test_webauthn_passkey.py::PasskeyManagementTestCase::test_list_passkeys_authenticated_only PASSED [ 77%]
+api/tests/test_webauthn_passkey.py::PasskeyManagementTestCase::test_list_passkeys_returns_all_user_passkeys PASSED [ 80%]
+api/tests/test_webauthn_passkey.py::PasskeyManagementTestCase::test_list_passkeys_shows_platform PASSED [ 83%]
+api/tests/test_webauthn_passkey.py::PasskeyManagementTestCase::test_rename_passkey_audit_log FAILED [ 86%]
+api/tests/test_webauthn_passkey.py::PasskeyManagementTestCase::test_rename_passkey_success FAILED [ 88%]
+api/tests/test_webauthn_passkey.py::PasskeyManagementTestCase::test_rename_passkey_validates_name_length PASSED [ 91%]
+api/tests/test_webauthn_passkey.py::PasskeySecurityTestCase::test_credential_id_uniqueness FAILED [ 94%]
+api/tests/test_webauthn_passkey.py::PasskeySecurityTestCase::test_public_key_stored_safely FAILED [ 97%]
+api/tests/test_webauthn_passkey.py::PasskeySecurityTestCase::test_sign_count_prevents_cloning FAILED [100%]
+
+================================== FAILURES ===================================
+_ PasskeyRegistrationBeginTestCase.test_passkey_register_begin_challenge_stored_in_session _
+api\tests\test_webauthn_passkey.py:104: in test_passkey_register_begin_challenge_stored_in_session
+    self.assertEqual(response.status_code, 200)
+E   AssertionError: 500 != 200
+------------------------------ Captured log call ------------------------------
+ERROR    api.views.auth_views:auth_views.py:972 Error in passkey_register_begin: No module named 'webauthn'
+ERROR    django.request:log.py:246 Internal Server Error: /api/v1/auth/passkey/register/begin
+_ PasskeyRegistrationBeginTestCase.test_passkey_register_begin_returns_challenge _
+api\tests\test_webauthn_passkey.py:88: in test_passkey_register_begin_returns_challenge
+    self.assertEqual(response.status_code, 200)
+E   AssertionError: 500 != 200
+------------------------------ Captured log call ------------------------------
+ERROR    api.views.auth_views:auth_views.py:972 Error in passkey_register_begin: No module named 'webauthn'
+ERROR    django.request:log.py:246 Internal Server Error: /api/v1/auth/passkey/register/begin
+_ PasskeyRegistrationBeginTestCase.test_passkey_register_begin_rp_id_correct __
+api\tests\test_webauthn_passkey.py:113: in test_passkey_register_begin_rp_id_correct
+    self.assertEqual(data["rp"]["id"], settings.WEBAUTHN_RP_ID)
+                     ^^^^^^^^^^
+E   KeyError: 'rp'
+------------------------------ Captured log call ------------------------------
+ERROR    api.views.auth_views:auth_views.py:972 Error in passkey_register_begin: No module named 'webauthn'
+ERROR    django.request:log.py:246 Internal Server Error: /api/v1/auth/passkey/register/begin
+_ PasskeyRegistrationBeginTestCase.test_passkey_register_begin_user_id_encoded _
+api\tests\test_webauthn_passkey.py:121: in test_passkey_register_begin_user_id_encoded
+    self.assertIn("id", data["user"])
+                        ^^^^^^^^^^^^
+E   KeyError: 'user'
+------------------------------ Captured log call ------------------------------
+ERROR    api.views.auth_views:auth_views.py:972 Error in passkey_register_begin: No module named 'webauthn'
+ERROR    django.request:log.py:246 Internal Server Error: /api/v1/auth/passkey/register/begin
+_ PasskeyRegistrationCompleteTestCase.test_passkey_register_complete_audit_log _
+C:\Python313\Lib\unittest\mock.py:1421: in patched
+    with self.decoration_helper(patched,
+C:\Python313\Lib\contextlib.py:141: in __enter__
+    return next(self.gen)
+           ^^^^^^^^^^^^^^
+C:\Python313\Lib\unittest\mock.py:1403: in decoration_helper
+    arg = exit_stack.enter_context(patching)
+          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+C:\Python313\Lib\contextlib.py:530: in enter_context
+    result = _enter(cm)
+             ^^^^^^^^^^
+C:\Python313\Lib\unittest\mock.py:1495: in __enter__
+    original, local = self.get_original()
+                      ^^^^^^^^^^^^^^^^^^^
+C:\Python313\Lib\unittest\mock.py:1465: in get_original
+    raise AttributeError(
+E   AttributeError: <module 'api.views.auth_views' from 'C:\\Users\\OSCARPACK\\Downloads\\EMR\\medsync-backend\\api\\views\\auth_views.py'> does not have the attribute 'verify_registration_response'
+_ PasskeyRegistrationCompleteTestCase.test_passkey_register_complete_platform_detection _
+C:\Python313\Lib\unittest\mock.py:1421: in patched
+    with self.decoration_helper(patched,
+C:\Python313\Lib\contextlib.py:141: in __enter__
+    return next(self.gen)
+           ^^^^^^^^^^^^^^
+C:\Python313\Lib\unittest\mock.py:1403: in decoration_helper
+    arg = exit_stack.enter_context(patching)
+          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+C:\Python313\Lib\contextlib.py:530: in enter_context
+    result = _enter(cm)
+             ^^^^^^^^^^
+C:\Python313\Lib\unittest\mock.py:1495: in __enter__
+    original, local = self.get_original()
+                      ^^^^^^^^^^^^^^^^^^^
+C:\Python313\Lib\unittest\mock.py:1465: in get_original
+    raise AttributeError(
+E   AttributeError: <module 'api.views.auth_views' from 'C:\\Users\\OSCARPACK\\Downloads\\EMR\\medsync-backend\\api\\views\\auth_views.py'> does not have the attribute 'verify_registration_response'
+_ PasskeyRegistrationCompleteTestCase.test_passkey_register_complete_requires_challenge _
+api\tests\test_webauthn_passkey.py:158: in test_passkey_register_complete_requires_challenge
+    self.assertIn("challenge", response.json().get("message", "").lower())
+E   AssertionError: 'challenge' not found in "passkey registration failed: no module named 'webauthn'"
+------------------------------ Captured log call ------------------------------
+ERROR    api.views.auth_views:auth_views.py:1059 Error in passkey_register_complete: No module named 'webauthn'
+WARNING  django.request:log.py:246 Bad Request: /api/v1/auth/passkey/register/complete
+_ PasskeyRegistrationCompleteTestCase.test_passkey_register_complete_requires_device_name _
+api\tests\test_webauthn_passkey.py:164: in test_passkey_register_complete_requires_device_name
+    self.assertEqual(begin_response.status_code, 200)
+E   AssertionError: 500 != 200
+------------------------------ Captured log call ------------------------------
+ERROR    api.views.auth_views:auth_views.py:972 Error in passkey_register_begin: No module named 'webauthn'
+ERROR    django.request:log.py:246 Internal Server Error: /api/v1/auth/passkey/register/begin
+_ PasskeyRegistrationCompleteTestCase.test_passkey_register_complete_stores_credential _
+C:\Python313\Lib\unittest\mock.py:1421: in patched
+    with self.decoration_helper(patched,
+C:\Python313\Lib\contextlib.py:141: in __enter__
+    return next(self.gen)
+           ^^^^^^^^^^^^^^
+C:\Python313\Lib\unittest\mock.py:1403: in decoration_helper
+    arg = exit_stack.enter_context(patching)
+          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+C:\Python313\Lib\contextlib.py:530: in enter_context
+    result = _enter(cm)
+             ^^^^^^^^^^
+C:\Python313\Lib\unittest\mock.py:1495: in __enter__
+    original, local = self.get_original()
+                      ^^^^^^^^^^^^^^^^^^^
+C:\Python313\Lib\unittest\mock.py:1465: in get_original
+    raise AttributeError(
+E   AttributeError: <module 'api.views.auth_views' from 'C:\\Users\\OSCARPACK\\Downloads\\EMR\\medsync-backend\\api\\views\\auth_views.py'> does not have the attribute 'verify_registration_response'
+_ PasskeyAuthenticationBeginTestCase.test_passkey_auth_begin_public_endpoint __
+api\tests\test_webauthn_passkey.py:276: in test_passkey_auth_begin_public_endpoint
+    self.assertIn(response.status_code, [200, 404])
+E   AssertionError: 500 not found in [200, 404]
+------------------------------ Captured log call ------------------------------
+ERROR    api.views.auth_views:auth_views.py:1141 Error in passkey_auth_begin: No module named 'webauthn'
+ERROR    django.request:log.py:246 Internal Server Error: /api/v1/auth/passkey/auth/begin
+_ PasskeyAuthenticationBeginTestCase.test_passkey_auth_begin_returns_challenge _
+api\tests\test_webauthn_passkey.py:304: in test_passkey_auth_begin_returns_challenge
+    self.assertEqual(response.status_code, 200)
+E   AssertionError: 500 != 200
+------------------------------ Captured log call ------------------------------
+ERROR    api.views.auth_views:auth_views.py:1141 Error in passkey_auth_begin: No module named 'webauthn'
+ERROR    django.request:log.py:246 Internal Server Error: /api/v1/auth/passkey/auth/begin
+_ PasskeyAuthenticationCompleteTestCase.test_passkey_auth_complete_detects_replay_attack _
+C:\Python313\Lib\unittest\mock.py:1421: in patched
+    with self.decoration_helper(patched,
+C:\Python313\Lib\contextlib.py:141: in __enter__
+    return next(self.gen)
+           ^^^^^^^^^^^^^^
+C:\Python313\Lib\unittest\mock.py:1403: in decoration_helper
+    arg = exit_stack.enter_context(patching)
+          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+C:\Python313\Lib\contextlib.py:530: in enter_context
+    result = _enter(cm)
+             ^^^^^^^^^^
+C:\Python313\Lib\unittest\mock.py:1495: in __enter__
+    original, local = self.get_original()
+                      ^^^^^^^^^^^^^^^^^^^
+C:\Python313\Lib\unittest\mock.py:1465: in get_original
+    raise AttributeError(
+E   AttributeError: <module 'api.views.auth_views' from 'C:\\Users\\OSCARPACK\\Downloads\\EMR\\medsync-backend\\api\\views\\auth_views.py'> does not have the attribute 'verify_authentication_response'
+_ PasskeyAuthenticationCompleteTestCase.test_passkey_auth_complete_issuesjwt __
+C:\Python313\Lib\unittest\mock.py:1421: in patched
+    with self.decoration_helper(patched,
+C:\Python313\Lib\contextlib.py:141: in __enter__
+    return next(self.gen)
+           ^^^^^^^^^^^^^^
+C:\Python313\Lib\unittest\mock.py:1403: in decoration_helper
+    arg = exit_stack.enter_context(patching)
+          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+C:\Python313\Lib\contextlib.py:530: in enter_context
+    result = _enter(cm)
+             ^^^^^^^^^^
+C:\Python313\Lib\unittest\mock.py:1495: in __enter__
+    original, local = self.get_original()
+                      ^^^^^^^^^^^^^^^^^^^
+C:\Python313\Lib\unittest\mock.py:1465: in get_original
+    raise AttributeError(
+E   AttributeError: <module 'api.views.auth_views' from 'C:\\Users\\OSCARPACK\\Downloads\\EMR\\medsync-backend\\api\\views\\auth_views.py'> does not have the attribute 'verify_authentication_response'
+_ PasskeyAuthenticationCompleteTestCase.test_passkey_auth_complete_requires_challenge _
+api\tests\test_webauthn_passkey.py:342: in test_passkey_auth_complete_requires_challenge
+    self.assertEqual(response.status_code, 400)
+E   AssertionError: 401 != 400
+------------------------------ Captured log call ------------------------------
+ERROR    api.views.auth_views:auth_views.py:1268 Error in passkey_auth_complete: No module named 'webauthn'
+Traceback (most recent call last):
+  File "C:\Users\OSCARPACK\Downloads\EMR\medsync-backend\api\views\auth_views.py", line 1168, in passkey_auth_complete
+    from webauthn.helpers import verify_authentication_response
+ModuleNotFoundError: No module named 'webauthn'
+WARNING  django.request:log.py:246 Unauthorized: /api/v1/auth/passkey/auth/complete
+_ PasskeyAuthenticationCompleteTestCase.test_passkey_auth_complete_updates_sign_count _
+C:\Python313\Lib\unittest\mock.py:1421: in patched
+    with self.decoration_helper(patched,
+C:\Python313\Lib\contextlib.py:141: in __enter__
+    return next(self.gen)
+           ^^^^^^^^^^^^^^
+C:\Python313\Lib\unittest\mock.py:1403: in decoration_helper
+    arg = exit_stack.enter_context(patching)
+          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+C:\Python313\Lib\contextlib.py:530: in enter_context
+    result = _enter(cm)
+             ^^^^^^^^^^
+C:\Python313\Lib\unittest\mock.py:1495: in __enter__
+    original, local = self.get_original()
+                      ^^^^^^^^^^^^^^^^^^^
+C:\Python313\Lib\unittest\mock.py:1465: in get_original
+    raise AttributeError(
+E   AttributeError: <module 'api.views.auth_views' from 'C:\\Users\\OSCARPACK\\Downloads\\EMR\\medsync-backend\\api\\views\\auth_views.py'> does not have the attribute 'verify_authentication_response'
+________ PasskeyManagementTestCase.test_cannot_access_others_passkeys _________
+api\tests\test_webauthn_passkey.py:553: in test_cannot_access_others_passkeys
+    self.assertEqual(response.status_code, 404)  # Not found (not visible to this user)
+    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E   AssertionError: 400 != 404
+------------------------------ Captured log call ------------------------------
+WARNING  shared.permissions:permissions.py:1138 Unknown endpoint: /api/v1/auth/passkeys/0900cf83-6b2f-4666-88c3-c3a087a5a753/rename
+WARNING  django.request:log.py:246 Bad Request: /api/v1/auth/passkeys/0900cf83-6b2f-4666-88c3-c3a087a5a753/rename
+___________ PasskeyManagementTestCase.test_rename_passkey_audit_log ___________
+api\tests\test_webauthn_passkey.py:512: in test_rename_passkey_audit_log
+    self.assertIsNotNone(audit_log)
+E   AssertionError: unexpectedly None
+------------------------------ Captured log call ------------------------------
+WARNING  shared.permissions:permissions.py:1138 Unknown endpoint: /api/v1/auth/passkeys/a91d45b6-69ff-4bad-91a1-709408a1546a/rename
+WARNING  django.request:log.py:246 Bad Request: /api/v1/auth/passkeys/a91d45b6-69ff-4bad-91a1-709408a1546a/rename
+____________ PasskeyManagementTestCase.test_rename_passkey_success ____________
+api\tests\test_webauthn_passkey.py:480: in test_rename_passkey_success
+    self.assertEqual(response.status_code, 200)
+E   AssertionError: 400 != 200
+------------------------------ Captured log call ------------------------------
+WARNING  shared.permissions:permissions.py:1138 Unknown endpoint: /api/v1/auth/passkeys/eacade98-7624-4028-8849-30aa1367d95f/rename
+WARNING  django.request:log.py:246 Bad Request: /api/v1/auth/passkeys/eacade98-7624-4028-8849-30aa1367d95f/rename
+____________ PasskeySecurityTestCase.test_credential_id_uniqueness ____________
+api\tests\test_webauthn_passkey.py:561: in setUp
+    self.hospital = Hospital.objects.create(
+..\.venv\Lib\site-packages\django\db\models\manager.py:87: in manager_method
+    return getattr(self.get_queryset(), name)(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+..\.venv\Lib\site-packages\django\db\models\query.py:658: in create
+    obj = self.model(**kwargs)
+          ^^^^^^^^^^^^^^^^^^^^
+..\.venv\Lib\site-packages\django\db\models\base.py:567: in __init__
+    raise TypeError(
+E   TypeError: Hospital() got unexpected keyword arguments: 'code'
+____________ PasskeySecurityTestCase.test_public_key_stored_safely ____________
+api\tests\test_webauthn_passkey.py:561: in setUp
+    self.hospital = Hospital.objects.create(
+..\.venv\Lib\site-packages\django\db\models\manager.py:87: in manager_method
+    return getattr(self.get_queryset(), name)(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+..\.venv\Lib\site-packages\django\db\models\query.py:658: in create
+    obj = self.model(**kwargs)
+          ^^^^^^^^^^^^^^^^^^^^
+..\.venv\Lib\site-packages\django\db\models\base.py:567: in __init__
+    raise TypeError(
+E   TypeError: Hospital() got unexpected keyword arguments: 'code'
+__________ PasskeySecurityTestCase.test_sign_count_prevents_cloning ___________
+api\tests\test_webauthn_passkey.py:561: in setUp
+    self.hospital = Hospital.objects.create(
+..\.venv\Lib\site-packages\django\db\models\manager.py:87: in manager_method
+    return getattr(self.get_queryset(), name)(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+..\.venv\Lib\site-packages\django\db\models\query.py:658: in create
+    obj = self.model(**kwargs)
+          ^^^^^^^^^^^^^^^^^^^^
+..\.venv\Lib\site-packages\django\db\models\base.py:567: in __init__
+    raise TypeError(
+E   TypeError: Hospital() got unexpected keyword arguments: 'code'
+-------------------------- Captured stderr teardown ---------------------------
+Destroying test database for alias 'default' ('file:memorydb_default?mode=memory&cache=shared')...
+
+=========================== short test summary info ===========================
+FAILED api/tests/test_webauthn_passkey.py::PasskeyRegistrationBeginTestCase::test_passkey_register_begin_challenge_stored_in_session - AssertionError: 500 != 200
+FAILED api/tests/test_webauthn_passkey.py::PasskeyRegistrationBeginTestCase::test_passkey_register_begin_returns_challenge - AssertionError: 500 != 200
+FAILED api/tests/test_webauthn_passkey.py::PasskeyRegistrationBeginTestCase::test_passkey_register_begin_rp_id_correct - KeyError: 'rp'
+FAILED api/tests/test_webauthn_passkey.py::PasskeyRegistrationBeginTestCase::test_passkey_register_begin_user_id_encoded - KeyError: 'user'
+FAILED api/tests/test_webauthn_passkey.py::PasskeyRegistrationCompleteTestCase::test_passkey_register_complete_audit_log - AttributeError: <module 'api.views.auth_views' from 'C:\\Users\\OSCARPACK\\Downloads\\EMR\\medsync-backend\\api\\views\\auth_views.py'> does not have the attribute 'verify_registration_response'
+FAILED api/tests/test_webauthn_passkey.py::PasskeyRegistrationCompleteTestCase::test_passkey_register_complete_platform_detection - AttributeError: <module 'api.views.auth_views' from 'C:\\Users\\OSCARPACK\\Downloads\\EMR\\medsync-backend\\api\\views\\auth_views.py'> does not have the attribute 'verify_registration_response'
+FAILED api/tests/test_webauthn_passkey.py::PasskeyRegistrationCompleteTestCase::test_passkey_register_complete_requires_challenge - AssertionError: 'challenge' not found in "passkey registration failed: no module named 'webauthn'"
+FAILED api/tests/test_webauthn_passkey.py::PasskeyRegistrationCompleteTestCase::test_passkey_register_complete_requires_device_name - AssertionError: 500 != 200
+FAILED api/tests/test_webauthn_passkey.py::PasskeyRegistrationCompleteTestCase::test_passkey_register_complete_stores_credential - AttributeError: <module 'api.views.auth_views' from 'C:\\Users\\OSCARPACK\\Downloads\\EMR\\medsync-backend\\api\\views\\auth_views.py'> does not have the attribute 'verify_registration_response'
+FAILED api/tests/test_webauthn_passkey.py::PasskeyAuthenticationBeginTestCase::test_passkey_auth_begin_public_endpoint - AssertionError: 500 not found in [200, 404]
+FAILED api/tests/test_webauthn_passkey.py::PasskeyAuthenticationBeginTestCase::test_passkey_auth_begin_returns_challenge - AssertionError: 500 != 200
+FAILED api/tests/test_webauthn_passkey.py::PasskeyAuthenticationCompleteTestCase::test_passkey_auth_complete_detects_replay_attack - AttributeError: <module 'api.views.auth_views' from 'C:\\Users\\OSCARPACK\\Downloads\\EMR\\medsync-backend\\api\\views\\auth_views.py'> does not have the attribute 'verify_authentication_response'
+FAILED api/tests/test_webauthn_passkey.py::PasskeyAuthenticationCompleteTestCase::test_passkey_auth_complete_issuesjwt - AttributeError: <module 'api.views.auth_views' from 'C:\\Users\\OSCARPACK\\Downloads\\EMR\\medsync-backend\\api\\views\\auth_views.py'> does not have the attribute 'verify_authentication_response'
+FAILED api/tests/test_webauthn_passkey.py::PasskeyAuthenticationCompleteTestCase::test_passkey_auth_complete_requires_challenge - AssertionError: 401 != 400
+FAILED api/tests/test_webauthn_passkey.py::PasskeyAuthenticationCompleteTestCase::test_passkey_auth_complete_updates_sign_count - AttributeError: <module 'api.views.auth_views' from 'C:\\Users\\OSCARPACK\\Downloads\\EMR\\medsync-backend\\api\\views\\auth_views.py'> does not have the attribute 'verify_authentication_response'
+FAILED api/tests/test_webauthn_passkey.py::PasskeyManagementTestCase::test_cannot_access_others_passkeys - AssertionError: 400 != 404
+FAILED api/tests/test_webauthn_passkey.py::PasskeyManagementTestCase::test_rename_passkey_audit_log - AssertionError: unexpectedly None
+FAILED api/tests/test_webauthn_passkey.py::PasskeyManagementTestCase::test_rename_passkey_success - AssertionError: 400 != 200
+FAILED api/tests/test_webauthn_passkey.py::PasskeySecurityTestCase::test_credential_id_uniqueness - TypeError: Hospital() got unexpected keyword arguments: 'code'
+FAILED api/tests/test_webauthn_passkey.py::PasskeySecurityTestCase::test_public_key_stored_safely - TypeError: Hospital() got unexpected keyword arguments: 'code'
+FAILED api/tests/test_webauthn_passkey.py::PasskeySecurityTestCase::test_sign_count_prevents_cloning - TypeError: Hospital() got unexpected keyword arguments: 'code'
+================== 21 failed, 15 passed in 104.07s (0:01:44) ==================

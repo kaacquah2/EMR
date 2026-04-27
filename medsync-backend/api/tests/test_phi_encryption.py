@@ -75,3 +75,5 @@ class TestPHIFieldEncryption(TestCase):
         self.assertEqual(fetched.phone, "+233201234567")
         self.assertEqual(fetched_allergy.allergen, "Penicillin")
         self.assertEqual(fetched_allergy.reaction_type, "Anaphylaxis")
+
+

@@ -69,38 +69,51 @@ export function useNurseDashboard() {
   const api = useApi();
   const [data, setData] = useState<NurseDashboardData | null>(null);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
   const fetch = useCallback(async () => {
     setLoading(true);
+    setError(null);
     try {
       const resp = await api.get<NurseDashboardData>("/nurse/dashboard");
       setData(resp);
-    } catch {
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "Failed to load nurse dashboard";
+      setError(message);
       setData(null);
     } finally {
       setLoading(false);
     }
   }, [api]);
+
   useEffect(() => {
     void fetch();
   }, [fetch]);
-  return { data, loading, fetch };
+
+  return { data, loading, error, fetch };
 }
 
 export function useNurseWorklist() {
   const api = useApi();
   const [data, setData] = useState<NurseWorklistData | null>(null);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
   const fetch = useCallback(async () => {
     setLoading(true);
+    setError(null);
     try {
       const resp = await api.get<NurseWorklistData>("/nurse/worklist");
       setData(resp);
-    } catch {
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "Failed to load nurse worklist";
+      setError(message);
       setData(null);
     } finally {
       setLoading(false);
     }
   }, [api]);
+
   useEffect(() => {
     void fetch();
   }, [fetch]);
@@ -121,5 +134,5 @@ export function useNurseWorklist() {
     [api, fetch]
   );
 
-  return { data, loading, fetch, dispense, acknowledgeHandover };
+  return { data, loading, error, fetch, dispense, acknowledgeHandover };
 }

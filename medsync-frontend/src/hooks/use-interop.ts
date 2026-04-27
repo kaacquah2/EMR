@@ -120,6 +120,7 @@ export function useCreateFacility() {
 export function useUpdateFacility() {
   const api = useApi();
   const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   const update = useCallback(
     async (
@@ -127,12 +128,17 @@ export function useUpdateFacility() {
       body: Partial<{ name: string; region: string; nhis_code: string; address: string; phone: string; email: string; head_of_facility: string; is_active: boolean }>
     ) => {
       setLoading(true);
+      setError(null);
       try {
         const data = await api.patch<{ facility_id: string; name: string; region: string; nhis_code: string; is_active: boolean }>(
           `/facilities/${facilityId}`,
           body
         );
         return data;
+      } catch (err) {
+        const message = err instanceof Error ? err.message : "Failed to update facility";
+        setError(message);
+        throw err;
       } finally {
         setLoading(false);
       }
@@ -140,7 +146,7 @@ export function useUpdateFacility() {
     [api]
   );
 
-  return { update, loading };
+  return { update, loading, error };
 }
 
 export function useLinkFacilityPatient() {

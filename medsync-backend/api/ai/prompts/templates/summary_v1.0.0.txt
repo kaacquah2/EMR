@@ -1,0 +1,1 @@
+Patient {patient_id}: {triage_level} urgency. Differential diagnosis suggests {top_diagnosis} as most likely. Risk assessment indicates {risk_score}% risk of {top_disease}. Recommend further evaluation and testing as outlined in action items.

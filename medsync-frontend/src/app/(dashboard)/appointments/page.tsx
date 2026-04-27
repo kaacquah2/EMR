@@ -10,6 +10,9 @@ import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { useApi } from "@/hooks/use-api";
 import { useToast } from "@/lib/toast-context";
+import AppointmentBulkImportForm from "@/components/features/AppointmentBulkImportForm";
+import AppointmentBulkActions from "@/components/features/AppointmentBulkActions";
+import AppointmentReminderUI from "@/components/features/AppointmentReminderUI";
 
 const APPOINTMENT_ROLES = ["super_admin", "hospital_admin", "doctor", "nurse", "receptionist"];
 const DEPARTMENTS = [
@@ -20,6 +23,8 @@ const DEPARTMENTS = [
   "Orthopaedics",
 ];
 type ViewMode = "list" | "day" | "week";
+type BookingMode = "single" | "bulk";
+type PageTab = "appointments" | "bulk-actions" | "reminders";
 
 export default function AppointmentsPage() {
   const router = useRouter();
@@ -27,11 +32,13 @@ export default function AppointmentsPage() {
   const api = useApi();
   const toast = useToast();
   const isReceptionist = user?.role === "receptionist";
+  const [pageTab, setPageTab] = useState<PageTab>("appointments");
   const [dateFilter, setDateFilter] = useState(() => {
     const d = new Date();
     return d.toISOString().slice(0, 10);
   });
   const [viewMode, setViewMode] = useState<ViewMode>("list");
+  const [bookingMode, setBookingMode] = useState<BookingMode>("single");
   const [statusFilter, setStatusFilter] = useState<string>("");
   const [departmentFilter, setDepartmentFilter] = useState<string>("");
   const [createOpen, setCreateOpen] = useState(isReceptionist);
@@ -187,13 +194,37 @@ export default function AppointmentsPage() {
     <div className="space-y-6">
       <div className="flex flex-wrap items-center justify-between gap-4">
         <h1 className="font-sora text-2xl font-bold text-[#0F172A]">Appointments</h1>
-        {canManage && (
+        {canManage && pageTab === "appointments" && (
           <Button onClick={() => setCreateOpen((s) => !s)}>
             {createOpen ? "Hide booking form" : "Book appointment"}
           </Button>
         )}
       </div>
 
+      {/* Page Level Tabs */}
+      <div className="border-b border-[#E2E8F0]">
+        <div className="flex gap-8">
+          {(["appointments", "bulk-actions", "reminders"] as const).map((tab) => (
+            <button
+              key={tab}
+              onClick={() => setPageTab(tab)}
+              className={`px-4 py-3 font-medium text-sm border-b-2 ${
+                pageTab === tab
+                  ? "border-[#0EAFBE] text-[#0EAFBE]"
+                  : "border-transparent text-[#64748B] hover:text-[#0F172A]"
+              }`}
+            >
+              {tab === "appointments" && "Appointments"}
+              {tab === "bulk-actions" && "Bulk Actions"}
+              {tab === "reminders" && "Reminders"}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {/* Appointments Tab */}
+      {pageTab === "appointments" && (
+        <>
       <div className="flex flex-wrap gap-2">
         <div className="inline-flex rounded-lg border border-[#E2E8F0] bg-white p-1">
           {(["list", "day", "week"] as const).map((mode) => (
@@ -243,18 +274,44 @@ export default function AppointmentsPage() {
 
       {createOpen && (
         <Card className="p-6">
-          <h2 className="font-sora text-lg font-bold text-[#0F172A]">Book new appointment</h2>
-          <form onSubmit={handleCreate} className="mt-4 space-y-3">
-            <div>
-              <label className="block text-sm font-medium text-[#0F172A]">Search patient</label>
-              <Input
-                placeholder="Search by name or Ghana Health ID"
-                onChange={(e) => {
-                  const v = e.target.value;
-                  if (v.trim().length >= 2) search(v, "name");
-                }}
-              />
-              {searchResults.length > 0 && (
+          <div className="mb-4 flex gap-2 border-b border-[#E2E8F0]">
+            <button
+              type="button"
+              onClick={() => setBookingMode("single")}
+              className={`px-4 py-2 text-sm font-medium ${
+                bookingMode === "single"
+                  ? "border-b-2 border-[#0EAFBE] text-[#0EAFBE]"
+                  : "text-[#64748B]"
+              }`}
+            >
+              Single Booking
+            </button>
+            <button
+              type="button"
+              onClick={() => setBookingMode("bulk")}
+              className={`px-4 py-2 text-sm font-medium ${
+                bookingMode === "bulk"
+                  ? "border-b-2 border-[#0EAFBE] text-[#0EAFBE]"
+                  : "text-[#64748B]"
+              }`}
+            >
+              Bulk Import
+            </button>
+          </div>
+          {bookingMode === "single" && (
+            <>
+              <h2 className="font-sora text-lg font-bold text-[#0F172A]">Book new appointment</h2>
+              <form onSubmit={handleCreate} className="mt-4 space-y-3">
+                <div>
+                  <label className="block text-sm font-medium text-[#0F172A]">Search patient</label>
+                  <Input
+                    placeholder="Search by name or Ghana Health ID"
+                    onChange={(e) => {
+                      const v = e.target.value;
+                      if (v.trim().length >= 2) search(v, "name");
+                    }}
+                  />
+                  {searchResults.length > 0 && (
                 <ul className="mt-1 max-h-32 overflow-y-auto rounded border border-[#E2E8F0] bg-white">
                   {searchResults.slice(0, 6).map((p) => (
                     <li
@@ -350,6 +407,17 @@ export default function AppointmentsPage() {
               Save
             </Button>
           </form>
+            </>
+          )}
+          {bookingMode === "bulk" && (
+            <>
+              <h2 className="font-sora text-lg font-bold text-[#0F172A]">Bulk Import Appointments</h2>
+              <AppointmentBulkImportForm onSuccess={() => {
+                fetch();
+                setBookingMode("single");
+              }} />
+            </>
+          )}
         </Card>
       )}
 
@@ -570,6 +638,21 @@ export default function AppointmentsPage() {
             </div>
           </form>
         </Card>
+      )}
+        </>
+      )}
+
+      {/* Bulk Actions Tab */}
+      {pageTab === "bulk-actions" && (
+        <AppointmentBulkActions
+          appointments={appointments}
+          onRefresh={fetch}
+        />
+      )}
+
+      {/* Reminders Tab */}
+      {pageTab === "reminders" && (
+        <AppointmentReminderUI />
       )}
     </div>
   );

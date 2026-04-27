@@ -1,0 +1,54 @@
+{
+  "overall_auc_roc": 0.5921,
+  "overall_sensitivity": 0.9013,
+  "overall_specificity": 0.2948,
+  "diseases": {
+    "readmission_risk": {
+      "auc_roc": 0.5921,
+      "sensitivity": 0.9013,
+      "specificity": 0.2948,
+      "samples": 7000,
+      "positive_rate": 0.2987,
+      "optimal_threshold": 0.3287,
+      "data_source": "hybrid"
+    }
+  },
+  "metadata": {
+    "test_data_size": 1050,
+    "test_data_source": "HYBRID Dataset",
+    "training_date": "2026-04-20",
+    "cross_validation_folds": 5,
+    "model_names": [
+      "LogisticRegression",
+      "RandomForest",
+      "XGBoost"
+    ],
+    "ensemble_weights": [
+      0.2,
+      0.3,
+      0.5
+    ],
+    "data_size": 7000,
+    "readmission_rate": 0.2987
+  },
+  "individual_models": {
+    "logistic_regression": {
+      "auc_roc": 0.6011,
+      "sensitivity": 0.8758,
+      "specificity": 0.3356,
+      "optimal_threshold": 0.486
+    },
+    "random_forest": {
+      "auc_roc": 0.5998,
+      "sensitivity": 0.9236,
+      "specificity": 0.2826,
+      "optimal_threshold": 0.3364
+    },
+    "xgboost": {
+      "auc_roc": 0.581,
+      "sensitivity": 0.8408,
+      "specificity": 0.3274,
+      "optimal_threshold": 0.3046
+    }
+  }
+}

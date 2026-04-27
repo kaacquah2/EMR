@@ -131,8 +131,9 @@ def break_glass_create(request):
                 notify_emails,
                 fail_silently=True,
             )
-        except Exception:
-            pass
+        except Exception as e:
+            import logging
+            logging.getLogger(__name__).warning(f"Failed to send break-glass notification: {str(e)}")
 
     return Response(
         BreakGlassLogSerializer(log).data,
@@ -167,10 +168,10 @@ def break_glass_list(request):
         .select_related("facility", "accessed_by")
         .order_by("-created_at")[:100]
     )
-    
+
     # Filter out expired logs from response (don't show expired access)
     active_logs = [log for log in logs if not log.is_expired()]
-    
+
     # Log expired access attempts in audit trail
     for log in logs:
         if log.is_expired() and log.accessed_by == request.user:
@@ -183,7 +184,7 @@ def break_glass_list(request):
                 ip_address=request.META.get("REMOTE_ADDR", "127.0.0.1"),
                 user_agent=request.META.get("HTTP_USER_AGENT", "") or "",
             )
-    
+
     return Response({
         "data": BreakGlassLogSerializer(active_logs, many=True).data,
     })

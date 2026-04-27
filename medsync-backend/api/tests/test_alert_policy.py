@@ -1,6 +1,6 @@
 from django.test import TestCase
 
-from api.permissions import ALERT_RESOLVE_ROLES, PERMISSION_MATRIX
+from shared.permissions import ALERT_RESOLVE_ROLES, PERMISSION_MATRIX
 
 
 class TestAlertPolicyConsistency(TestCase):
@@ -11,3 +11,5 @@ class TestAlertPolicyConsistency(TestCase):
             map_roles,
             "ALERT_RESOLVE_ROLES and PERMISSION_MATRIX['alerts/<pk>/resolve'] are out of sync",
         )
+
+

@@ -2,9 +2,13 @@ import csv
 import io
 import secrets
 import pyotp
+from django.db import transaction
 from django.utils import timezone
 from django.utils.dateparse import parse_datetime
 from datetime import datetime, timedelta
+from django.core.mail import send_mail
+from django.template.loader import render_to_string
+from django.conf import settings
 from rest_framework import status
 from rest_framework.decorators import api_view, permission_classes, parser_classes
 from rest_framework.permissions import IsAuthenticated
@@ -13,14 +17,46 @@ from rest_framework.response import Response
 from core.models import User, Hospital, Ward, Department, LabUnit, AuditLog, Bed
 from patients.models import PatientAdmission
 from api.serializers import UserSerializer, WardSerializer
-from api.utils import sanitize_audit_resource_id, get_request_hospital, audit_log, get_hospital_for_super_admin_override
+from api.utils import get_request_hospital, audit_log, get_effective_hospital
 from api.pagination import paginate_queryset
+from django.db.models import Count, Q
 
 try:
     from rest_framework_simplejwt.token_blacklist.models import OutstandingToken, BlacklistedToken
 except ImportError:
     OutstandingToken = None
     BlacklistedToken = None
+
+
+def _send_invitation_email(user, token):
+    """Send invitation email to newly created user."""
+    try:
+        activation_url = f"{settings.FRONTEND_URL}/activate?token={token}"
+        expiry_time = (timezone.now() + timedelta(hours=24)).strftime("%Y-%m-%d %H:%M UTC")
+
+        context = {
+            'user_name': user.full_name or user.email.split('@')[0],
+            'hospital_name': user.hospital.name if user.hospital else 'MedSync',
+            'activation_url': activation_url,
+            'expiry_hours': 24,
+            'expiry_time': expiry_time,
+            'hospital_admin_email': settings.SUPPORT_EMAIL,
+            'support_url': settings.FRONTEND_URL,
+        }
+
+        html_message = render_to_string('invitation_email.html', context)
+
+        send_mail(
+            subject=f'Welcome to {user.hospital.name if user.hospital else "MedSync"} - Complete Your Account Setup',
+            message='Complete your MedSync account setup by clicking the activation link in this email.',
+            from_email=settings.DEFAULT_FROM_EMAIL,
+            recipient_list=[user.email],
+            html_message=html_message,
+            fail_silently=False,
+        )
+        return True, None
+    except Exception as e:
+        return False, str(e)
 
 
 _USER_ORDERING = {
@@ -110,13 +146,23 @@ def user_invite(request):
     if request.user.role == "super_admin":
         if role != "hospital_admin":
             return Response(
-                {"message": "Super Admin can only create Hospital Administrators. Staff (doctors, nurses, etc.) are invited by each hospital's admin."},
+                {
+                    "message": (
+                        "Super Admin can only create Hospital Administrators. "
+                        "Staff (doctors, nurses, etc.) are invited by each "
+                        "hospital's admin."
+                    )
+                },
                 status=status.HTTP_400_BAD_REQUEST,
             )
     else:
-        if role not in ("doctor", "nurse", "receptionist", "lab_technician", "pharmacist", "radiology_technician", "billing_staff", "ward_clerk"):
+        # Hospital Admin can invite staff roles
+        if role not in (
+            "doctor", "nurse", "receptionist", "lab_technician",
+            "pharmacy_technician", "radiology_technician", "billing_staff", "ward_clerk"
+        ):
             return Response(
-                {"message": "Invalid role"},
+                {"message": "Invalid role for hospital staff"},
                 status=status.HTTP_400_BAD_REQUEST,
             )
     ward_id = data.get("ward_id") if role == "nurse" else None
@@ -135,7 +181,7 @@ def user_invite(request):
         try:
             department_link = Department.objects.get(id=dep_id, hospital=hospital)
         except Department.DoesNotExist:
-            pass
+            logger.warning(f"Department {dep_id} not found in hospital {hospital.id}")
     lab_unit = None
     if role == "lab_technician":
         unit_id = data.get("lab_unit_id")
@@ -143,7 +189,7 @@ def user_invite(request):
             try:
                 lab_unit = LabUnit.objects.get(id=unit_id, hospital=hospital)
             except LabUnit.DoesNotExist:
-                pass
+                logger.warning(f"Lab unit {unit_id} not found in hospital {hospital.id}")
     token = secrets.token_urlsafe(48)
     totp_secret = pyotp.random_base32()
     dept_name = department_link.name if department_link else (data.get("department") or "").strip()
@@ -165,9 +211,27 @@ def user_invite(request):
     if role == "doctor":
         user.gmdc_licence_number = data.get("gmdc_licence_number") or None
         user.save(update_fields=["gmdc_licence_number"])
+
+    # Send invitation email
+    email_sent, email_error = _send_invitation_email(user, token)
+
+    # Log the action with email delivery status
     audit_log(request.user, "INVITE_SENT", "user", str(user.id), hospital, request)
+    if email_sent:
+        audit_log(request.user, "EMAIL_INVITATION_SENT", "user", str(user.id), hospital, request)
+    else:
+        audit_log(request.user, "EMAIL_INVITATION_FAILED", "user", str(user.id), hospital, request)
+
+    response_data = {
+        "message": "Invitation sent",
+        "user_id": str(user.id),
+        "email_sent": email_sent,
+    }
+    if not email_sent:
+        response_data["email_error"] = email_error
+
     return Response(
-        {"message": "Invitation sent", "user_id": str(user.id)},
+        response_data,
         status=status.HTTP_201_CREATED,
     )
 
@@ -176,7 +240,12 @@ def user_invite(request):
 @permission_classes([IsAuthenticated])
 @parser_classes([MultiPartParser, FormParser])
 def user_bulk_import(request):
-    """Accept a CSV file with columns: email, full_name, role[, department, ward_id, gmdc_licence_number]. Creates pending users with invitation tokens. Super Admin cannot use bulk import; they create hospital admins one at a time."""
+    """
+    Accept a CSV file with columns: email, full_name, role[, department,
+    ward_id, gmdc_licence_number]. Creates pending users with invitation
+    tokens. Super Admin cannot use bulk import; they create hospital admins
+    one at a time.
+    """
     if request.user.role not in ("hospital_admin", "super_admin"):
         return Response(
             {"message": "Permission denied"},
@@ -231,7 +300,12 @@ def user_bulk_import(request):
         )
     if len(content) > MAX_CSV_BYTES:
         return Response(
-            {"message": f"File too large. Maximum size is {MAX_CSV_BYTES // (1024 * 1024)} MB."},
+            {
+                "message": (
+                    f"File too large. Maximum size is "
+                    f"{MAX_CSV_BYTES // (1024 * 1024)} MB."
+                )
+            },
             status=status.HTTP_400_BAD_REQUEST,
         )
     reader = csv.DictReader(io.StringIO(content))
@@ -239,57 +313,85 @@ def user_bulk_import(request):
     created = 0
     errors = []
     row_limit = MAX_CSV_ROWS + 1  # header is row 1
-    for i, row in enumerate(reader, start=2):
-        if i > row_limit:
-            errors.append({"row": i, "error": f"Row limit exceeded ({MAX_CSV_ROWS} rows). Processed first {MAX_CSV_ROWS} rows only."})
-            break
-        row = {k.strip().lower().replace(" ", "_"): v for k, v in row.items() if k}
-        if not required.issubset(row):
-            errors.append({"row": i, "error": "Missing email, full_name, or role"})
-            continue
-        email = (row.get("email") or "").strip().lower()
-        full_name = (row.get("full_name") or "").strip()
-        role = (row.get("role") or "").strip().lower()
-        if not email:
-            errors.append({"row": i, "error": "Empty email"})
-            continue
-        if role not in ("doctor", "nurse", "receptionist", "lab_technician", "pharmacist", "radiology_technician", "billing_staff", "ward_clerk"):
-            errors.append({"row": i, "error": f"Invalid role: {role}"})
-            continue
-        if User.objects.filter(email__iexact=email).exists():
-            errors.append({"row": i, "email": email, "error": "User already exists"})
-            continue
-        ward_id = (row.get("ward_id") or "").strip() or None
-        ward = None
-        if ward_id and role == "nurse":
-            try:
-                ward = Ward.objects.get(id=ward_id, hospital=hospital)
-            except (Ward.DoesNotExist, ValueError):
-                errors.append({"row": i, "email": email, "error": "Invalid ward_id"})
-                continue
-        try:
-            token = secrets.token_urlsafe(48)
-            totp_secret = pyotp.random_base32()
-            user = User.objects.create(
-                hospital=hospital,
-                email=email,
-                role=role,
-                full_name=full_name or email,
-                department=(row.get("department") or "").strip(),
-                ward=ward,
-                account_status="pending",
-                invitation_token=token,
-                invitation_expires_at=timezone.now() + timedelta(hours=24),
-                invited_by=request.user,
-                totp_secret=totp_secret,
-            )
-            if role == "doctor":
-                user.gmdc_licence_number = (row.get("gmdc_licence_number") or "").strip() or None
-                user.save(update_fields=["gmdc_licence_number"])
-            audit_log(request.user, "INVITE_SENT", "user", str(user.id), hospital, request)
-            created += 1
-        except Exception as e:
-            errors.append({"row": i, "email": email, "error": str(e)})
+    
+    # ATOMICITY: Process all rows within a single transaction
+    # If any row fails validation or creation, the entire bulk import is rolled back
+    try:
+        with transaction.atomic():
+            for i, row in enumerate(reader, start=2):
+                if i > row_limit:
+                    errors.append({
+                        "row": i,
+                        "error": (
+                            f"Row limit exceeded ({MAX_CSV_ROWS} rows). "
+                            f"Processed first {MAX_CSV_ROWS} rows only."
+                        )
+                    })
+                    break
+                row = {k.strip().lower().replace(" ", "_"): v for k, v in row.items() if k}
+                if not required.issubset(row):
+                    errors.append({"row": i, "error": "Missing email, full_name, or role"})
+                    continue
+                email = (row.get("email") or "").strip().lower()
+                full_name = (row.get("full_name") or "").strip()
+                role = (row.get("role") or "").strip().lower()
+                if not email:
+                    errors.append({"row": i, "error": "Empty email"})
+                    continue
+                if role not in ("doctor", "nurse", "receptionist", "lab_technician"):
+                    errors.append({"row": i, "error": f"Invalid role: {role}"})
+                    continue
+                if User.objects.filter(email__iexact=email).exists():
+                    errors.append({"row": i, "email": email, "error": "User already exists"})
+                    continue
+                ward_id = (row.get("ward_id") or "").strip() or None
+                ward = None
+                if ward_id and role == "nurse":
+                    try:
+                        ward = Ward.objects.get(id=ward_id, hospital=hospital)
+                    except (Ward.DoesNotExist, ValueError):
+                        errors.append({"row": i, "email": email, "error": "Invalid ward_id"})
+                        continue
+                try:
+                    token = secrets.token_urlsafe(48)
+                    totp_secret = pyotp.random_base32()
+                    user = User.objects.create(
+                        hospital=hospital,
+                        email=email,
+                        role=role,
+                        full_name=full_name or email,
+                        department=(row.get("department") or "").strip(),
+                        ward=ward,
+                        account_status="pending",
+                        invitation_token=token,
+                        invitation_expires_at=timezone.now() + timedelta(hours=24),
+                        invited_by=request.user,
+                        totp_secret=totp_secret,
+                    )
+                    if role == "doctor":
+                        user.gmdc_licence_number = (row.get("gmdc_licence_number") or "").strip() or None
+                        user.save(update_fields=["gmdc_licence_number"])
+
+                    # Send invitation email
+                    email_sent, email_error = _send_invitation_email(user, token)
+
+                    audit_log(request.user, "INVITE_SENT", "user", str(user.id), hospital, request)
+                    if email_sent:
+                        audit_log(request.user, "EMAIL_INVITATION_SENT", "user", str(user.id), hospital, request)
+                    else:
+                        audit_log(request.user, "EMAIL_INVITATION_FAILED", "user", str(user.id), hospital, request)
+
+                    created += 1
+                except Exception as e:
+                    errors.append({"row": i, "email": email, "error": str(e)})
+    except Exception as e:
+        # If transaction fails, return error indicating bulk import was rolled back
+        return Response({
+            "message": "Bulk import failed and rolled back due to transaction error",
+            "created": 0,
+            "errors": [{"error": f"Transaction failed: {str(e)}"}],
+        }, status=status.HTTP_400_BAD_REQUEST)
+    
     return Response({
         "message": f"Created {created} user(s)",
         "created": created,
@@ -350,36 +452,63 @@ def audit_logs(request):
 
 
 def _get_admin_target_user(request, pk):
-    """Return target user if request.user (hospital_admin or super_admin) is allowed to manage them. Else (None, Response)."""
+    """
+    Return target user if request.user (hospital_admin or super_admin) is
+    allowed to manage them. Else (None, Response).
+    """
     if request.user.role not in ("hospital_admin", "super_admin"):
-        return None, Response({"message": "Permission denied"}, status=status.HTTP_403_FORBIDDEN)
+        return None, Response(
+            {"message": "Permission denied"},
+            status=status.HTTP_403_FORBIDDEN
+        )
     qs = User.objects.all()
     if request.user.role == "hospital_admin":
         qs = qs.filter(hospital=get_request_hospital(request))
     try:
         return qs.get(id=pk), None
     except (User.DoesNotExist, ValueError):
-        return None, Response({"message": "User not found"}, status=status.HTTP_404_NOT_FOUND)
+        return None, Response(
+            {"message": "User not found"},
+            status=status.HTTP_404_NOT_FOUND
+        )
 
 
 @api_view(["POST"])
 @permission_classes([IsAuthenticated])
 def user_send_password_reset(request, pk):
-    """Admin-initiated password reset: set reset token so user can use reset-password flow. Hospital admin: own hospital only; super_admin: any."""
+    """
+    Admin-initiated password reset: set reset token so user can use
+    reset-password flow. Hospital admin: own hospital only; super_admin: any.
+    """
     target, err = _get_admin_target_user(request, pk)
     if err:
         return err
     if target.account_status != "active":
         return Response(
-            {"message": "Only active accounts can receive a password reset. Use Resend invite for pending users."},
+            {
+                "message": (
+                    "Only active accounts can receive a password reset. "
+                    "Use Resend invite for pending users."
+                )
+            },
             status=status.HTTP_400_BAD_REQUEST,
         )
     target.invitation_token = secrets.token_urlsafe(48)
     target.invitation_expires_at = timezone.now() + timedelta(hours=1)
     target.save()
-    audit_log(request.user, "ADMIN_PASSWORD_RESET_SENT", "user", str(target.id), target.hospital, request)
+    audit_log(
+        request.user,
+        "ADMIN_PASSWORD_RESET_SENT",
+        "user",
+        str(target.id),
+        target.hospital,
+        request
+    )
     return Response({
-        "message": "Password reset token generated. Use the token to build the reset link for the user.",
+        "message": (
+            "Password reset token generated. Use the token to build the "
+            "reset link for the user."
+        ),
         "token": target.invitation_token,
         "expires_in_hours": 1,
     })
@@ -388,7 +517,10 @@ def user_send_password_reset(request, pk):
 @api_view(["POST"])
 @permission_classes([IsAuthenticated])
 def user_reset_mfa(request, pk):
-    """Clear user MFA so they must set it up again on next login. Hospital admin: own hospital only; super_admin: any."""
+    """
+    Clear user MFA so they must set it up again on next login. Hospital admin:
+    own hospital only; super_admin: any.
+    """
     target, err = _get_admin_target_user(request, pk)
     if err:
         return err
@@ -401,31 +533,68 @@ def user_reset_mfa(request, pk):
     target.totp_secret = pyotp.random_base32()
     target.mfa_backup_codes = None
     target.save()
-    audit_log(request.user, "ADMIN_MFA_RESET", "user", str(target.id), target.hospital, request)
+    audit_log(
+        request.user,
+        "ADMIN_MFA_RESET",
+        "user",
+        str(target.id),
+        target.hospital,
+        request
+    )
     return Response({"message": "MFA reset. User must set up MFA again on next login."})
 
 
 @api_view(["POST"])
 @permission_classes([IsAuthenticated])
 def user_resend_invite(request, pk):
-    """Resend invitation (new token, 24h expiry) for pending users. Hospital admin: own hospital only; super_admin: any."""
+    """
+    Resend invitation (new token, 24h expiry) for pending users. Hospital
+    admin: own hospital only; super_admin: any.
+    """
     target, err = _get_admin_target_user(request, pk)
     if err:
         return err
     if target.account_status != "pending":
         return Response(
-            {"message": "Only pending (not yet activated) users can receive a new invite. Use Send password reset for active users."},
+            {
+                "message": (
+                    "Only pending (not yet activated) users can receive a "
+                    "new invite. Use Send password reset for active users."
+                )
+            },
             status=status.HTTP_400_BAD_REQUEST,
         )
     target.invitation_token = secrets.token_urlsafe(48)
     target.invitation_expires_at = timezone.now() + timedelta(hours=24)
     target.save()
-    audit_log(request.user, "INVITE_RESENT", "user", str(target.id), target.hospital, request)
-    return Response({
-        "message": "Invitation resent. Use the token to build the activation link for the user.",
-        "token": target.invitation_token,
+
+    # Send resend invitation email
+    email_sent, email_error = _send_invitation_email(target, target.invitation_token)
+
+    audit_log(
+        request.user, "INVITE_RESENT", "user", str(target.id),
+        target.hospital, request
+    )
+    if email_sent:
+        audit_log(
+            request.user, "EMAIL_INVITATION_SENT", "user", str(target.id),
+            target.hospital, request
+        )
+    else:
+        audit_log(
+            request.user, "EMAIL_INVITATION_FAILED", "user", str(target.id),
+            target.hospital, request
+        )
+
+    response_data = {
+        "message": "Invitation resent",
         "expires_in_hours": 24,
-    })
+        "email_sent": email_sent,
+    }
+    if not email_sent:
+        response_data["email_error"] = email_error
+
+    return Response(response_data)
 
 
 @api_view(["PATCH"])
@@ -449,9 +618,17 @@ def user_update(request, pk):
     data = request.data
     old_role = target.role
     old_status = target.account_status
+    new_status = None
     if "account_status" in data and data["account_status"] is not None:
-        if data["account_status"] in ("active", "inactive", "pending", "suspended", "locked"):
-            target.account_status = data["account_status"]
+        if data["account_status"] in (
+            "active",
+            "inactive",
+            "pending",
+            "suspended",
+            "locked"
+        ):
+            new_status = data["account_status"]
+            target.account_status = new_status
     requested_role = data.get("role")
     if request.user.role == "super_admin":
         if "hospital_id" in data:
@@ -462,9 +639,26 @@ def user_update(request, pk):
                     target.hospital = Hospital.objects.get(id=data["hospital_id"])
                 except Hospital.DoesNotExist:
                     pass
-        if requested_role in ("super_admin", "hospital_admin", "doctor", "nurse", "receptionist", "lab_technician", "pharmacist", "radiology_technician", "billing_staff", "ward_clerk"):
+        if requested_role in (
+            "super_admin",
+            "hospital_admin",
+            "doctor",
+            "nurse",
+            "receptionist",
+            "lab_technician",
+            "pharmacy_technician",
+            "radiology_technician",
+            "billing_staff",
+            "ward_clerk"
+        ):
             target.role = requested_role
-    elif request.user.role == "hospital_admin" and requested_role in ("doctor", "nurse", "receptionist", "lab_technician", "pharmacist", "radiology_technician", "billing_staff", "ward_clerk"):
+    elif (
+        request.user.role == "hospital_admin"
+        and requested_role in (
+            "doctor", "nurse", "receptionist", "lab_technician",
+            "pharmacy_technician", "radiology_technician", "billing_staff", "ward_clerk"
+        )
+    ):
         # Hospital admins can reassign roles for clinical/admin staff in their own facility.
         if target.role in ("super_admin", "hospital_admin"):
             return Response(
@@ -523,7 +717,13 @@ def user_update(request, pk):
                 if timezone.is_naive(dt):
                     dt = timezone.make_aware(dt, timezone.get_current_timezone())
                 target.last_role_reviewed_at = dt
-    target.save()
+    
+    # Handle user deactivation when status changes to inactive/suspended/locked
+    if new_status and new_status in ("inactive", "suspended", "locked") and old_status != new_status:
+        target.deactivate(reason=f"admin_action_{new_status}")
+    else:
+        target.save()
+    
     if target.role != old_role:
         audit_log(
             request.user,
@@ -534,9 +734,16 @@ def user_update(request, pk):
             request,
             extra_data={"from_role": old_role, "to_role": target.role, "reason": data.get("reason")},
         )
-    if (target.role != old_role or target.account_status != old_status) and OutstandingToken is not None and BlacklistedToken is not None:
-        for ot in OutstandingToken.objects.filter(user_id=target.id):
-            BlacklistedToken.objects.get_or_create(token=ot)
+    if target.account_status != old_status:
+        audit_log(
+            request.user,
+            "USER_STATUS_CHANGE",
+            "user",
+            str(target.id),
+            target.hospital,
+            request,
+            extra_data={"from_status": old_status, "to_status": target.account_status},
+        )
     return Response(UserSerializer(target).data)
 
 
@@ -631,7 +838,8 @@ def ward_create(request):
     if not created:
         return Response({"message": "Ward already exists", "ward_id": str(ward.id)}, status=status.HTTP_200_OK)
     audit_log(request.user, "CREATE", "ward", str(ward.id), hospital, request)
-    return Response({"ward_id": str(ward.id), "name": ward.ward_name, "ward_type": ward.ward_type}, status=status.HTTP_201_CREATED)
+    return Response({"ward_id": str(ward.id), "name": ward.ward_name,
+                    "ward_type": ward.ward_type}, status=status.HTTP_201_CREATED)
 
 
 @api_view(["PATCH"])
@@ -826,17 +1034,31 @@ def lab_unit_create(request):
     if request.user.role == "super_admin":
         hid = request.data.get("hospital_id")
         if not hid:
-            return Response({"message": "hospital_id required"}, status=status.HTTP_400_BAD_REQUEST)
+            return Response(
+                {"message": "hospital_id required"},
+                status=status.HTTP_400_BAD_REQUEST
+            )
         try:
             hospital = Hospital.objects.get(id=hid)
         except Hospital.DoesNotExist:
-            return Response({"message": "Hospital not found"}, status=status.HTTP_404_NOT_FOUND)
+            return Response(
+                {"message": "Hospital not found"},
+                status=status.HTTP_404_NOT_FOUND
+            )
     if not hospital:
-        return Response({"message": "No hospital"}, status=status.HTTP_400_BAD_REQUEST)
+        return Response(
+            {"message": "No hospital"},
+            status=status.HTTP_400_BAD_REQUEST
+        )
     name = (request.data.get("name") or "").strip()
     if not name:
-        return Response({"message": "name required"}, status=status.HTTP_400_BAD_REQUEST)
-    unit, created = LabUnit.objects.get_or_create(hospital=hospital, name=name, defaults={"is_active": True})
+        return Response(
+            {"message": "name required"},
+            status=status.HTTP_400_BAD_REQUEST
+        )
+    unit, created = LabUnit.objects.get_or_create(
+        hospital=hospital, name=name, defaults={"is_active": True}
+    )
     return Response(
         {"lab_unit_id": str(unit.id), "name": unit.name},
         status=status.HTTP_201_CREATED if created else status.HTTP_200_OK,
@@ -846,7 +1068,10 @@ def lab_unit_create(request):
 @api_view(["GET"])
 @permission_classes([IsAuthenticated])
 def lab_test_type_list(request):
-    """List lab test types (test name -> lab unit) for ordering. Used by doctor when creating lab order."""
+    """
+    List lab test types (test name -> lab unit) for ordering. Used by doctor
+    when creating lab order.
+    """
     from records.models import LabTestType
     if request.user.role not in ("hospital_admin", "super_admin", "doctor"):
         return Response(
@@ -868,7 +1093,12 @@ def lab_test_type_list(request):
     )
     return Response({
         "data": [
-            {"test_name": t.test_name, "lab_unit_id": str(t.lab_unit_id), "lab_unit_name": t.lab_unit.name, "specimen": t.specimen or ""}
+            {
+                "test_name": t.test_name,
+                "lab_unit_id": str(t.lab_unit_id),
+                "lab_unit_name": t.lab_unit.name,
+                "specimen": t.specimen or ""
+            }
             for t in types
         ],
     })
@@ -932,17 +1162,19 @@ def doctor_list(request):
             return Response({"data": []})
     if not hospital:
         return Response({"data": []})
-    qs = User.objects.filter(hospital=hospital, role="doctor", account_status="active").select_related("department_link")
+    qs = User.objects.filter(
+        hospital=hospital,
+        role="doctor",
+        account_status="active").select_related("department_link")
     dep_id = request.GET.get("department_id")
     if dep_id:
         qs = qs.filter(department_link_id=dep_id)
     qs = qs.order_by("full_name")
-    return Response({
-        "data": [
-            {"user_id": str(u.id), "full_name": u.full_name, "department_id": str(u.department_link_id) if u.department_link_id else None, "department_name": u.department_link.name if u.department_link else None}
-            for u in qs
-        ],
-    })
+    return Response({"data": [{"user_id": str(u.id),
+                               "full_name": u.full_name,
+                               "department_id": str(u.department_link_id) if u.department_link_id else None,
+                               "department_name": u.department_link.name if u.department_link else None} for u in qs],
+                     })
 
 
 # ---- Possible duplicates queue (admin / HIM) ----
@@ -956,7 +1188,7 @@ def duplicate_list(request):
             {"message": "Permission denied"},
             status=status.HTTP_403_FORBIDDEN,
         )
-    from patients.models import PotentialDuplicate, Patient
+    from patients.models import PotentialDuplicate
     hospital = get_request_hospital(request)
     if request.user.role == "hospital_admin" and not hospital:
         return Response({"data": []})
@@ -992,7 +1224,7 @@ def duplicate_list(request):
 
 @api_view(["POST"])
 @permission_classes([IsAuthenticated])
-def duplicate_create(request):
+def duplicate_submit(request):
     """Submit a possible duplicate pair for review. Hospital admin / super_admin."""
     if request.user.role not in ("hospital_admin", "super_admin"):
         return Response(
@@ -1007,9 +1239,15 @@ def duplicate_create(request):
             try:
                 hospital = Hospital.objects.get(id=hid)
             except Hospital.DoesNotExist:
-                return Response({"message": "Hospital not found"}, status=status.HTTP_404_NOT_FOUND)
+                return Response(
+                    {"message": "Hospital not found"},
+                    status=status.HTTP_404_NOT_FOUND
+                )
     if not hospital:
-        return Response({"message": "hospital_id required"}, status=status.HTTP_400_BAD_REQUEST)
+        return Response(
+            {"message": "hospital_id required"},
+            status=status.HTTP_400_BAD_REQUEST
+        )
     patient_a_id = request.data.get("patient_a_id")
     patient_b_id = request.data.get("patient_b_id")
     if not patient_a_id or not patient_b_id:
@@ -1037,7 +1275,11 @@ def duplicate_create(request):
     ).exists()
     if existing:
         return Response(
-            {"message": "A pending duplicate record for this pair already exists"},
+            {
+                "message": (
+                    "A pending duplicate record for this pair already exists"
+                )
+            },
             status=status.HTTP_400_BAD_REQUEST,
         )
     dup = PotentialDuplicate.objects.create(
@@ -1061,7 +1303,10 @@ def duplicate_create(request):
 @api_view(["GET", "PATCH"])
 @permission_classes([IsAuthenticated])
 def duplicate_detail(request, duplicate_id):
-    """Get or review a possible duplicate. PATCH: set status (not_duplicate, approved_duplicate) or merge (merged, merged_into_patient_id)."""
+    """
+    Get or review a possible duplicate. PATCH: set status
+    (not_duplicate, approved_duplicate) or merge (merged, merged_into_patient_id).
+    """
     if request.user.role not in ("hospital_admin", "super_admin"):
         return Response(
             {"message": "Permission denied"},
@@ -1118,7 +1363,8 @@ def duplicate_detail(request, duplicate_id):
                 "status": dup.status,
                 "merged_into_patient_id": str(dup.merged_into_patient_id),
             })
-        return Response({"message": "Invalid status or missing merged_into_patient_id for merge"}, status=status.HTTP_400_BAD_REQUEST)
+        return Response({"message": "Invalid status or missing merged_into_patient_id for merge"},
+                        status=status.HTTP_400_BAD_REQUEST)
     return Response(status=status.HTTP_405_METHOD_NOT_ALLOWED)
 
 
@@ -1134,26 +1380,26 @@ def staff_onboarding_dashboard(request):
             {"message": "Permission denied"},
             status=status.HTTP_403_FORBIDDEN,
         )
-    
+
     hospital = get_request_hospital(request)
     if not hospital:
         return Response({"data": []})
-    
+
     users = User.objects.filter(hospital=hospital).order_by("-created_at")
-    
+
     data = []
     for user in users:
         # Onboarding status
         account_activated = user.account_status == "active"
         mfa_setup = user.is_mfa_enabled
         license_verified = user.licence_verified if user.role == "doctor" else None
-        
+
         training_status = "not_started"
         if account_activated and mfa_setup:
             training_status = "in_progress"
         if account_activated and mfa_setup and (license_verified or user.role != "doctor"):
             training_status = "complete"
-        
+
         data.append({
             "user_id": str(user.id),
             "email": user.email,
@@ -1167,7 +1413,7 @@ def staff_onboarding_dashboard(request):
                 "status": training_status,
             }
         })
-    
+
     return Response({
         "total_staff": len(data),
         "by_status": {
@@ -1176,4 +1422,607 @@ def staff_onboarding_dashboard(request):
             "complete": sum(1 for d in data if d["onboarding"]["status"] == "complete"),
         },
         "staff": data,
+    })
+
+
+# PHASE 7.5: Hospital Admin Staff Performance Analytics
+
+
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def staff_performance_analytics(request):
+    """
+    GET /admin/analytics/staff-performance?from=&to=
+    
+    Returns aggregate staff performance metrics (no PHI).
+    - Encounters per doctor per day
+    - Average consultation time
+    - Lab TAT by unit
+    
+    Only for hospital_admin and super_admin.
+    """
+    if request.user.role not in ('hospital_admin', 'super_admin'):
+        return Response({'message': 'Permission denied'}, status=status.HTTP_403_FORBIDDEN)
+    
+    hospital = get_request_hospital(request)
+    if not hospital and request.user.role != 'super_admin':
+        return Response({'message': 'No hospital context'}, status=status.HTTP_400_BAD_REQUEST)
+    
+    # Parse date range
+    from_date_str = request.query_params.get('from')
+    to_date_str = request.query_params.get('to')
+    
+    try:
+        from_date = datetime.fromisoformat(from_date_str) if from_date_str else (timezone.now() - timedelta(days=30))
+        to_date = datetime.fromisoformat(to_date_str) if to_date_str else timezone.now()
+    except ValueError:
+        return Response({'message': 'Invalid date format. Use ISO 8601.'}, status=status.HTTP_400_BAD_REQUEST)
+    
+    # Base querysets
+    from records.models import Encounter, LabOrder
+    
+    encounter_qs = Encounter.objects.filter(
+        encounter_date__gte=from_date,
+        encounter_date__lte=to_date,
+    )
+    
+    lab_qs = LabOrder.objects.filter(
+        created_at__gte=from_date,
+        created_at__lte=to_date,
+    )
+    
+    if hospital:
+        encounter_qs = encounter_qs.filter(hospital=hospital)
+        lab_qs = lab_qs.filter(hospital=hospital)
+    
+    # Encounters per doctor
+    from django.db.models import Count, Avg, F
+    from django.db.models.functions import TruncDate
+    
+    encounters_by_doctor = encounter_qs.values(
+        'assigned_doctor__id',
+        'assigned_doctor__full_name',
+    ).annotate(
+        encounter_count=Count('id'),
+    ).order_by('-encounter_count')[:20]
+    
+    # Encounters per day
+    encounters_by_day = encounter_qs.annotate(
+        date=TruncDate('encounter_date')
+    ).values('date').annotate(
+        count=Count('id')
+    ).order_by('date')
+    
+    # Lab TAT by unit (average time from ordered to resulted)
+    from django.db.models import ExpressionWrapper, DurationField
+    
+    lab_with_results = lab_qs.filter(
+        status='resulted',
+        resulted_at__isnull=False,
+    ).annotate(
+        tat_seconds=ExpressionWrapper(
+            F('resulted_at') - F('created_at'),
+            output_field=DurationField()
+        )
+    )
+    
+    # Group by lab unit
+    lab_tat_by_unit = {}
+    for order in lab_with_results.select_related('lab_unit'):
+        unit_name = order.lab_unit.name if order.lab_unit else 'Unassigned'
+        if unit_name not in lab_tat_by_unit:
+            lab_tat_by_unit[unit_name] = {'total_seconds': 0, 'count': 0}
+        if order.tat_seconds:
+            lab_tat_by_unit[unit_name]['total_seconds'] += order.tat_seconds.total_seconds()
+            lab_tat_by_unit[unit_name]['count'] += 1
+    
+    lab_tat_summary = []
+    for unit, data in lab_tat_by_unit.items():
+        if data['count'] > 0:
+            avg_minutes = (data['total_seconds'] / data['count']) / 60
+            lab_tat_summary.append({
+                'lab_unit': unit,
+                'avg_tat_minutes': round(avg_minutes, 1),
+                'order_count': data['count'],
+            })
+    
+    # Summary stats
+    total_encounters = encounter_qs.count()
+    unique_doctors = encounter_qs.values('assigned_doctor').distinct().count()
+    
+    return Response({
+        'period': {
+            'from': from_date.isoformat(),
+            'to': to_date.isoformat(),
+        },
+        'summary': {
+            'total_encounters': total_encounters,
+            'unique_doctors': unique_doctors,
+            'avg_encounters_per_doctor': round(total_encounters / max(unique_doctors, 1), 1),
+        },
+        'encounters_by_doctor': [
+            {
+                'doctor_id': str(d['assigned_doctor__id']) if d['assigned_doctor__id'] else None,
+                'doctor_name': d['assigned_doctor__full_name'] or 'Unassigned',
+                'encounter_count': d['encounter_count'],
+            }
+            for d in encounters_by_doctor
+        ],
+        'encounters_by_day': [
+            {
+                'date': d['date'].isoformat() if d['date'] else None,
+                'count': d['count'],
+            }
+            for d in encounters_by_day
+        ],
+        'lab_tat_by_unit': sorted(lab_tat_summary, key=lambda x: x['avg_tat_minutes']),
+    })
+
+
+# PHASE 7.5: Bed Management Dashboard
+
+
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def bed_management_dashboard(request):
+    """
+    GET /admin/bed-management
+    
+    Returns all wards with live bed occupancy for hospital admin.
+    """
+    if request.user.role not in ('hospital_admin', 'super_admin'):
+        return Response({'message': 'Permission denied'}, status=status.HTTP_403_FORBIDDEN)
+    
+    hospital = get_effective_hospital(request)
+    if not hospital and request.user.role != 'super_admin':
+        hospital = get_request_hospital(request)
+    if not hospital and request.user.role != 'super_admin':
+        return Response({'message': 'No hospital context'}, status=status.HTTP_400_BAD_REQUEST)
+    
+    # Get all wards with bed counts
+    wards_qs = Ward.objects.filter(is_active=True)
+    if hospital:
+        wards_qs = wards_qs.filter(hospital=hospital)
+    
+    wards_qs = wards_qs.annotate(
+        total_beds=Count('bed', filter=Q(bed__is_active=True)),
+        occupied_beds=Count(
+            'bed',
+            filter=Q(
+                bed__is_active=True,
+                bed__is_occupied=True,
+            )
+        ),
+    ).select_related('hospital')
+    
+    ward_data = []
+    for ward in wards_qs:
+        available = ward.total_beds - ward.occupied_beds
+        occupancy_pct = round((ward.occupied_beds / ward.total_beds * 100) if ward.total_beds > 0 else 0, 1)
+        
+        # Get current admissions for this ward
+        current_admissions = PatientAdmission.objects.filter(
+            ward=ward,
+            discharged_at__isnull=True,
+        ).select_related('patient', 'bed').order_by('bed__bed_number')[:50]
+        
+        beds_detail = []
+        for admission in current_admissions:
+            beds_detail.append({
+                'bed_id': str(admission.bed.id) if admission.bed else None,
+                'bed_number': admission.bed.bed_number if admission.bed else 'Unassigned',
+                'patient_id': str(admission.patient.id),
+                'patient_name': admission.patient.full_name,
+                'admitted_at': admission.admitted_at.isoformat(),
+                'admission_reason': admission.admission_reason or '',
+            })
+        
+        ward_data.append({
+            'ward_id': str(ward.id),
+            'ward_name': ward.ward_name,
+            'ward_type': ward.ward_type,
+            'hospital_id': str(ward.hospital.id),
+            'hospital_name': ward.hospital.name,
+            'total_beds': ward.total_beds,
+            'occupied_beds': ward.occupied_beds,
+            'available_beds': available,
+            'occupancy_percent': occupancy_pct,
+            'status': 'critical' if occupancy_pct >= 90 else 'warning' if occupancy_pct >= 75 else 'normal',
+            'current_patients': beds_detail,
+        })
+    
+    # Summary
+    total_beds = sum(w['total_beds'] for w in ward_data)
+    total_occupied = sum(w['occupied_beds'] for w in ward_data)
+    
+    return Response({
+        'summary': {
+            'total_beds': total_beds,
+            'occupied_beds': total_occupied,
+            'available_beds': total_beds - total_occupied,
+            'overall_occupancy_percent': round((total_occupied / total_beds * 100) if total_beds > 0 else 0, 1),
+            'wards_count': len(ward_data),
+            'critical_wards': len([w for w in ward_data if w['status'] == 'critical']),
+        },
+        'wards': ward_data,
+    })
+
+
+@api_view(['POST'])
+@permission_classes([IsAuthenticated])
+def patient_transfer(request, admission_id):
+    """
+    POST /admissions/:id/transfer
+    
+    Transfer patient to different ward/bed.
+    
+    Request body:
+    {
+        "to_ward_id": "uuid",
+        "to_bed_id": "uuid" (optional),
+        "reason": "string"
+    }
+    """
+    if request.user.role not in ('doctor', 'nurse', 'hospital_admin', 'super_admin'):
+        return Response({'message': 'Permission denied'}, status=status.HTTP_403_FORBIDDEN)
+    
+    hospital = get_effective_hospital(request)
+    if not hospital:
+        hospital = get_request_hospital(request)
+    
+    try:
+        admission = PatientAdmission.objects.select_related('patient', 'ward', 'bed').get(
+            id=admission_id,
+            discharged_at__isnull=True,
+        )
+    except PatientAdmission.DoesNotExist:
+        return Response({'message': 'Active admission not found'}, status=status.HTTP_404_NOT_FOUND)
+    
+    if hospital and admission.hospital_id != hospital.id:
+        return Response({'message': 'Admission not in your hospital'}, status=status.HTTP_403_FORBIDDEN)
+    
+    to_ward_id = request.data.get('to_ward_id')
+    to_bed_id = request.data.get('to_bed_id')
+    reason = request.data.get('reason', '')
+    
+    if not to_ward_id:
+        return Response({'message': 'to_ward_id required'}, status=status.HTTP_400_BAD_REQUEST)
+    
+    try:
+        to_ward = Ward.objects.get(id=to_ward_id, hospital=admission.hospital, is_active=True)
+    except Ward.DoesNotExist:
+        return Response({'message': 'Target ward not found'}, status=status.HTTP_404_NOT_FOUND)
+    
+    to_bed = None
+    if to_bed_id:
+        try:
+            to_bed = Bed.objects.get(id=to_bed_id, ward=to_ward, is_active=True, is_occupied=False)
+        except Bed.DoesNotExist:
+            return Response({'message': 'Target bed not found or occupied'}, status=status.HTTP_404_NOT_FOUND)
+    
+    # Release old bed
+    old_ward = admission.ward
+    old_bed = admission.bed
+    if old_bed:
+        old_bed.is_occupied = False
+        old_bed.save(update_fields=['is_occupied'])
+    
+    # Assign new ward/bed
+    admission.ward = to_ward
+    admission.bed = to_bed
+    if to_bed:
+        to_bed.is_occupied = True
+        to_bed.save(update_fields=['is_occupied'])
+    
+    admission.save(update_fields=['ward', 'bed'])
+    
+    # Audit
+    audit_log(
+        request.user,
+        'PATIENT_TRANSFERRED',
+        'PatientAdmission',
+        str(admission.id),
+        admission.hospital,
+        request,
+        extra_data={
+            'from_ward': str(old_ward.id) if old_ward else None,
+            'to_ward': str(to_ward.id),
+            'reason': reason,
+        }
+    )
+    
+    return Response({
+        'message': 'Patient transferred successfully',
+        'admission_id': str(admission.id),
+        'new_ward': to_ward.ward_name,
+        'new_bed': to_bed.bed_number if to_bed else None,
+    })
+
+
+# PHASE 10.3: Anomaly Detection for Security
+
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def security_alerts(request):
+    """
+    GET /superadmin/security/alerts
+    
+    Get recent security alerts (anomalies, failed logins, etc.)
+    """
+    if request.user.role != 'super_admin':
+        return Response({'message': 'Super admin only'}, status=status.HTTP_403_FORBIDDEN)
+    
+    from django.utils import timezone
+    from datetime import timedelta
+    
+    since = timezone.now() - timedelta(days=7)
+    
+    alerts = AuditLog.objects.filter(
+        action__in=['ANOMALY_DETECTED', 'LOGIN_FAILED', 'ACCOUNT_LOCKED', 'BREAK_GLASS_ACCESS'],
+        timestamp__gte=since,
+    ).select_related('user', 'hospital').order_by('-timestamp')[:100]
+    
+    data = []
+    for alert in alerts:
+        data.append({
+            'id': str(alert.id),
+            'action': alert.action,
+            'user_email': alert.user.email if alert.user else 'Unknown',
+            'user_role': alert.user.role if alert.user else None,
+            'hospital': alert.hospital.name if alert.hospital else None,
+            'details': alert.details,
+            'ip_address': alert.ip_address,
+            'timestamp': alert.timestamp.isoformat(),
+        })
+    
+    # Summary counts
+    anomalies = len([a for a in data if a['action'] == 'ANOMALY_DETECTED'])
+    failed_logins = len([a for a in data if a['action'] == 'LOGIN_FAILED'])
+    lockouts = len([a for a in data if a['action'] == 'ACCOUNT_LOCKED'])
+    break_glass = len([a for a in data if a['action'] == 'BREAK_GLASS_ACCESS'])
+    
+    return Response({
+        'summary': {
+            'total_alerts': len(data),
+            'anomaly_detections': anomalies,
+            'failed_logins': failed_logins,
+            'account_lockouts': lockouts,
+            'break_glass_events': break_glass,
+        },
+        'alerts': data,
+    })
+
+
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def network_overview(request):
+    """
+    GET /superadmin/analytics/network-overview
+    
+    Network-wide metrics for super admin.
+    """
+    if request.user.role != 'super_admin':
+        return Response({'message': 'Super admin only'}, status=status.HTTP_403_FORBIDDEN)
+    
+    from django.db.models import Count, Avg
+    from django.utils import timezone
+    from datetime import timedelta
+    from patients.models import Patient
+    from records.models import Encounter
+    from interop.models import Referral
+    
+    now = timezone.now()
+    today = now.date()
+    last_30_days = today - timedelta(days=30)
+    
+    # Hospital stats
+    hospitals = Hospital.objects.filter(is_active=True).annotate(
+        staff_count=Count('users', filter=Q(users__is_active=True)),
+        patient_count=Count('patient'),
+        encounter_count_30d=Count(
+            'encounter',
+            filter=Q(encounter__encounter_date__date__gte=last_30_days)
+        ),
+    )
+    
+    hospital_data = []
+    for h in hospitals:
+        hospital_data.append({
+            'id': str(h.id),
+            'name': h.name,
+            'code': h.code,
+            'staff_count': h.staff_count,
+            'patient_count': h.patient_count,
+            'encounters_last_30d': h.encounter_count_30d,
+        })
+    
+    # Global totals
+    total_hospitals = hospitals.count()
+    total_staff = User.objects.filter(is_active=True).exclude(role='super_admin').count()
+    total_patients = Patient.objects.count()
+    total_encounters_30d = Encounter.objects.filter(encounter_date__date__gte=last_30_days).count()
+    
+    # Referral network
+    referrals_30d = Referral.objects.filter(created_at__date__gte=last_30_days)
+    pending_referrals = referrals_30d.filter(status=Referral.STATUS_PENDING).count()
+    completed_referrals = referrals_30d.filter(status=Referral.STATUS_COMPLETED).count()
+    
+    return Response({
+        'generated_at': now.isoformat(),
+        'totals': {
+            'hospitals': total_hospitals,
+            'active_staff': total_staff,
+            'registered_patients': total_patients,
+            'encounters_last_30d': total_encounters_30d,
+        },
+        'referrals': {
+            'total_last_30d': referrals_30d.count(),
+            'pending': pending_referrals,
+            'completed': completed_referrals,
+        },
+        'hospitals': hospital_data,
+    })
+
+
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def disease_burden(request):
+    """
+    GET /superadmin/analytics/disease-burden?days=30
+    
+    Top diagnoses across the network.
+    """
+    if request.user.role != 'super_admin':
+        return Response({'message': 'Super admin only'}, status=status.HTTP_403_FORBIDDEN)
+    
+    from django.db.models import Count
+    from django.utils import timezone
+    from datetime import timedelta
+    from records.models import Diagnosis, MedicalRecord
+    
+    days = int(request.query_params.get('days', 30))
+    since = timezone.now().date() - timedelta(days=days)
+    
+    # Get medical records created since date
+    medical_records = MedicalRecord.objects.filter(
+        created_at__date__gte=since,
+        record_type='diagnosis'
+    )
+    
+    # Get diagnoses from those records
+    top_diagnoses = Diagnosis.objects.filter(
+        record__in=medical_records
+    ).values('icd10_code', 'icd10_description').annotate(
+        count=Count('id')
+    ).order_by('-count')[:20]
+    
+    # By hospital
+    by_hospital = Diagnosis.objects.filter(
+        record__in=medical_records
+    ).values('record__hospital__name').annotate(
+        total_diagnoses=Count('id')
+    ).order_by('-total_diagnoses')
+    
+    return Response({
+        'period_days': days,
+        'top_diagnoses': list(top_diagnoses),
+        'by_hospital': list(by_hospital),
+    })
+
+
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def referral_network(request):
+    """
+    GET /superadmin/analytics/referral-network?days=30
+    
+    Inter-hospital referral patterns.
+    """
+    if request.user.role != 'super_admin':
+        return Response({'message': 'Super admin only'}, status=status.HTTP_403_FORBIDDEN)
+    
+    from django.db.models import Count
+    from django.utils import timezone
+    from datetime import timedelta
+    from interop.models import Referral
+    
+    days = int(request.query_params.get('days', 30))
+    since = timezone.now().date() - timedelta(days=days)
+    
+    # Referral flows between hospitals
+    flows = Referral.objects.filter(
+        created_at__date__gte=since
+    ).values(
+        'from_facility__name', 'to_facility__name'
+    ).annotate(
+        count=Count('id')
+    ).order_by('-count')
+    
+    # Top receiving hospitals
+    top_receivers = Referral.objects.filter(
+        created_at__date__gte=since
+    ).values('to_facility__name').annotate(
+        received=Count('id')
+    ).order_by('-received')[:10]
+    
+    # Top referring hospitals
+    top_senders = Referral.objects.filter(
+        created_at__date__gte=since
+    ).values('from_facility__name').annotate(
+        sent=Count('id')
+    ).order_by('-sent')[:10]
+    
+    # Acceptance rate
+    total = Referral.objects.filter(created_at__date__gte=since).count()
+    accepted = Referral.objects.filter(
+        created_at__date__gte=since,
+        status=Referral.STATUS_ACCEPTED
+    ).count()
+    
+    return Response({
+        'period_days': days,
+        'total_referrals': total,
+        'acceptance_rate': round(accepted / total * 100, 1) if total > 0 else 0,
+        'flows': list(flows)[:50],
+        'top_receivers': list(top_receivers),
+        'top_senders': list(top_senders),
+    })
+
+
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def gpid_duplicates(request):
+    """
+    GET /superadmin/gpid-registry/duplicates
+    
+    Find potential duplicate patient records across hospitals.
+    """
+    if request.user.role != 'super_admin':
+        return Response({'message': 'Super admin only'}, status=status.HTTP_403_FORBIDDEN)
+    
+    from django.db.models import Count
+    from interop.models import GlobalPatient
+    
+    # Find patients with same name + DOB at different facilities
+    # This is a simplified duplicate detection
+    duplicates = GlobalPatient.objects.values(
+        'first_name', 'last_name', 'date_of_birth'
+    ).annotate(
+        facility_count=Count('facility_profiles__facility', distinct=True),
+        record_count=Count('id'),
+    ).filter(
+        record_count__gt=1
+    ).order_by('-record_count')[:50]
+    
+    results = []
+    for dup in duplicates:
+        patients = GlobalPatient.objects.filter(
+            first_name=dup['first_name'],
+            last_name=dup['last_name'],
+            date_of_birth=dup['date_of_birth'],
+        ).prefetch_related('facility_profiles')[:5]
+        
+        results.append({
+            'name': f"{dup['first_name']} {dup['last_name']}",
+            'date_of_birth': dup['date_of_birth'].isoformat() if dup['date_of_birth'] else None,
+            'record_count': dup['record_count'],
+            'records': [
+                {
+                    'id': str(p.id),
+                    'facilities': [
+                        {
+                            'facility': fp.facility.name,
+                            'local_patient_id': fp.local_patient_id,
+                        }
+                        for fp in p.facility_profiles.all()
+                    ],
+                    'ghana_health_id': p.ghana_health_id,
+                }
+                for p in patients
+            ]
+        })
+    
+    return Response({
+        'potential_duplicates': len(results),
+        'duplicates': results,
     })

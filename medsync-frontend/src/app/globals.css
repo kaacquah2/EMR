@@ -18,6 +18,64 @@
   --gray-300: #CBD5E1;
   --gray-100: #F1F5F9;
   --purple-700: #6D28D9;
+
+  /* Dark mode variables */
+  --card: 0 0% 100%;
+  --card-foreground: 222.2 84% 4.9%;
+  --popover: 0 0% 100%;
+  --popover-foreground: 222.2 84% 4.9%;
+  --primary: 166 56% 30%;
+  --primary-foreground: 210 40% 98%;
+  --secondary: 210 40% 96.1%;
+  --secondary-foreground: 222.2 47.4% 11.2%;
+  --muted: 210 40% 96.1%;
+  --muted-foreground: 215.4 16.3% 46.9%;
+  --accent: 210 40% 96.1%;
+  --accent-foreground: 222.2 47.4% 11.2%;
+  --destructive: 0 84.2% 60.2%;
+  --destructive-foreground: 210 40% 98%;
+  --border: 214.3 31.8% 91.4%;
+  --input: 214.3 31.8% 91.4%;
+  --ring: 166 56% 30%;
+}
+
+.dark {
+  --background: #0F172A;
+  --foreground: #F5F3EE;
+  --navy-900: #1A2E47;
+  --navy-700: #2D4A6F;
+  --blue-500: #3B7FA6;
+  --teal-500: #1B9BA5;
+  --teal-400: #2DBDC9;
+  --cream-bg: #0F172A;
+  --red-600: #EF5350;
+  --amber-600: #FFA726;
+  --green-600: #4CAF50;
+  --gray-900: #F5F3EE;
+  --gray-700: #B0BEC5;
+  --gray-500: #78909C;
+  --gray-300: #455A64;
+  --gray-100: #263238;
+  --purple-700: #9C27B0;
+
+  /* Dark mode card variables */
+  --card: 222.2 84% 4.9%;
+  --card-foreground: 210 40% 98%;
+  --popover: 222.2 84% 4.9%;
+  --popover-foreground: 210 40% 98%;
+  --primary: 166 56% 45%;
+  --primary-foreground: 222.2 84% 4.9%;
+  --secondary: 217.2 32.6% 17.5%;
+  --secondary-foreground: 210 40% 98%;
+  --muted: 217.2 32.6% 17.5%;
+  --muted-foreground: 215 20.2% 65.1%;
+  --accent: 217.2 32.6% 17.5%;
+  --accent-foreground: 210 40% 98%;
+  --destructive: 0 62.8% 30.6%;
+  --destructive-foreground: 210 40% 98%;
+  --border: 217.2 32.6% 17.5%;
+  --input: 217.2 32.6% 17.5%;
+  --ring: 166 56% 45%;
 }
 
 @theme inline {
@@ -42,9 +100,18 @@ body {
   font-family: 'DM Sans', system-ui, sans-serif;
 }
 
+.dark body {
+  background: var(--cream-bg);
+  color: var(--gray-900);
+}
+
 /* Dashboard app: main content area background (subtle gradient, not flat cream) */
 .dashboard-main {
   background: linear-gradient(165deg, #F5F3EE 0%, #F0F4F8 50%, #EDF2F7 100%);
+}
+
+.dark .dashboard-main {
+  background: linear-gradient(165deg, #0F172A 0%, #1A2835 50%, #1A2E47 100%);
 }
 
 /* Page header: title + optional description with accent line. Use on any dashboard page. */
@@ -53,19 +120,43 @@ body {
   border-bottom: 2px solid transparent;
   border-image: linear-gradient(90deg, var(--teal-500) 0%, var(--navy-900) 100%) 1;
 }
+.dark .page-header {
+  border-image: linear-gradient(90deg, var(--teal-400) 0%, var(--navy-700) 100%) 1;
+}
+
 .page-header-title {
   font-family: var(--font-display), 'Sora', system-ui, sans-serif;
   font-size: 1.875rem;
   font-weight: 700;
   color: var(--gray-900);
 }
+.dark .page-header-title {
+  color: var(--gray-900);
+}
+
 .page-header-desc {
   margin-top: 0.25rem;
   font-size: 0.875rem;
   color: var(--gray-500);
 }
+.dark .page-header-desc {
+  color: var(--gray-500);
+}
 
 /* Card accents: use <Card accent="teal"|"navy"|"green"|"amber"> for a left border. */
+
+/* ---- Utility: text shadow (extracted from AuthLayout inline styles) ---- */
+.text-shadow-sm { text-shadow: 0 1px 2px rgba(0,0,0,0.35); }
+.text-shadow-md { text-shadow: 0 2px 4px rgba(0,0,0,0.45); }
+.text-shadow-lg { text-shadow: 0 1px 3px rgba(0,0,0,0.4); }
+
+/* ---- Utility: Sidebar background pattern ---- */
+.sidebar-bg {
+  background-image:
+    url("data:image/svg+xml,%3Csvg width='24' height='24' viewBox='0 0 24 24' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M11 8h2v8h-2zM8 11h8v2H8z' fill='%23ffffff' fill-opacity='0.03'/%3E%3C/svg%3E"),
+    linear-gradient(180deg, #0C1F3D 0%, #0f2847 50%, #0C1F3D 100%);
+  background-color: #0C1F3D;
+}
 
 /* Login page: form enter and step transition */
 @keyframes login-form-enter {

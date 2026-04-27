@@ -34,7 +34,15 @@ class Patient(models.Model):
     blood_group = models.CharField(max_length=10, choices=BLOOD_GROUPS, default="unknown")
     registered_at = models.ForeignKey(Hospital, on_delete=models.PROTECT, related_name="+")
     created_by = models.ForeignKey(User, on_delete=models.PROTECT)
+    is_archived = models.BooleanField(default=False, db_index=True)
     created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        indexes = [
+            models.Index(fields=["full_name"]),
+            models.Index(fields=["is_archived", "registered_at"]),
+        ]
 
 
 class Allergy(models.Model):
@@ -70,6 +78,12 @@ class PatientAdmission(models.Model):
     discharge_reason = models.TextField(blank=True, null=True)
     created_at = models.DateTimeField(auto_now_add=True)
 
+    class Meta:
+        indexes = [
+            models.Index(fields=['ward', 'discharged_at'], name='adm_ward_discharged_idx'),
+            models.Index(fields=['hospital', '-admitted_at'], name='adm_hospital_admitted_idx'),
+        ]
+
 
 class ClinicalAlert(models.Model):
     SEVERITY = [
@@ -91,6 +105,7 @@ class ClinicalAlert(models.Model):
     status = models.CharField(max_length=20, choices=STATUS, default="active")
     created_by = models.ForeignKey(User, on_delete=models.PROTECT)
     created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
     resolved_at = models.DateTimeField(null=True, blank=True)
     resolved_by = models.ForeignKey(
         User, null=True, blank=True, on_delete=models.SET_NULL, related_name="+"
@@ -158,7 +173,20 @@ class Invoice(models.Model):
     paid_at = models.DateTimeField(null=True, blank=True)
 
     class Meta:
-        indexes = [models.Index(fields=["hospital", "-created_at"])]
+        indexes = [
+            models.Index(fields=["hospital", "-created_at"]),
+            models.Index(fields=["patient", "-created_at"]),
+        ]
+
+
+class InvoiceItem(models.Model):
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    invoice = models.ForeignKey(Invoice, on_delete=models.CASCADE, related_name="items")
+    description = models.CharField(max_length=255)
+    quantity = models.IntegerField(default=1)
+    unit_price = models.IntegerField(default=0)  # in cents
+    service_type = models.CharField(max_length=50, blank=True, null=True)
+    created_at = models.DateTimeField(auto_now_add=True)
 
 
 class Appointment(models.Model):
@@ -174,7 +202,13 @@ class Appointment(models.Model):
         ("follow_up", "Follow-up"),
         ("consultation", "Consultation"),
         ("procedure", "Procedure"),
+        ("walk_in", "Walk-in"),
         ("other", "Other"),
+    ]
+    URGENCY_CHOICES = [
+        ("routine", "Routine"),
+        ("urgent", "Urgent"),
+        ("emergency", "Emergency"),
     ]
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     patient = models.ForeignKey(Patient, on_delete=models.CASCADE)
@@ -196,8 +230,45 @@ class Appointment(models.Model):
         null=True,
         help_text="Reason for unmarking a no-show (if doctor overrides)"
     )
+    # PHASE 7.4: Walk-in queue fields
+    queue_position = models.PositiveIntegerField(null=True, blank=True, help_text="Queue position for walk-in appointments")
+    urgency = models.CharField(max_length=20, choices=URGENCY_CHOICES, default="routine", help_text="Urgency level of appointment")
+    reason = models.TextField(blank=True, null=True, help_text="Reason for visit")
     created_by = models.ForeignKey(User, on_delete=models.PROTECT)
     created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    
+    # Emergency Department Triage fields
+    TRIAGE_COLOR_CHOICES = [
+        ('red', 'RED - Immediate (<5min)'),
+        ('yellow', 'YELLOW - Urgent (<30min)'),
+        ('green', 'GREEN - Less Urgent (<2hr)'),
+        ('blue', 'BLUE - Non-Urgent (routine)'),
+    ]
+    triage_color = models.CharField(
+        max_length=10, 
+        choices=TRIAGE_COLOR_CHOICES, 
+        null=True, 
+        blank=True,
+        help_text="Emergency triage color code (red=immediate, yellow=urgent, green=less urgent, blue=non-urgent)"
+    )
+    triage_assessed_at = models.DateTimeField(null=True, blank=True, help_text="Timestamp when triage assessment was completed")
+    triaged_by = models.ForeignKey(
+        User, 
+        on_delete=models.SET_NULL, 
+        null=True, 
+        blank=True, 
+        related_name='triage_assessments',
+        help_text="User (doctor/nurse) who performed triage assessment"
+    )
+    chief_complaint = models.TextField(blank=True, null=True, help_text="Primary reason for emergency visit")
+    triage_vitals = models.JSONField(
+        null=True, 
+        blank=True,
+        help_text="Vital signs captured during triage (BP, HR, RR, SpO2, temp, pain_scale)"
+    )
+    ed_arrival_time = models.DateTimeField(null=True, blank=True, help_text="Time patient arrived to Emergency Department")
+    ed_room_assignment = models.CharField(max_length=50, blank=True, null=True, help_text="Assigned ED room/bed (e.g., 'ED-1', 'Trauma Bay 2')")
 
     class Meta:
         indexes = [

@@ -29,6 +29,14 @@ os.environ["DEBUG"] = "True"
 if "SECRET_KEY" not in os.environ:
     os.environ["SECRET_KEY"] = f"test-{secrets.token_hex(32)}"
 
+if "AUDIT_LOG_SIGNING_KEY" not in os.environ:
+    os.environ["AUDIT_LOG_SIGNING_KEY"] = secrets.token_hex(32)
+
+if "FIELD_ENCRYPTION_KEY" not in os.environ:
+    # 32-byte key base64 encoded or just raw hex for testing
+    import base64
+    os.environ["FIELD_ENCRYPTION_KEY"] = base64.urlsafe_b64encode(secrets.token_bytes(32)).decode('utf-8')
+
 django.setup()
 
 pytest_plugins = ["pytest_django"]

@@ -11,7 +11,6 @@ Expands audit logging to capture:
 
 from core.models import AuditLog, User
 from django.utils import timezone
-from django.db import models
 from api.utils import sanitize_audit_resource_id, get_client_ip
 import json
 import re
@@ -32,14 +31,14 @@ EXTENDED_AUDIT_ACTIONS = [
     ('PASSWORD_RESET_REQUEST', 'Password Reset Requested'),
     ('PASSWORD_RESET', 'Password Reset Completed'),
     ('PASSWORD_RESET_FAILED', 'Password Reset Failed'),
-    
+
     # Account security
     ('ACCOUNT_LOCKED', 'Account Locked'),
     ('ACCOUNT_UNLOCKED', 'Account Unlocked'),
     ('ACCOUNT_ACTIVATED', 'Account Activated'),
     ('MFA_ENABLED', 'MFA Enabled'),
     ('MFA_DISABLED', 'MFA Disabled'),
-    
+
     # Data access
     ('VIEW', 'View Record'),
     ('VIEW_PATIENT_RECORD', 'View Patient Record'),
@@ -47,34 +46,34 @@ EXTENDED_AUDIT_ACTIONS = [
     ('SEARCH_PATIENT', 'Patient Search'),
     ('EXPORT_DATA', 'Data Export'),
     ('VIEW_AUDIT_LOG', 'Audit Log Accessed'),
-    
+
     # Data modification
     ('CREATE', 'Create Record'),
     ('UPDATE', 'Update Record'),
     ('DELETE', 'Delete Record'),
     ('BULK_IMPORT', 'Bulk Import'),
-    
+
     # Sensitive operations
     ('BREAK_GLASS_ACCESS', 'Emergency Break-Glass Access'),
     ('CROSS_FACILITY_ACCESS', 'Cross-Facility Data Access'),
     ('ROLE_CHANGE', 'User Role Changed'),
     ('HOSPITAL_CHANGE', 'Hospital Assignment Changed'),
     ('PERMISSIONS_MODIFIED', 'Permissions Modified'),
-    
+
     # Admin actions
     ('USER_CREATED', 'User Created'),
     ('USER_DEACTIVATED', 'User Deactivated'),
     ('USER_REACTIVATED', 'User Reactivated'),
     ('HOSPITAL_CREATED', 'Hospital Created'),
     ('HOSPITAL_UPDATED', 'Hospital Updated'),
-    
+
     # Security events
     ('RATE_LIMIT_HIT', 'Rate Limit Exceeded'),
     ('PERMISSION_DENIED', 'Permission Denied'),
     ('SUSPICIOUS_ACTIVITY', 'Suspicious Activity Detected'),
     ('FAILED_OBJECT_ACCESS', 'Object Access Denied'),
     ('VIEW_AS_HOSPITAL', 'View As Hospital'),
-    
+
     # Error logging
     ('ERROR', 'Application Error'),
 ]
@@ -218,7 +217,7 @@ def audit_log_extended(
 def log_authentication_event(user_email, success, request, error_reason=None):
     """
     PHASE 2: Log login attempts (successful and failed).
-    
+
     Args:
         user_email: Email address attempting login
         success: Boolean - was login successful
@@ -229,13 +228,13 @@ def log_authentication_event(user_email, success, request, error_reason=None):
         user = User.objects.get(email=user_email) if success else None
     except User.DoesNotExist:
         user = None
-    
+
     action = 'LOGIN' if success else 'LOGIN_FAILED'
-    
+
     extra_data = {}
     if not success and error_reason:
         extra_data['reason'] = error_reason
-    
+
     audit_log_extended(
         user=user,
         action=action,
@@ -269,18 +268,18 @@ def log_mfa_event(user, success, request, error_reason=None, extra_data=None):
 def log_rate_limit_exceeded(request, action_type):
     """
     PHASE 2: Log rate limiting events.
-    
+
     Args:
         request: HTTP request
         action_type: What action was rate-limited (login, mfa, password_reset, etc.)
     """
     user = request.user if request.user and request.user.is_authenticated else None
-    
+
     extra_data = {
         'action_type': action_type,
         'ip_address': get_client_ip(request),
     }
-    
+
     audit_log_extended(
         user=user,
         action='RATE_LIMIT_HIT',
@@ -294,7 +293,7 @@ def log_rate_limit_exceeded(request, action_type):
 def log_permission_denied(user, action, resource_type, resource_id, reason, request):
     """
     PHASE 2: Log failed access attempts (for security monitoring).
-    
+
     Args:
         user: User attempting access
         action: What they tried to do
@@ -304,7 +303,7 @@ def log_permission_denied(user, action, resource_type, resource_id, reason, requ
         request: HTTP request
     """
     extra_data = {'denied_reason': reason}
-    
+
     audit_log_extended(
         user=user,
         action='FAILED_OBJECT_ACCESS',
@@ -320,7 +319,7 @@ def log_permission_denied(user, action, resource_type, resource_id, reason, requ
 def log_sensitive_operation(user, operation, resource_type, resource_id, request, details=None):
     """
     PHASE 2-3: Log sensitive operations (break-glass, cross-facility, role changes, etc.).
-    
+
     Args:
         user: User performing operation
         operation: Type (BREAK_GLASS_ACCESS, ROLE_CHANGE, etc.)
@@ -330,10 +329,10 @@ def log_sensitive_operation(user, operation, resource_type, resource_id, request
         details: Additional context dict
     """
     extra_data = details or {}
-    
+
     # Always include IP for sensitive ops
     extra_data['ip_address'] = get_client_ip(request)
-    
+
     audit_log_extended(
         user=user,
         action=operation,
@@ -347,7 +346,7 @@ def log_sensitive_operation(user, operation, resource_type, resource_id, request
 def log_bulk_operation(user, operation_type, resource_type, count, request, details=None):
     """
     PHASE 2: Log bulk operations (imports, exports, deletions).
-    
+
     Args:
         user: User performing operation
         operation_type: BULK_IMPORT, EXPORT_DATA, etc.
@@ -358,7 +357,7 @@ def log_bulk_operation(user, operation_type, resource_type, count, request, deta
     """
     extra_data = details or {}
     extra_data['item_count'] = count
-    
+
     audit_log_extended(
         user=user,
         action=operation_type,
@@ -375,24 +374,24 @@ def log_bulk_operation(user, operation_type, resource_type, count, request, deta
 def get_user_activity_summary(user, days=30):
     """
     PHASE 3: Generate user activity report for compliance.
-    
+
     Returns:
         dict with user's actions over past N days
     """
     from datetime import timedelta
-    
+
     cutoff = timezone.now() - timedelta(days=days)
-    
+
     logs = AuditLog.objects.filter(
         user=user,
         timestamp__gte=cutoff,
     )
-    
+
     actions = {}
     for log in logs:
         action = log.action
         actions[action] = actions.get(action, 0) + 1
-    
+
     return {
         'user_id': str(user.id),
         'email': user.email,
@@ -407,19 +406,19 @@ def get_user_activity_summary(user, days=30):
 def detect_suspicious_activity(user, request):
     """
     PHASE 3: Detect suspicious patterns (multiple failed logins, rapid actions, etc.).
-    
+
     Returns:
         bool: True if suspicious activity detected
     """
     from datetime import timedelta
-    
+
     # Check for multiple failed logins in last 30 minutes
     recent_failures = AuditLog.objects.filter(
         user=user,
         action='LOGIN_FAILED',
         timestamp__gte=timezone.now() - timedelta(minutes=30),
     ).count()
-    
+
     if recent_failures >= 3:
         log_sensitive_operation(
             user=user,
@@ -430,13 +429,13 @@ def detect_suspicious_activity(user, request):
             details={'activity': 'multiple_failed_logins', 'count': recent_failures},
         )
         return True
-    
+
     # Check for rapid API calls (more than 100 in 5 minutes)
     rapid_calls = AuditLog.objects.filter(
         user=user,
         timestamp__gte=timezone.now() - timedelta(minutes=5),
     ).count()
-    
+
     if rapid_calls > 100:
         log_sensitive_operation(
             user=user,
@@ -447,36 +446,36 @@ def detect_suspicious_activity(user, request):
             details={'activity': 'rapid_api_calls', 'count': rapid_calls},
         )
         return True
-    
+
     return False
 
 
 def export_audit_logs_for_compliance(hospital=None, days=90):
     """
     PHASE 3: Export audit logs for compliance/HIPAA reporting.
-    
+
     Args:
         hospital: Optional hospital to filter (None = all)
         days: Number of days to include (default 90 for HIPAA quarterly)
-    
+
     Returns:
         CSV-formatted string of audit logs
     """
     from datetime import timedelta
     import csv
     from io import StringIO
-    
+
     cutoff = timezone.now() - timedelta(days=days)
-    
+
     logs = AuditLog.objects.filter(timestamp__gte=cutoff)
-    
+
     if hospital:
         logs = logs.filter(hospital=hospital)
-    
+
     # Build CSV
     output = StringIO()
     writer = csv.writer(output)
-    
+
     # Header
     writer.writerow([
         'Timestamp',
@@ -489,13 +488,13 @@ def export_audit_logs_for_compliance(hospital=None, days=90):
         'Status',
         'Notes',
     ])
-    
+
     # Data rows
     for log in logs:
         notes = ''
         if log.extra_data:
             notes = json.dumps(log.extra_data)[:200]  # Truncate for CSV
-        
+
         writer.writerow([
             log.timestamp.isoformat(),
             log.user.email if log.user else 'SYSTEM',
@@ -507,5 +506,5 @@ def export_audit_logs_for_compliance(hospital=None, days=90):
             'OK',
             notes,
         ])
-    
+
     return output.getvalue()

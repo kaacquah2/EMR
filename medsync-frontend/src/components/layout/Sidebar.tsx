@@ -4,14 +4,137 @@ import React, { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useAuth } from "@/lib/auth-context";
+import { useSidebar } from "@/lib/sidebar-context";
 import { Badge } from "@/components/ui/badge";
 import { getNavigation } from "@/lib/navigation";
 import { useApi } from "@/hooks/use-api";
 import { usePollWhenVisible } from "@/hooks/use-poll-when-visible";
+import { useNurseSidebarBadges } from "@/hooks/use-nurse-sidebar-badges";
+import { ShiftWidget } from "@/components/features/ShiftWidget";
+import { ThemeToggle } from "@/components/ui/ThemeToggle";
+import {
+  LayoutDashboard,
+  Users,
+  Calendar,
+  FileText,
+  Activity,
+  AlertTriangle,
+  Building2,
+  Shield,
+  Brain,
+  Bed,
+  Pill,
+  Beaker,
+  ClipboardList,
+  Search,
+  UserCog,
+  Heart,
+  Stethoscope,
+  LogOut,
+  type LucideIcon,
+} from "lucide-react";
 
 import { roleAccentColours } from "@/components/ui/badge";
 
 type NavRow = { href: string; label: string; badge?: React.ReactNode; tag?: React.ReactNode };
+
+// Icon mapping for navigation items
+const navIconMap: Record<string, LucideIcon> = {
+  // Common
+  "Dashboard": LayoutDashboard,
+  "Patient Search": Search,
+  "Patients": Users,
+  "Appointments": Calendar,
+  "Admissions": Bed,
+  "Alerts": AlertTriangle,
+  "Worklist": ClipboardList,
+  
+  // Doctor
+  "My Encounters": FileText,
+  "AI Suite": Brain,
+  "Referrals": Activity,
+  
+  // Nurse
+  "Ward Patients": Users,
+  "Batch Vitals": Heart,
+  "Pending Dispense": Pill,
+  "Nursing Notes": FileText,
+  
+  // Lab Tech
+  "Lab Orders": Beaker,
+  "Pending Results": ClipboardList,
+  
+  // Receptionist
+  "Register Patient": UserCog,
+  "Check-in": Calendar,
+  
+  // Hospital Admin
+  "Staff Management": Users,
+  "RBAC Review": Shield,
+  "Audit Logs": FileText,
+  "Reports": ClipboardList,
+  
+  // Super Admin
+  "Hospitals": Building2,
+  "Cross-Facility Monitor": Activity,
+  "User Management": Users,
+  "Break-glass review": Shield,
+  "Facilities": Building2,
+  "System health": Heart,
+  "AI integration": Brain,
+};
+
+// Get icon for a navigation label
+function getNavIcon(label: string): LucideIcon {
+  return navIconMap[label] || Stethoscope;
+}
+
+// NavItem component for consistent rendering
+interface NavItemProps {
+  href: string;
+  label: string;
+  isActive: boolean;
+  collapsed: boolean;
+  badge?: React.ReactNode;
+  tag?: React.ReactNode;
+  onClick?: () => void;
+  icon: LucideIcon;
+}
+
+function NavItem({ href, label, isActive, collapsed, badge, tag, onClick, icon: Icon }: NavItemProps) {
+  return (
+    <Link
+      href={href}
+      onClick={onClick}
+      title={collapsed ? label : undefined}
+      className={
+        "group relative flex items-center rounded-lg transition-all duration-150 " +
+        (collapsed 
+          ? "justify-center px-2 py-2.5 " 
+          : "gap-3 px-3 py-2.5 ") +
+        (isActive
+          ? (collapsed 
+              ? "bg-[rgba(11,138,150,0.2)] text-white shadow-[inset_0_0_0_1px_rgba(14,175,190,0.15)]"
+              : "border-l-[3px] border-[#0EAFBE] bg-[rgba(11,138,150,0.2)] text-white shadow-[inset_0_0_0_1px_rgba(14,175,190,0.15)]")
+          : "text-white/92 hover:bg-[#1A3A5C]/80 hover:text-white")
+      }
+    >
+      <Icon className={collapsed ? "h-5 w-5" : "h-4 w-4 flex-shrink-0"} />
+      {!collapsed && <span className="text-sm font-medium truncate">{label}</span>}
+      {!collapsed && badge}
+      {!collapsed && tag}
+      
+      {/* Tooltip on hover when collapsed */}
+      {collapsed && (
+        <div className="pointer-events-none absolute left-full ml-2 whitespace-nowrap rounded-md bg-[#1A3A5C] px-2.5 py-1.5 text-xs font-medium text-white opacity-0 shadow-lg transition-opacity group-hover:opacity-100 z-50">
+          {label}
+          {/* Arrow */}
+          <div className="absolute left-0 top-1/2 -ml-1 -translate-y-1/2 border-4 border-transparent border-r-[#1A3A5C]" />
+        </div>
+      )}
+    </Link>
+  );
+}
 
 const AI_NEW_TAG_KEY = "medsync_ai_integration_new_seen";
 
@@ -19,7 +142,7 @@ export function Sidebar() {
   const pathname = usePathname();
   const { user, logout, viewAsHospitalId } = useAuth();
   const api = useApi();
-  const [collapsed, setCollapsed] = useState(false);
+  const { collapsed, setCollapsed } = useSidebar();
   const [breakGlassUnreviewed, setBreakGlassUnreviewed] = useState<number | null>(null);
   const [haAlertCount, setHaAlertCount] = useState<number | null>(null);
   const [haRbacOverdue, setHaRbacOverdue] = useState<number | null>(null);
@@ -32,10 +155,20 @@ export function Sidebar() {
     }
   });
 
+  // Fetch nurse sidebar badges
+  const nurseBadges = useNurseSidebarBadges(user?.role === "nurse");
+
   const role = user?.role ?? "";
   const viewAsActive = role === "super_admin" && !!viewAsHospitalId;
   const nav = getNavigation(role, { viewAsActive });
   const roleLabel = role ? role.replace(/_/g, " ") : "";
+
+  // UX-24: listen for hamburger button events from TopBar
+  useEffect(() => {
+    const handler = () => setCollapsed(false);
+    document.addEventListener("sidebar:open", handler);
+    return () => document.removeEventListener("sidebar:open", handler);
+  }, [setCollapsed]);
 
   useEffect(() => {
     if (role !== "super_admin") return;
@@ -149,20 +282,27 @@ export function Sidebar() {
   if (!user) return null;
 
   return (
-    <aside
-      className={
-        "fixed left-0 top-0 z-40 flex h-screen flex-col transition-all duration-200 " +
-        (collapsed ? "w-12" : "w-[260px]")
-      }
-      style={{
-        backgroundImage: `url("data:image/svg+xml,%3Csvg width='24' height='24' viewBox='0 0 24 24' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M11 8h2v8h-2zM8 11h8v2H8z' fill='%23ffffff' fill-opacity='0.03'/%3E%3C/svg%3E"), linear-gradient(180deg, #0C1F3D 0%, #0f2847 50%, #0C1F3D 100%)`,
-        backgroundColor: "#0C1F3D",
-      }}
-    >
-      {/* Teal accent strip on right edge when collapsed */}
-      {collapsed && <div className="absolute right-0 top-0 h-full w-0.5 bg-[#0B8A96]/50" aria-hidden />}
+    <>
+      {/* Mobile overlay backdrop */}
+      {!collapsed && (
+        <div
+          className="fixed inset-0 z-30 bg-black/40 lg:hidden"
+          onClick={() => setCollapsed(true)}
+          aria-hidden="true"
+        />
+      )}
+      <aside
+        className={
+          "sidebar-bg fixed left-0 top-0 z-40 flex h-screen flex-col transition-all duration-200 " +
+          (collapsed
+            ? "w-16 -translate-x-full lg:translate-x-0"
+            : "w-[260px]")
+        }
+      >
+        {/* Teal accent strip on right edge when collapsed */}
+        {collapsed && <div className="absolute right-0 top-0 h-full w-0.5 bg-[var(--teal-500)]/50" aria-hidden="true" />}
 
-      <div className="flex h-14 items-center justify-between border-b border-[#1A3A5C] px-4">
+      <div className={"flex h-14 items-center border-b border-[#1A3A5C] " + (collapsed ? "justify-center px-2" : "justify-between px-4")}>
         {!collapsed && (
           <Link href={brandHref} className="font-sora text-lg font-bold text-white hover:text-[#BAE6FD] transition-colors">
             MedSync
@@ -171,7 +311,7 @@ export function Sidebar() {
         <button
           type="button"
           onClick={() => setCollapsed(!collapsed)}
-          className="rounded-lg p-1.5 text-white/90 hover:bg-[#1A3A5C] hover:text-white transition-colors"
+          className={"rounded-lg p-1.5 text-white/90 hover:bg-[#1A3A5C] hover:text-white transition-colors " + (collapsed ? "mx-auto" : "")}
           aria-label={collapsed ? "Expand sidebar" : "Collapse sidebar"}
         >
           <svg
@@ -212,19 +352,15 @@ export function Sidebar() {
               {superAdminSections.system.map((row) => {
                 const isActive = pathname === row.href || pathname.startsWith(row.href + "/");
                 return (
-                  <Link
+                  <NavItem
                     key={row.href}
                     href={row.href}
-                    className={
-                      "flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-all duration-150 " +
-                      (isActive
-                        ? "border-l-[3px] border-[#0EAFBE] bg-[rgba(11,138,150,0.2)] text-white shadow-[inset_0_0_0_1px_rgba(14,175,190,0.15)]"
-                        : "text-white/92 hover:bg-[#1A3A5C]/80 hover:text-white")
-                    }
-                  >
-                    {collapsed ? <span className="text-lg font-semibold">{row.label[0]}</span> : row.label}
-                    {!collapsed ? row.badge : null}
-                  </Link>
+                    label={row.label}
+                    isActive={isActive}
+                    collapsed={collapsed}
+                    badge={row.badge}
+                    icon={getNavIcon(row.label)}
+                  />
                 );
               })}
             </div>
@@ -238,29 +374,23 @@ export function Sidebar() {
               {superAdminSections.config.map((row) => {
                 const isActive = pathname === row.href || pathname.startsWith(row.href + "/");
                 return (
-                  <Link
+                  <NavItem
                     key={row.href}
                     href={row.href}
-                    onClick={() => {
-                      if (row.href === "/superadmin/ai-integration") {
-                        try {
-                          localStorage.setItem(AI_NEW_TAG_KEY, "1");
-                          setAiNewSeen(true);
-                        } catch {
-                          //
-                        }
+                    label={row.label}
+                    isActive={isActive}
+                    collapsed={collapsed}
+                    tag={row.tag}
+                    icon={getNavIcon(row.label)}
+                    onClick={row.href === "/superadmin/ai-integration" ? () => {
+                      try {
+                        localStorage.setItem(AI_NEW_TAG_KEY, "1");
+                        setAiNewSeen(true);
+                      } catch {
+                        //
                       }
-                    }}
-                    className={
-                      "flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-all duration-150 " +
-                      (isActive
-                        ? "border-l-[3px] border-[#0EAFBE] bg-[rgba(11,138,150,0.2)] text-white shadow-[inset_0_0_0_1px_rgba(14,175,190,0.15)]"
-                        : "text-white/92 hover:bg-[#1A3A5C]/80 hover:text-white")
-                    }
-                  >
-                    {collapsed ? <span className="text-lg font-semibold">{row.label[0]}</span> : row.label}
-                    {!collapsed ? row.tag : null}
-                  </Link>
+                    } : undefined}
+                  />
                 );
               })}
             </div>
@@ -276,18 +406,14 @@ export function Sidebar() {
                   {superAdminSections.clinical.map((row) => {
                     const isActive = pathname === row.href || pathname.startsWith(row.href + "/");
                     return (
-                      <Link
+                      <NavItem
                         key={row.href}
                         href={row.href}
-                        className={
-                          "flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-all duration-150 " +
-                          (isActive
-                            ? "border-l-[3px] border-[#0EAFBE] bg-[rgba(11,138,150,0.2)] text-white shadow-[inset_0_0_0_1px_rgba(14,175,190,0.15)]"
-                            : "text-white/92 hover:bg-[#1A3A5C]/80 hover:text-white")
-                        }
-                      >
-                        {collapsed ? <span className="text-lg font-semibold">{row.label[0]}</span> : row.label}
-                      </Link>
+                        label={row.label}
+                        isActive={isActive}
+                        collapsed={collapsed}
+                        icon={getNavIcon(row.label)}
+                      />
                     );
                   })}
                 </div>
@@ -311,19 +437,15 @@ export function Sidebar() {
                     </span>
                   ) : null;
                 return (
-                  <Link
+                  <NavItem
                     key={item.href}
                     href={item.href}
-                    className={
-                      "flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-all duration-150 " +
-                      (isActive
-                        ? "border-l-[3px] border-[#0EAFBE] bg-[rgba(11,138,150,0.2)] text-white shadow-[inset_0_0_0_1px_rgba(14,175,190,0.15)]"
-                        : "text-white/92 hover:bg-[#1A3A5C]/80 hover:text-white")
-                    }
-                  >
-                    {collapsed ? <span className="text-lg font-semibold">{item.label[0]}</span> : item.label}
-                    {!collapsed ? alertBadge : null}
-                  </Link>
+                    label={item.label}
+                    isActive={isActive}
+                    collapsed={collapsed}
+                    badge={alertBadge}
+                    icon={getNavIcon(item.label)}
+                  />
                 );
               })}
             </div>
@@ -342,19 +464,15 @@ export function Sidebar() {
                     </span>
                   ) : null;
                 return (
-                  <Link
+                  <NavItem
                     key={item.href}
                     href={item.href}
-                    className={
-                      "flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-all duration-150 " +
-                      (isActive
-                        ? "border-l-[3px] border-[#0EAFBE] bg-[rgba(11,138,150,0.2)] text-white shadow-[inset_0_0_0_1px_rgba(14,175,190,0.15)]"
-                        : "text-white/92 hover:bg-[#1A3A5C]/80 hover:text-white")
-                    }
-                  >
-                    {collapsed ? <span className="text-lg font-semibold">{item.label[0]}</span> : item.label}
-                    {!collapsed ? rbacBadge : null}
-                  </Link>
+                    label={item.label}
+                    isActive={isActive}
+                    collapsed={collapsed}
+                    badge={rbacBadge}
+                    icon={getNavIcon(item.label)}
+                  />
                 );
               })}
             </div>
@@ -362,25 +480,50 @@ export function Sidebar() {
         ) : (
           nav.map((item) => {
             const isActive = pathname === item.href || pathname.startsWith(item.href + "/");
+
+            // Add badges for nurse-specific items
+            let itemBadge: React.ReactNode = null;
+            if (role === "nurse" && !collapsed) {
+              if (item.href === "/patients/vitals/new" && nurseBadges.vitals_overdue_count > 0) {
+                itemBadge = (
+                  <span className="ml-auto rounded-full bg-[#E24B4A]/90 px-2 py-0.5 text-[11px] font-semibold text-white">
+                    {nurseBadges.vitals_overdue_count}
+                  </span>
+                );
+              } else if (item.href === "/worklist/dispense" && nurseBadges.pending_dispense_count > 0) {
+                itemBadge = (
+                  <span className="ml-auto rounded-full bg-[#EF9F27]/90 px-2 py-0.5 text-[11px] font-semibold text-[#0C1F3D]">
+                    {nurseBadges.pending_dispense_count}
+                  </span>
+                );
+              } else if (item.href === "/alerts" && nurseBadges.active_alerts_count > 0) {
+                itemBadge = (
+                  <span className="ml-auto rounded-full bg-[#E24B4A]/90 px-2 py-0.5 text-[11px] font-semibold text-white">
+                    {nurseBadges.active_alerts_count}
+                  </span>
+                );
+              }
+            }
+
             return (
-              <Link
+              <NavItem
                 key={item.href}
                 href={item.href}
-                className={
-                  "flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-all duration-150 " +
-                  (isActive
-                    ? "border-l-[3px] border-[#0EAFBE] bg-[rgba(11,138,150,0.2)] text-white shadow-[inset_0_0_0_1px_rgba(14,175,190,0.15)]"
-                    : "text-white/92 hover:bg-[#1A3A5C]/80 hover:text-white")
-                }
-              >
-                {collapsed ? <span className="text-lg font-semibold">{item.label[0]}</span> : item.label}
-              </Link>
+                label={item.label}
+                isActive={isActive}
+                collapsed={collapsed}
+                badge={itemBadge}
+                icon={getNavIcon(item.label)}
+              />
             );
           })
         )}
       </nav>
 
-      <div className="border-t border-[#1A3A5C] border-t-[#0B8A96]/30 p-4">
+      {/* Shift widget for nurses */}
+      {role === "nurse" && !collapsed && <ShiftWidget />}
+
+      <div className={"border-t border-[#1A3A5C] border-t-[#0B8A96]/30 " + (collapsed ? "p-2" : "p-4")}>
         {!collapsed && (
           <div className="mb-2 flex items-center gap-2">
             <div className="flex h-8 w-8 items-center justify-center rounded-full bg-[#0EAFBE] text-sm font-semibold text-white">
@@ -389,16 +532,42 @@ export function Sidebar() {
             <span className="truncate text-sm text-white">{user.full_name}</span>
           </div>
         )}
+        {collapsed && (
+          <div className="mb-2 flex justify-center">
+            <div className="flex h-8 w-8 items-center justify-center rounded-full bg-[#0EAFBE] text-sm font-semibold text-white" title={user.full_name}>
+              {user.full_name?.charAt(0) || "U"}
+            </div>
+          </div>
+        )}
         <div className="flex flex-col gap-1.5">
+          {!collapsed && (
+            <div className="mb-2">
+              <ThemeToggle />
+            </div>
+          )}
           <button
             type="button"
             onClick={() => void logout()}
-            className="w-full rounded-lg px-3 py-2 text-left text-sm text-white/92 hover:bg-[#1A3A5C] hover:text-white transition-colors"
+            title={collapsed ? "Log out" : undefined}
+            className={
+              "group relative flex items-center rounded-lg text-white/92 hover:bg-[#1A3A5C] hover:text-white transition-colors " +
+              (collapsed ? "justify-center p-2" : "w-full px-3 py-2 text-left text-sm")
+            }
           >
-            {collapsed ? "Out" : "Log out"}
+            <LogOut className={collapsed ? "h-5 w-5" : "h-4 w-4 mr-2"} />
+            {!collapsed && "Log out"}
+            
+            {/* Tooltip when collapsed */}
+            {collapsed && (
+              <div className="pointer-events-none absolute left-full ml-2 whitespace-nowrap rounded-md bg-[#1A3A5C] px-2.5 py-1.5 text-xs font-medium text-white opacity-0 shadow-lg transition-opacity group-hover:opacity-100 z-50">
+                Log out
+                <div className="absolute left-0 top-1/2 -ml-1 -translate-y-1/2 border-4 border-transparent border-r-[#1A3A5C]" />
+              </div>
+            )}
           </button>
         </div>
       </div>
     </aside>
+    </>
   );
 }

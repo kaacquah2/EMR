@@ -4,6 +4,7 @@ from decimal import Decimal, InvalidOperation
 from urllib.parse import urlparse
 
 from django.conf import settings
+from django.db import transaction
 from django.db.models import Case, IntegerField, Q, When
 from django.utils import timezone
 from rest_framework import status
@@ -16,8 +17,9 @@ from api.utils import (
     get_effective_hospital,
     get_lab_order_queryset,
 )
+from api.state_machines import validate_lab_order_transition, StateMachineError
 from patients.models import ClinicalAlert
-from records.models import LabOrder, LabResult
+from records.models import LabResult
 
 MAX_ATTACHMENT_SIZE_BYTES = 10 * 1024 * 1024  # 10MB
 ALLOWED_ATTACHMENT_CONTENT_TYPE = "application/pdf"
@@ -231,7 +233,7 @@ def lab_orders_list(request):
     orders, normalized_tab = _status_tab_filter(orders, tab)
     orders = orders.order_by("urgency_rank", "record__created_at")
     total = orders.count()
-    page = orders[offset : offset + limit]
+    page = orders[offset: offset + limit]
     data = [_lab_order_payload(o) for o in page]
 
     stat_count = orders.filter(urgency="stat").count()
@@ -295,6 +297,16 @@ def lab_order_detail(request, order_id):
     }
     if next_status not in {"collected", "in_progress", "verified"}:
         return Response({"message": "Unsupported status transition"}, status=status.HTTP_400_BAD_REQUEST)
+    
+    # Validate state transition
+    try:
+        validate_lab_order_transition(lab_order.status, next_status)
+    except StateMachineError as e:
+        return Response(
+            {"message": str(e)},
+            status=status.HTTP_400_BAD_REQUEST
+        )
+    
     if next_status not in transition.get(lab_order.status, set()):
         return Response(
             {"message": f"Invalid transition from {lab_order.status} to {next_status}"},
@@ -332,10 +344,13 @@ def lab_order_result(request, order_id):
             {"message": "Permission denied"},
             status=status.HTTP_403_FORBIDDEN,
         )
+    # Use select_for_update() to prevent race conditions when two lab techs simultaneously
+    # try to update the same order. Lock is held until end of transaction.atomic() block.
     lab_order = (
         get_lab_order_queryset(request.user, get_effective_hospital(request))
         .filter(id=order_id)
         .select_related("record", "record__patient", "record__created_by")
+        .select_for_update()  # Acquire row lock to prevent concurrent updates
         .first()
     )
     if not lab_order:
@@ -348,6 +363,16 @@ def lab_order_result(request, order_id):
             {"message": f"Order must be in_progress before posting result. Current status: {lab_order.status}"},
             status=status.HTTP_400_BAD_REQUEST,
         )
+    
+    # Validate state transition to 'resulted'
+    try:
+        validate_lab_order_transition(lab_order.status, 'resulted')
+    except StateMachineError as e:
+        return Response(
+            {"message": str(e)},
+            status=status.HTTP_400_BAD_REQUEST
+        )
+    
     lab_order.assigned_to = request.user
     lab_order.save(update_fields=["assigned_to"])
     data = request.data
@@ -366,19 +391,7 @@ def lab_order_result(request, order_id):
             status=status.HTTP_400_BAD_REQUEST,
         )
 
-    lab_result, _ = LabResult.objects.get_or_create(
-        lab_order=lab_order,
-        defaults={
-            "record": lab_order.record,
-            "test_name": lab_order.test_name,
-            "status": "pending",
-            "lab_tech": request.user,
-        },
-    )
-    lab_result.result_value = result_value
-    lab_result.reference_range = data.get("reference_range")
-    lab_result.status = "resulted"
-    lab_result.lab_tech = request.user
+    # Validate attachment before entering transaction
     attachment_url = data.get("attachment_url")
     if attachment_url:
         ok, err = _validate_attachment_url(
@@ -388,13 +401,30 @@ def lab_order_result(request, order_id):
         )
         if not ok:
             return Response({"message": err}, status=status.HTTP_400_BAD_REQUEST)
-    lab_result.attachment_url = attachment_url or None
-    lab_result.save()
 
-    now = timezone.now()
-    lab_order.status = "resulted"
-    lab_order.resulted_at = now
-    lab_order.save(update_fields=["status", "resulted_at"])
+    # ATOMICITY: Wrap LabResult creation/update and LabOrder status update in transaction
+    # If either operation fails, both are rolled back to maintain consistency
+    with transaction.atomic():
+        lab_result, _ = LabResult.objects.get_or_create(
+            lab_order=lab_order,
+            defaults={
+                "record": lab_order.record,
+                "test_name": lab_order.test_name,
+                "status": "pending",
+                "lab_tech": request.user,
+            },
+        )
+        lab_result.result_value = result_value
+        lab_result.reference_range = data.get("reference_range")
+        lab_result.status = "resulted"
+        lab_result.lab_tech = request.user
+        lab_result.attachment_url = attachment_url or None
+        lab_result.save()
+
+        now = timezone.now()
+        lab_order.status = "resulted"
+        lab_order.resulted_at = now
+        lab_order.save(update_fields=["status", "resulted_at"])
 
     if critical and critical_notified and lab_order.record and lab_order.record.patient:
         ClinicalAlert.objects.create(
@@ -402,9 +432,9 @@ def lab_order_result(request, order_id):
             hospital=lab_order.record.hospital,
             severity="critical",
             message=(
-                f"Critical lab result for {lab_order.test_name}: {result_value}. "
-                f"Ordering doctor: {lab_order.record.created_by.full_name if lab_order.record.created_by else 'Unknown'}"
-            ),
+                f"Critical lab result for {
+                    lab_order.test_name}: {result_value}. " f"Ordering doctor: {
+                    lab_order.record.created_by.full_name if lab_order.record.created_by else 'Unknown'}"),
             status="active",
             created_by=request.user,
             resource_type="lab_result",
@@ -440,26 +470,26 @@ def lab_results_bulk_submit(request):
             {"message": "Permission denied"},
             status=status.HTTP_403_FORBIDDEN,
         )
-    
+
     results_data = request.data.get("results", [])
     if not results_data:
         return Response(
             {"message": "results array required"},
             status=status.HTTP_400_BAD_REQUEST,
         )
-    
+
     hospital = get_effective_hospital(request)
     details = []
     submitted = 0
     failed = 0
-    
+
     for item in results_data:
         order_id = item.get("order_id")
         if not order_id:
             details.append({"status": "error", "message": "order_id required"})
             failed += 1
             continue
-        
+
         lab_order = get_lab_order_queryset(request.user, hospital).filter(id=order_id).first()
         if not lab_order:
             details.append({
@@ -469,16 +499,16 @@ def lab_results_bulk_submit(request):
             })
             failed += 1
             continue
-        
+
         try:
             if lab_order.status != "in_progress":
                 details.append(
                     {
                         "order_id": order_id,
                         "status": "error",
-                        "message": f"Order must be in_progress before result submit. Current status: {lab_order.status}",
-                    }
-                )
+                        "message": f"Order must be in_progress before result submit. Current status: {
+                            lab_order.status}",
+                    })
                 failed += 1
                 continue
 
@@ -497,7 +527,7 @@ def lab_results_bulk_submit(request):
                     })
                     failed += 1
                     continue
-            
+
             lab_result, _ = LabResult.objects.get_or_create(
                 lab_order=lab_order,
                 defaults={
@@ -518,7 +548,7 @@ def lab_results_bulk_submit(request):
             lab_order.status = "resulted"
             lab_order.resulted_at = timezone.now()
             lab_order.save(update_fields=["assigned_to", "status", "resulted_at"])
-            
+
             details.append({
                 "order_id": order_id,
                 "status": "success",
@@ -532,7 +562,7 @@ def lab_results_bulk_submit(request):
                 "message": str(e)
             })
             failed += 1
-    
+
     audit_log(
         request.user,
         "LAB_BULK_SUBMIT",
@@ -541,12 +571,85 @@ def lab_results_bulk_submit(request):
         hospital,
         request,
     )
-    
+
     return Response({
         "submitted": submitted,
         "failed": failed,
         "details": details,
     }, status=status.HTTP_200_OK if submitted > 0 else status.HTTP_400_BAD_REQUEST)
+
+
+@api_view(["GET"])
+@permission_classes([IsAuthenticated])
+def lab_results_list(request):
+    """List lab results with filtering and pagination."""
+    if request.user.role != "lab_technician":
+        return Response(
+            {"message": "Permission denied"},
+            status=status.HTTP_403_FORBIDDEN,
+        )
+
+    hospital = get_effective_hospital(request)
+
+    # Get query parameters
+    status_filter = request.query_params.get("status", "").split(",")
+    status_filter = [s.strip() for s in status_filter if s.strip()]
+
+    date_from = request.query_params.get("date_from")
+    date_to = request.query_params.get("date_to")
+    limit = int(request.query_params.get("limit", 50))
+    offset = int(request.query_params.get("offset", 0))
+
+    # Build queryset
+    queryset = LabResult.objects.select_related(
+        "lab_order", "lab_order__record", "lab_order__record__patient", "lab_tech"
+    ).filter(lab_order__record__hospital=hospital)
+
+    # Apply filters
+    if status_filter:
+        queryset = queryset.filter(status__in=status_filter)
+
+    if date_from:
+        queryset = queryset.filter(created_at__gte=date_from)
+
+    if date_to:
+        queryset = queryset.filter(created_at__lte=date_to)
+
+    # Order by created_at descending
+    queryset = queryset.order_by("-created_at")
+
+    # Count total
+    total_count = queryset.count()
+
+    # Paginate
+    results = queryset[offset: offset + limit]
+
+    # Build response
+    data = []
+    for result in results:
+        order = result.lab_order
+        patient = order.record.patient if order.record else None
+
+        data.append({
+            "id": str(result.id),
+            "order_id": str(order.id),
+            "patient_name": patient.full_name if patient else "",
+            "gha_id": patient.ghana_health_id if patient else "",
+            "test_name": result.test_name,
+            "result_value": result.result_value,
+            "reference_range": result.reference_range,
+            "status": result.status,
+            "lab_tech_name": result.lab_tech.full_name if result.lab_tech else "",
+            "created_at": result.created_at.isoformat() if result.created_at else None,
+            "attachment_url": result.attachment_url,
+        })
+
+    return Response({
+        "count": total_count,
+        "limit": limit,
+        "offset": offset,
+        "data": data,
+    })
 
 
 @api_view(["GET"])
@@ -606,7 +709,11 @@ def lab_analytics_trends(request):
     throughput_today = orders.filter(resulted_at__date=today).count()
     yesterday = today - timezone.timedelta(days=1)
     throughput_yesterday = orders.filter(resulted_at__date=yesterday).count()
-    seven_day_total = orders.filter(resulted_at__date__gte=today - timezone.timedelta(days=6), resulted_at__date__lte=today).count()
+    seven_day_total = orders.filter(
+        resulted_at__date__gte=today -
+        timezone.timedelta(
+            days=6),
+        resulted_at__date__lte=today).count()
     seven_day_avg = round(seven_day_total / 7, 2)
 
     return Response(

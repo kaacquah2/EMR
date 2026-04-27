@@ -7,6 +7,8 @@ import { useAuth } from "@/lib/auth-context";
 import { usePatient } from "@/hooks/use-patients";
 import { useCreateEncounter } from "@/hooks/use-encounters";
 import { useDepartments, useDoctors } from "@/hooks/use-admin";
+import { useEncounterAutoSave } from "@/hooks/use-encounter-auto-save";
+import { AutoSaveIndicator } from "@/components/features/encounter/auto-save-indicator";
 import { Button } from "@/components/ui/button";
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
 import { Breadcrumbs } from "@/components/ui/breadcrumbs";
@@ -33,6 +35,11 @@ export default function NewEncounterPage() {
   const { user } = useAuth();
   const { patient, loading: patientLoading, error: patientError } = usePatient(id);
   const { create, loading: submitting } = useCreateEncounter(id);
+  
+  // Auto-save hook
+  const { updateDraft, isSaving, getFormattedLastSavedTime, error: autoSaveError } = 
+    useEncounterAutoSave(id);
+
   const [encounterType, setEncounterType] = useState("outpatient");
   const [notes, setNotes] = useState("");
   const [chiefComplaint, setChiefComplaint] = useState("");
@@ -42,6 +49,7 @@ export default function NewEncounterPage() {
   const [assignedDepartmentId, setAssignedDepartmentId] = useState("");
   const [assignedDoctorId, setAssignedDoctorId] = useState("");
   const [status, setStatus] = useState<"waiting" | "in_consultation" | "completed">("waiting");
+  const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
 
   const { departments, fetch: fetchDepartments } = useDepartments();
   const { doctors, fetch: fetchDoctors } = useDoctors(assignedDepartmentId || undefined);
@@ -63,6 +71,42 @@ export default function NewEncounterPage() {
   useEffect(() => {
     if (canAdd) fetchDoctors();
   }, [canAdd, fetchDoctors, assignedDepartmentId]);
+
+  // Trigger auto-save on SOAP field changes
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      updateDraft({
+        patient_id: id,
+        soap: {
+          subjective: chiefComplaint || hpi ? `Chief complaint: ${chiefComplaint}\nHPI: ${hpi}` : "",
+          objective: examFindings,
+          assessment: assessmentPlan,
+          plan: notes,
+        },
+      });
+      setHasUnsavedChanges(false);
+    }, 500);
+
+    return () => clearTimeout(timer);
+  }, [chiefComplaint, hpi, examFindings, assessmentPlan, notes, updateDraft, id]);
+
+  // Track form changes
+  const handleFieldChange = () => {
+    setHasUnsavedChanges(true);
+  };
+
+  // Warn before leaving with unsaved changes
+  useEffect(() => {
+    const handleBeforeUnload = (e: BeforeUnloadEvent) => {
+      if (hasUnsavedChanges) {
+        e.preventDefault();
+        e.returnValue = "";
+      }
+    };
+
+    window.addEventListener("beforeunload", handleBeforeUnload);
+    return () => window.removeEventListener("beforeunload", handleBeforeUnload);
+  }, [hasUnsavedChanges]);
 
   if (patientLoading || !patient) {
     return (
@@ -86,11 +130,14 @@ export default function NewEncounterPage() {
         assigned_doctor_id: assignedDoctorId || undefined,
         status,
       });
+      setHasUnsavedChanges(false);
       router.push(`/patients/${id}`);
     } catch {
       //
     }
   };
+
+  const lastSavedTime = getFormattedLastSavedTime();
 
   return (
     <div className="mx-auto max-w-2xl space-y-6">
@@ -109,6 +156,9 @@ export default function NewEncounterPage() {
         <p className="text-[#64748B]">
           Patient: {patient.full_name} ({patient.ghana_health_id})
         </p>
+        {lastSavedTime && (
+          <p className="mt-1 text-xs text-green-600">✓ Auto-saved at {lastSavedTime}</p>
+        )}
       </div>
 
       <Card>
@@ -122,7 +172,10 @@ export default function NewEncounterPage() {
               <select
                 className="mt-1 w-full rounded-lg border border-[#E2E8F0] bg-white px-3 py-2 text-[#0F172A]"
                 value={encounterType}
-                onChange={(e) => setEncounterType(e.target.value)}
+                onChange={(e) => {
+                  setEncounterType(e.target.value);
+                  handleFieldChange();
+                }}
               >
                 {ENCOUNTER_TYPES.map((t) => (
                   <option key={t.value} value={t.value}>
@@ -139,6 +192,7 @@ export default function NewEncounterPage() {
                 onChange={(e) => {
                   setAssignedDepartmentId(e.target.value);
                   setAssignedDoctorId("");
+                  handleFieldChange();
                 }}
               >
                 <option value="">Select department</option>
@@ -153,7 +207,10 @@ export default function NewEncounterPage() {
               <select
                 className="mt-1 w-full rounded-lg border border-[#E2E8F0] bg-white px-3 py-2 text-[#0F172A]"
                 value={assignedDoctorId}
-                onChange={(e) => setAssignedDoctorId(e.target.value)}
+                onChange={(e) => {
+                  setAssignedDoctorId(e.target.value);
+                  handleFieldChange();
+                }}
               >
                 <option value="">Any doctor in department</option>
                 {doctors.map((d) => (
@@ -166,7 +223,10 @@ export default function NewEncounterPage() {
               <select
                 className="mt-1 w-full rounded-lg border border-[#E2E8F0] bg-white px-3 py-2 text-[#0F172A]"
                 value={status}
-                onChange={(e) => setStatus(e.target.value as "waiting" | "in_consultation" | "completed")}
+                onChange={(e) => {
+                  setStatus(e.target.value as "waiting" | "in_consultation" | "completed");
+                  handleFieldChange();
+                }}
               >
                 {ENCOUNTER_STATUS.map((s) => (
                   <option key={s.value} value={s.value}>{s.label}</option>
@@ -179,7 +239,11 @@ export default function NewEncounterPage() {
                 className="mt-1 w-full rounded-lg border border-[#E2E8F0] bg-white px-3 py-2 text-[#0F172A]"
                 rows={2}
                 value={chiefComplaint}
-                onChange={(e) => setChiefComplaint(e.target.value)}
+                onChange={(e) => {
+                   setChiefComplaint(e.target.value);
+                   handleFieldChange();
+                 }}
+                data-testid="encounter-chief-complaint"
                 placeholder="Main complaint in patient words"
               />
             </div>
@@ -189,7 +253,11 @@ export default function NewEncounterPage() {
                 className="mt-1 w-full rounded-lg border border-[#E2E8F0] bg-white px-3 py-2 text-[#0F172A]"
                 rows={3}
                 value={hpi}
-                onChange={(e) => setHpi(e.target.value)}
+                onChange={(e) => {
+                   setHpi(e.target.value);
+                   handleFieldChange();
+                 }}
+                data-testid="encounter-hpi"
                 placeholder="Duration, progression, associated symptoms"
               />
             </div>
@@ -199,7 +267,11 @@ export default function NewEncounterPage() {
                 className="mt-1 w-full rounded-lg border border-[#E2E8F0] bg-white px-3 py-2 text-[#0F172A]"
                 rows={3}
                 value={examFindings}
-                onChange={(e) => setExamFindings(e.target.value)}
+                onChange={(e) => {
+                   setExamFindings(e.target.value);
+                   handleFieldChange();
+                 }}
+                data-testid="encounter-examination"
                 placeholder="Physical exam and objective findings"
               />
             </div>
@@ -209,7 +281,11 @@ export default function NewEncounterPage() {
                 className="mt-1 w-full rounded-lg border border-[#E2E8F0] bg-white px-3 py-2 text-[#0F172A]"
                 rows={3}
                 value={assessmentPlan}
-                onChange={(e) => setAssessmentPlan(e.target.value)}
+                onChange={(e) => {
+                   setAssessmentPlan(e.target.value);
+                   handleFieldChange();
+                 }}
+                data-testid="encounter-assessment"
                 placeholder="Differential, treatment plan, follow-up"
               />
             </div>
@@ -219,7 +295,10 @@ export default function NewEncounterPage() {
                 className="mt-1 w-full rounded-lg border border-[#E2E8F0] bg-white px-3 py-2 text-[#0F172A]"
                 rows={4}
                 value={notes}
-                onChange={(e) => setNotes(e.target.value)}
+                onChange={(e) => {
+                   setNotes(e.target.value);
+                   handleFieldChange();
+                 }}
                 placeholder="Reason for visit, complaint, etc."
               />
             </div>
@@ -236,6 +315,12 @@ export default function NewEncounterPage() {
           </form>
         </CardContent>
       </Card>
+
+      <AutoSaveIndicator 
+        isSaving={isSaving} 
+        error={autoSaveError}
+        lastSavedAt={lastSavedTime}
+      />
     </div>
   );
 }

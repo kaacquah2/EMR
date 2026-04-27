@@ -10,14 +10,15 @@ class Migration(migrations.Migration):
     ]
 
     operations = [
-        migrations.RenameIndex(
-            model_name='encounter',
-            new_name='records_enc_assigne_51c098_idx',
-            old_name='records_enc_dept_st_idx',
-        ),
-        migrations.RenameIndex(
-            model_name='encounter',
-            new_name='records_enc_assigne_336884_idx',
-            old_name='records_enc_doc_st_idx',
-        ),
+        # Rename indexes were removed - these indexes don't exist on the Encounter model
+        # migrations.RenameIndex(
+        #     model_name='encounter',
+        #     new_name='records_enc_assigne_51c098_idx',
+        #     old_name='records_enc_dept_st_idx',
+        # ),
+        # migrations.RenameIndex(
+        #     model_name='encounter',
+        #     new_name='records_enc_assigne_336884_idx',
+        #     old_name='records_enc_doc_st_idx',
+        # ),
     ]

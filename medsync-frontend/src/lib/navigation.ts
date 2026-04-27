@@ -2,6 +2,7 @@
  * Navigation configuration for all user roles
  * Single source of truth for sidebar navigation structure
  */
+import { ROLES } from "./permissions";
 
 export interface NavItem {
   href: string;
@@ -20,6 +21,8 @@ const COMMON_NAV = {
   admissions: { href: "/admissions", label: "Admissions" },
   alerts: { href: "/alerts", label: "Alerts" },
   referrals: { href: "/referrals", label: "Referrals" },
+  emergencyQueue: { href: "/emergency", label: "Emergency Queue" },
+  pharmacyWorklist: { href: "/pharmacy", label: "Pharmacy" },
   userManagement: { href: "/admin/users", label: "User Management" },
   auditLogs: { href: "/admin/audit-logs", label: "Audit Logs" },
   facilities: { href: "/admin/facilities", label: "Facility config" },
@@ -43,6 +46,7 @@ export const navByRole: Record<string, NavItem[]> = {
     COMMON_NAV.dashboard,
     { href: "/worklist", label: "Worklist" },
     { href: "/ai-insights", label: "AI Insights" },
+    COMMON_NAV.emergencyQueue,
     COMMON_NAV.patientSearch,
     COMMON_NAV.appointments,
     COMMON_NAV.alerts,
@@ -51,15 +55,18 @@ export const navByRole: Record<string, NavItem[]> = {
 
   nurse: [
     COMMON_NAV.dashboard,
-    { href: "/worklist", label: "Worklist" },
-    { href: "/patients/search", label: "My Ward" },
-    COMMON_NAV.appointments,
+    COMMON_NAV.emergencyQueue,
+    COMMON_NAV.pharmacyWorklist,
+    { href: "/patients/vitals/new", label: "Record Vitals" },
+    { href: "/worklist/dispense", label: "Dispense Medications" },
+    { href: "/records/nursing-note", label: "Nursing Notes" },
+    { href: "/worklist/handover", label: "Shift Handover" },
     COMMON_NAV.alerts,
-    COMMON_NAV.admissions,
   ],
 
   receptionist: [
     COMMON_NAV.dashboard,
+    COMMON_NAV.emergencyQueue,
     COMMON_NAV.patientSearch,
     COMMON_NAV.appointments,
   ],
@@ -69,8 +76,15 @@ export const navByRole: Record<string, NavItem[]> = {
     { href: "/lab/orders", label: "Lab Orders" },
   ],
 
+  pharmacy_technician: [
+    COMMON_NAV.pharmacyWorklist,
+    COMMON_NAV.dashboard,
+  ],
+
   hospital_admin: [
     COMMON_NAV.dashboard,
+    COMMON_NAV.emergencyQueue,
+    COMMON_NAV.pharmacyWorklist,
     COMMON_NAV.patientSearch,
     COMMON_NAV.appointments,
     COMMON_NAV.admissions,
@@ -192,10 +206,12 @@ function isLabTechnicianPathnameAccessible(path: string): boolean {
   return !!segments[2] && pathSegmentIsUuid(segments[2]);
 }
 
+// RBAC-02: Receptionists can view (read-only) emergency queue
 const RECEPTIONIST_EXACT_ALLOWED = new Set([
   "/dashboard",
   "/patients/search",
   "/appointments",
+  "/emergency",      // read-only view — no triage/room actions
   "/unauthorized",
 ]);
 
@@ -238,22 +254,17 @@ export function isPathnameAccessible(role: string, pathname: string, options?: N
 
   if (segments[0] === "admin" && segments.length >= 2) {
     const sub = `/${segments[0]}/${segments[1]}`;
-    if (sub === "/admin/facilities") return role === "super_admin" || role === "hospital_admin";
-    if (sub === "/admin/rbac-review") return role === "hospital_admin" || role === "super_admin";
-    // Super Admin sidebar links to /superadmin/* which redirect here; nav hrefs differ so allow role explicitly.
+    if (sub === "/admin/facilities") return role === ROLES.SUPER_ADMIN || role === ROLES.HOSPITAL_ADMIN;
+    // RBAC-03: super_admin must be able to access rbac-review
+    if (sub === "/admin/rbac-review") return role === ROLES.HOSPITAL_ADMIN || role === ROLES.SUPER_ADMIN;
     if (sub === "/admin/users" || sub === "/admin/audit-logs") {
-      return role === "hospital_admin" || role === "super_admin";
+      return role === ROLES.HOSPITAL_ADMIN || role === ROLES.SUPER_ADMIN;
     }
   }
 
-  if (segments[0] === "superadmin" && segments.length >= 1) {
-    const sub = `/${segments[0]}/${segments[1] ?? ""}`.replace(/\/$/, "");
-    if (sub === "/superadmin") {
-      return role === "super_admin";
-    }
-    if (sub === "/superadmin/hospitals" || sub === "/superadmin/cross-facility-activity-log") {
-      return role === "super_admin";
-    }
+  // RBAC-04: ALL /superadmin/* sub-routes require super_admin, no exceptions
+  if (segments[0] === "superadmin") {
+    return role === ROLES.SUPER_ADMIN;
   }
 
   return false;

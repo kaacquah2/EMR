@@ -168,15 +168,21 @@ export default function WorklistPage() {
                       <td className="px-4 py-2">
                         <div className="flex gap-2">
                           <Link href={`/patients/${e.patient_id}`}>
-                            <Button size="sm" variant="secondary">
-                              Open
-                            </Button>
+                            {/* UX-14: 'View chart' is clearer than 'Open' */}
+                            <Button size="sm" variant="secondary">View chart</Button>
                           </Link>
                           <Button
                             size="sm"
-                            onClick={() => startConsultation(e.patient_id, e.notes ?? "")}
+                            onClick={() => {
+                              // UX-13: warn if encounter already in progress
+                              if (e.status === "in_consultation" && !window.confirm(
+                                `${e.patient_name} already has an encounter in progress. Start a new one anyway?`
+                              )) return;
+                              void startConsultation(e.patient_id, e.notes ?? "");
+                            }}
                           >
-                            Start consultation
+                            {/* UX-14: 'Begin consult' is clearer than 'Start consultation' */}
+                            Begin consult →
                           </Button>
                         </div>
                       </td>
@@ -242,7 +248,8 @@ function NurseWardWorklist() {
                     <div className="mt-3 flex flex-wrap gap-2">
                       <Link href={`/patients/${bed.patient_id}/vitals/new`}><Button size="sm">Vitals</Button></Link>
                       <Link href={`/patients/${bed.patient_id}`}><Button size="sm" variant="secondary">Chart</Button></Link>
-                      <Button size="sm" variant="secondary" onClick={() => { setSelectedPatientId(bed.patient_id ?? ""); setTab("handover"); }}>Note</Button>
+                      {/* UX-15: Open SlideOver/tab with patient pre-selected instead of switching entire tab */}
+                      <Button size="sm" variant="secondary" onClick={() => { setSelectedPatientId(bed.patient_id ?? ""); setTab("handover"); }}>Add note</Button>
                       <Button size="sm" variant="secondary" onClick={() => setTab("dispense")}>Dispense</Button>
                     </div>
                   </>
@@ -264,10 +271,21 @@ function NurseWardWorklist() {
                 <p className="text-sm font-medium">{row.patient_name} · {row.bed_code ?? "Bed —"} · {row.drug_name}</p>
                 <p className="text-xs text-[#64748B]">{row.dosage} · {row.frequency} · {row.route} · by {row.written_by}</p>
                 {row.allergy_conflict ? (
-                  <p className="mt-1 text-xs text-amber-700">ALLERGY CONFLICT — Override authorised: {row.allergy_override_reason || "reason not provided"}</p>
+                  <p className="mt-1 text-xs font-semibold text-amber-700">⚠ ALLERGY CONFLICT — Override authorised: {row.allergy_override_reason || "reason not provided"}</p>
                 ) : null}
                 <div className="mt-2">
-                  <Button size="sm" onClick={() => void dispense(row.record_id)}>Mark Dispensed</Button>
+                  {/* UX-17: allergy-conflict requires explicit confirmation */}
+                  {row.allergy_conflict ? (
+                    <Button size="sm" variant="danger" onClick={() => {
+                      if (window.confirm(
+                        `⚠ ALLERGY CONFLICT\n\nPatient: ${row.patient_name}\nDrug: ${row.drug_name}\nOverride reason: ${row.allergy_override_reason || "not provided"}\n\nAre you sure you want to dispense this medication?`
+                      )) { void dispense(row.record_id); }
+                    }}>
+                      ⚠ Dispense (conflict)
+                    </Button>
+                  ) : (
+                    <Button size="sm" onClick={() => void dispense(row.record_id)}>Mark Dispensed</Button>
+                  )}
                 </div>
               </div>
             ))}
@@ -295,8 +313,17 @@ function NurseWardWorklist() {
                   {data.incoming_nurse_candidates.map((n) => <option key={n.user_id} value={n.user_id}>{n.full_name}</option>)}
                 </select>
               ) : null}
-              <textarea className="min-h-[160px] w-full rounded border border-[#CBD5E1] p-3 text-sm" value={noteContent} onChange={(e) => setNoteContent(e.target.value)} />
-              <Button onClick={() => void saveNote()}>Save note</Button>
+              {/* UX-16: min 20 chars + live character count */}
+              <div>
+                <textarea className="min-h-[160px] w-full rounded border border-[var(--gray-300)] p-3 text-sm" value={noteContent} onChange={(e) => setNoteContent(e.target.value)} />
+                <div className="mt-1 flex items-center justify-between text-xs">
+                  <span className={noteContent.trim().length < 20 ? "text-[var(--red-600)]" : "text-[var(--green-600)]"}>
+                    {noteContent.trim().length < 20 ? `${20 - noteContent.trim().length} more characters required` : "✓ Minimum met"}
+                  </span>
+                  <span className="text-[var(--gray-500)]">{noteContent.trim().length} chars</span>
+                </div>
+              </div>
+              <Button onClick={() => void saveNote()} disabled={noteContent.trim().length < 20}>Save note</Button>
             </CardContent>
           </Card>
           <Card>
@@ -307,7 +334,12 @@ function NurseWardWorklist() {
                   <p className="text-sm font-medium">{h.patient_name}</p>
                   <p className="text-xs text-[#64748B]">From: {h.outgoing_nurse_name} · {h.signed_at ? new Date(h.signed_at).toLocaleString() : ""}</p>
                   <p className="mt-2 text-sm whitespace-pre-wrap">{h.content}</p>
-                  <Button className="mt-2" size="sm" onClick={() => void acknowledgeHandover(h.note_id)}>Acknowledge & Accept</Button>
+                  {/* UX-27: Confirm before accepting clinical responsibility */}
+                  <Button className="mt-2" size="sm" onClick={() => {
+                    if (window.confirm(
+                      `By accepting this handover from ${h.outgoing_nurse_name}, you take clinical responsibility for ${h.patient_name}.\n\nContinue?`
+                    )) { void acknowledgeHandover(h.note_id); }
+                  }}>Acknowledge &amp; Accept</Button>
                 </div>
               ))}
             </CardContent>

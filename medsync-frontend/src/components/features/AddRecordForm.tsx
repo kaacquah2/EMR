@@ -6,7 +6,21 @@ import { useApi } from "@/hooks/use-api";
 import { useLabTestTypes } from "@/hooks/use-admin";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Select } from "@/components/ui/select";
+import { Textarea } from "@/components/ui/textarea";
 import { AllergyConflictModal } from "@/components/features/AllergyConflictModal";
+import { useToast } from "@/lib/toast-context";
+import { ROLES } from "@/lib/permissions";
+
+// UX-09: Context-aware save button labels
+const SAVE_LABELS: Record<string, string> = {
+  diagnosis: "Add diagnosis",
+  prescription: "Write prescription",
+  lab_order: "Order lab test",
+  vitals: "Record vitals",
+  allergy: "Add allergy",
+  nursing_note: "Save note",
+};
 
 const ALL_RECORD_TYPES = [
   { id: "diagnosis", label: "Diagnosis" },
@@ -36,20 +50,25 @@ const TYPE_TO_ID: Record<string, string> = {
 
 export function AddRecordForm({ patientId, onSuccess, onClose, initialType }: AddRecordFormProps) {
   const { user } = useAuth();
+  const { success: toastSuccess } = useToast();
   const api = useApi();
   const { labTestTypes, fetch: fetchLabTestTypes } = useLabTestTypes();
   useEffect(() => {
-    if (user?.role === "doctor") fetchLabTestTypes();
+    if (user?.role === ROLES.DOCTOR || user?.role === ROLES.SUPER_ADMIN) fetchLabTestTypes();
   }, [user?.role, fetchLabTestTypes]);
+
+  // RBAC-07: only expose record types the user's role can actually create
   const recordTypes = useMemo(() => {
-    if (user?.role === "nurse") {
+    const role = user?.role;
+    if (role === ROLES.NURSE) {
       return ALL_RECORD_TYPES.filter((t) =>
         ["vitals", "allergy", "nursing_note"].includes(t.id)
       );
     }
-    if (user?.role === "doctor") {
-      return ALL_RECORD_TYPES;
+    if (role === ROLES.DOCTOR || role === ROLES.SUPER_ADMIN) {
+      return ALL_RECORD_TYPES; // full access
     }
+    // All other roles (receptionist, hospital_admin, etc.) cannot write records
     return [];
   }, [user?.role]);
   const [selectedType, setSelectedType] = useState<string | null>(
@@ -131,6 +150,20 @@ export function AddRecordForm({ patientId, onSuccess, onClose, initialType }: Ad
 
   const submit = async () => {
     setError("");
+    // Basic client-side validation
+    if (selectedType === "vitals") {
+      const t = parseFloat(form.temperature_c);
+      if (form.temperature_c && (t < 25 || t > 45)) {
+        setError("Please enter a valid temperature between 25°C and 45°C");
+        return;
+      }
+      const p = parseInt(form.pulse_bpm, 10);
+      if (form.pulse_bpm && (p < 0 || p > 300)) {
+        setError("Please enter a valid pulse rate");
+        return;
+      }
+    }
+
     setLoading(true);
     try {
       if (selectedType === "diagnosis") {
@@ -189,6 +222,8 @@ export function AddRecordForm({ patientId, onSuccess, onClose, initialType }: Ad
           content: form.content,
         });
       }
+      // UX-10: success toast
+      toastSuccess(SAVE_LABELS[selectedType ?? ""] ? `${SAVE_LABELS[selectedType!]} saved` : "Record saved");
       onSuccess?.();
       onClose?.();
       setSelectedType(null);
@@ -312,19 +347,16 @@ export function AddRecordForm({ patientId, onSuccess, onClose, initialType }: Ad
             onChange={(e) => setForm((f) => ({ ...f, icd10_description: e.target.value }))}
             required
           />
-          <div>
-            <label className="mb-1.5 block text-xs font-semibold uppercase text-[#64748B]">Severity</label>
-            <select
-              value={form.severity}
-              onChange={(e) => setForm((f) => ({ ...f, severity: e.target.value }))}
-              className="h-11 w-full rounded-lg border-[1.5px] border-[#CBD5E1] px-3"
-            >
-              <option value="mild">Mild</option>
-              <option value="moderate">Moderate</option>
-              <option value="severe">Severe</option>
-              <option value="critical">Critical</option>
-            </select>
-          </div>
+          <Select
+            label="Severity"
+            value={form.severity}
+            onChange={(e) => setForm((f) => ({ ...f, severity: e.target.value }))}
+          >
+            <option value="mild">Mild</option>
+            <option value="moderate">Moderate</option>
+            <option value="severe">Severe</option>
+            <option value="critical">Critical</option>
+          </Select>
           <Input
             label="Onset date"
             type="date"
@@ -393,21 +425,18 @@ export function AddRecordForm({ patientId, onSuccess, onClose, initialType }: Ad
             value={form.duration_days}
             onChange={(e) => setForm((f) => ({ ...f, duration_days: e.target.value }))}
           />
-          <div>
-            <label className="mb-1.5 block text-xs font-semibold uppercase text-[#64748B]">Route</label>
-            <select
-              value={form.route}
-              onChange={(e) => setForm((f) => ({ ...f, route: e.target.value }))}
-              className="h-11 w-full rounded-lg border-[1.5px] border-[#CBD5E1] px-3"
-            >
-              <option value="oral">Oral</option>
-              <option value="iv">IV</option>
-              <option value="im">IM</option>
-              <option value="topical">Topical</option>
-              <option value="inhalation">Inhalation</option>
-              <option value="other">Other</option>
-            </select>
-          </div>
+          <Select
+            label="Route"
+            value={form.route}
+            onChange={(e) => setForm((f) => ({ ...f, route: e.target.value }))}
+          >
+            <option value="oral">Oral</option>
+            <option value="iv">IV</option>
+            <option value="im">IM</option>
+            <option value="topical">Topical</option>
+            <option value="inhalation">Inhalation</option>
+            <option value="other">Other</option>
+          </Select>
           <Input
             label="Notes"
             value={form.notes}
@@ -419,12 +448,11 @@ export function AddRecordForm({ patientId, onSuccess, onClose, initialType }: Ad
       {selectedType === "lab_order" && (
         <>
           <div>
-            <label className="mb-1.5 block text-xs font-semibold uppercase text-[#64748B]">Test type</label>
             {labTestTypes.length > 0 ? (
-              <select
+              <Select
+                label="Test type"
                 value={form.test_name}
                 onChange={(e) => setForm((f) => ({ ...f, test_name: e.target.value }))}
-                className="h-11 w-full rounded-lg border-[1.5px] border-[#CBD5E1] px-3"
                 required
               >
                 <option value="">Select test</option>
@@ -433,7 +461,7 @@ export function AddRecordForm({ patientId, onSuccess, onClose, initialType }: Ad
                     {t.test_name} ({t.lab_unit_name})
                   </option>
                 ))}
-              </select>
+              </Select>
             ) : (
               <Input
                 label="Test name"
@@ -445,18 +473,15 @@ export function AddRecordForm({ patientId, onSuccess, onClose, initialType }: Ad
             )}
             <p className="mt-1 text-xs text-[#64748B]">Order is routed to the correct lab unit.</p>
           </div>
-          <div>
-            <label className="mb-1.5 block text-xs font-semibold uppercase text-[#64748B]">Urgency</label>
-            <select
-              value={form.urgency}
-              onChange={(e) => setForm((f) => ({ ...f, urgency: e.target.value }))}
-              className="h-11 w-full rounded-lg border-[1.5px] border-[#CBD5E1] px-3"
-            >
-              <option value="routine">Routine</option>
-              <option value="urgent">Urgent</option>
-              <option value="stat">STAT</option>
-            </select>
-          </div>
+          <Select
+            label="Urgency"
+            value={form.urgency}
+            onChange={(e) => setForm((f) => ({ ...f, urgency: e.target.value }))}
+          >
+            <option value="routine">Routine</option>
+            <option value="urgent">Urgent</option>
+            <option value="stat">STAT</option>
+          </Select>
           <Input
             label="Notes for lab"
             value={form.notes}
@@ -486,18 +511,27 @@ export function AddRecordForm({ patientId, onSuccess, onClose, initialType }: Ad
             value={form.resp_rate}
             onChange={(e) => setForm((f) => ({ ...f, resp_rate: e.target.value }))}
           />
-          <Input
-            label="BP Systolic"
-            type="number"
-            value={form.bp_systolic}
-            onChange={(e) => setForm((f) => ({ ...f, bp_systolic: e.target.value }))}
-          />
-          <Input
-            label="BP Diastolic"
-            type="number"
-            value={form.bp_diastolic}
-            onChange={(e) => setForm((f) => ({ ...f, bp_diastolic: e.target.value }))}
-          />
+          {/* UX-12: BP fields side-by-side */}
+          <div>
+            <label className="mb-1.5 block text-xs font-semibold uppercase tracking-wide text-[var(--gray-500)]">Blood Pressure (mmHg)</label>
+            <div className="flex items-center gap-2">
+              <Input
+                type="number"
+                value={form.bp_systolic}
+                onChange={(e) => setForm((f) => ({ ...f, bp_systolic: e.target.value }))}
+                placeholder="Systolic"
+                className="flex-1"
+              />
+              <span className="font-bold text-[var(--gray-500)]">/</span>
+              <Input
+                type="number"
+                value={form.bp_diastolic}
+                onChange={(e) => setForm((f) => ({ ...f, bp_diastolic: e.target.value }))}
+                placeholder="Diastolic"
+                className="flex-1"
+              />
+            </div>
+          </div>
           <Input
             label="SpO2 (%)"
             type="number"
@@ -535,19 +569,16 @@ export function AddRecordForm({ patientId, onSuccess, onClose, initialType }: Ad
             onChange={(e) => setForm((f) => ({ ...f, reaction_type: e.target.value }))}
             placeholder="e.g. Anaphylaxis, Rash"
           />
-          <div>
-            <label className="mb-1.5 block text-xs font-semibold uppercase text-[#64748B]">Severity</label>
-            <select
-              value={form.severity}
-              onChange={(e) => setForm((f) => ({ ...f, severity: e.target.value }))}
-              className="h-11 w-full rounded-lg border-[1.5px] border-[#CBD5E1] px-3"
-            >
-              <option value="mild">Mild</option>
-              <option value="moderate">Moderate</option>
-              <option value="severe">Severe</option>
-              <option value="life_threatening">Life Threatening</option>
-            </select>
-          </div>
+          <Select
+            label="Severity"
+            value={form.severity}
+            onChange={(e) => setForm((f) => ({ ...f, severity: e.target.value }))}
+          >
+            <option value="mild">Mild</option>
+            <option value="moderate">Moderate</option>
+            <option value="severe">Severe</option>
+            <option value="life_threatening">Life Threatening</option>
+          </Select>
           <Input
             label="Notes"
             value={form.notes}
@@ -557,33 +588,36 @@ export function AddRecordForm({ patientId, onSuccess, onClose, initialType }: Ad
       )}
 
       {selectedType === "nursing_note" && (
-        <div>
-          <label className="mb-1.5 block text-xs font-semibold uppercase text-[#64748B]">Note content</label>
-          <textarea
-            value={form.content}
-            onChange={(e) => setForm((f) => ({ ...f, content: e.target.value }))}
-            className="h-32 w-full rounded-lg border-[1.5px] border-[#CBD5E1] px-3 py-2"
-            required
-          />
-        </div>
+        <Textarea
+          label="Note content"
+          value={form.content}
+          onChange={(e) => setForm((f) => ({ ...f, content: e.target.value }))}
+          placeholder="Enter clinical note..."
+          required
+          maxLength={1000}
+          showCount
+        />
       )}
 
-      {error && <p className="text-sm text-[#DC2626]">{error}</p>}
+      {error && <p className="text-sm text-[var(--red-600)]" role="alert">{error}</p>}
       <div className="flex gap-2">
         {!initialType && (
           <Button
             type="button"
             variant="secondary"
             onClick={() => {
+              // UX-11: unsaved changes guard
+              const dirty = Object.values(form).some((v) => (typeof v === "string" ? v.trim() !== "" : false));
+              if (dirty && !window.confirm("You have unsaved changes. Discard them?")) return;
               setSelectedType(null);
               setAllergyConflict(null);
             }}
           >
-            Back
+            ← Back
           </Button>
         )}
-        <Button type="submit" disabled={loading}>
-          {loading ? "Saving..." : "Save"}
+        <Button type="submit" loading={loading}>
+          {SAVE_LABELS[selectedType ?? ""] ?? "Save"}
         </Button>
       </div>
     </form>

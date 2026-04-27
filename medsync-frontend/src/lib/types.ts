@@ -4,7 +4,8 @@ export type UserRole =
   | "doctor"
   | "nurse"
   | "receptionist"
-  | "lab_technician";
+  | "lab_technician"
+  | "pharmacy_technician";
 
 export type AccountStatus = "pending" | "active" | "inactive";
 
@@ -233,6 +234,26 @@ export interface Encounter {
   discharge_summary?: string | null;
 }
 
+export interface EncounterDraft {
+  id: string;
+  encounter_id?: string | null;
+  patient_id: string;
+  hospital_id: string;
+  draft_data: {
+    patient_id: string;
+    encounter_id?: string;
+    soap?: {
+      subjective?: string;
+      objective?: string;
+      assessment?: string;
+      plan?: string;
+    };
+    [key: string]: unknown;
+  };
+  created_at: string;
+  last_saved_at: string;
+}
+
 export interface Consent {
   consent_id: string;
   global_patient_id: string;
@@ -273,4 +294,48 @@ export interface CrossFacilityRecordsResponse {
   facilities: { facility_id: string; name: string }[];
   records: MedicalRecord[];
   read_only: boolean;
+}
+
+// ---- AI Async Analysis (Celery) ----
+
+export interface AIAnalysisJob {
+  job_id: string;
+  patient_id: string;
+  status: "pending" | "processing" | "completed" | "failed" | "cancelled";
+  progress_percent: number; // 0-99 while processing, 100 when complete
+  current_step: string;
+  celery_task_id: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface AIAnalysis {
+  job_id: string;
+  patient_id: string;
+  analysis_type: string;
+  diagnostic_insights: string;
+  recommendations: string[];
+  risk_factors: string[];
+  created_at: string;
+}
+
+export interface AIAnalysisJobResponse extends AIAnalysisJob {
+  analysis?: AIAnalysis; // Only populated when status='completed'
+}
+
+// ---- Shift Handover (SBAR) ----
+
+export interface ShiftHandover {
+  id: string;
+  shift_id: string;
+  outgoing_nurse_id: string;
+  incoming_nurse_id: string;
+  situation: string;
+  background: string;
+  assessment: string;
+  recommendation: string;
+  outgoing_signed_at: string;
+  incoming_acknowledged_at: string | null;
+  status: "pending" | "acknowledged";
+  created_at: string;
 }

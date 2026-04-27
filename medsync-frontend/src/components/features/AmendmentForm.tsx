@@ -5,6 +5,8 @@ import { useApi } from "@/hooks/use-api";
 import type { MedicalRecord } from "@/lib/types";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Select } from "@/components/ui/select";
+import { Textarea } from "@/components/ui/textarea";
 
 interface AmendmentFormProps {
   record: MedicalRecord;
@@ -17,6 +19,8 @@ export function AmendmentForm({ record, onSuccess, onClose }: AmendmentFormProps
   const [reason, setReason] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+  // UX-26: confirmation step
+  const [confirmOpen, setConfirmOpen] = useState(false);
 
   const [form, setForm] = useState({
     icd10_code: record.diagnosis?.icd10_code ?? "",
@@ -104,37 +108,31 @@ export function AmendmentForm({ record, onSuccess, onClose }: AmendmentFormProps
       <p className="text-sm text-[#64748B]">
         Create an amendment for this {t.replace("_", " ")} record. The original will be marked as amended and a new record will be created.
       </p>
-      <div>
-        <label className="mb-1.5 block text-xs font-semibold uppercase text-[#64748B]">Amendment reason (required, min 20 characters)</label>
-        <textarea
-          className="w-full rounded-lg border border-[#CBD5E1] px-3 py-2 text-sm min-h-[80px]"
-          value={reason}
-          onChange={(e) => setReason(e.target.value)}
-          placeholder="Describe why this record needs correction (min 20 characters)"
-        />
-        {reason.trim().length > 0 && reason.trim().length < MIN_REASON_CHARS && (
-          <p className="text-xs text-amber-600 mt-1">{MIN_REASON_CHARS - reason.trim().length} more characters required.</p>
-        )}
-      </div>
+      <Textarea
+        label="Amendment reason (required, min 20 characters)"
+        value={reason}
+        onChange={(e) => setReason(e.target.value)}
+        placeholder="Describe why this record needs correction (min 20 characters)"
+        maxLength={500}
+        showCount
+        error={reason.trim().length > 0 && reason.trim().length < MIN_REASON_CHARS ? `${MIN_REASON_CHARS - reason.trim().length} more characters required.` : undefined}
+      />
 
       {t === "diagnosis" && record.diagnosis && (
         <div className="space-y-3 border-t border-[#E2E8F0] pt-4">
           <p className="text-xs font-semibold text-[#64748B]">Corrected data (optional)</p>
           <Input label="ICD-10 Code" value={form.icd10_code} onChange={(e) => setForm((f) => ({ ...f, icd10_code: e.target.value }))} />
           <Input label="Description" value={form.icd10_description} onChange={(e) => setForm((f) => ({ ...f, icd10_description: e.target.value }))} />
-          <div>
-            <label className="mb-1.5 block text-xs font-semibold uppercase text-[#64748B]">Severity</label>
-            <select
-              value={form.severity}
-              onChange={(e) => setForm((f) => ({ ...f, severity: e.target.value as "mild" | "moderate" | "severe" | "critical" }))}
-              className="h-11 w-full rounded-lg border border-[#CBD5E1] px-3"
-            >
-              <option value="mild">Mild</option>
-              <option value="moderate">Moderate</option>
-              <option value="severe">Severe</option>
-              <option value="critical">Critical</option>
-            </select>
-          </div>
+          <Select
+            label="Severity"
+            value={form.severity}
+            onChange={(e) => setForm((f) => ({ ...f, severity: e.target.value as typeof form.severity }))}
+          >
+            <option value="mild">Mild</option>
+            <option value="moderate">Moderate</option>
+            <option value="severe">Severe</option>
+            <option value="critical">Critical</option>
+          </Select>
           <Input label="Onset date" type="date" value={form.onset_date} onChange={(e) => setForm((f) => ({ ...f, onset_date: e.target.value }))} />
           <div className="flex items-center gap-2">
             <input type="checkbox" checked={form.is_chronic} onChange={(e) => setForm((f) => ({ ...f, is_chronic: e.target.checked }))} />
@@ -151,17 +149,18 @@ export function AmendmentForm({ record, onSuccess, onClose }: AmendmentFormProps
           <Input label="Dosage" value={form.dosage} onChange={(e) => setForm((f) => ({ ...f, dosage: e.target.value }))} />
           <Input label="Frequency" value={form.frequency} onChange={(e) => setForm((f) => ({ ...f, frequency: e.target.value }))} />
           <Input label="Duration (days)" type="number" value={form.duration_days} onChange={(e) => setForm((f) => ({ ...f, duration_days: e.target.value }))} />
-          <div>
-            <label className="mb-1.5 block text-xs font-semibold uppercase text-[#64748B]">Route</label>
-            <select value={form.route} onChange={(e) => setForm((f) => ({ ...f, route: e.target.value }))} className="h-11 w-full rounded-lg border border-[#CBD5E1] px-3">
-              <option value="oral">Oral</option>
-              <option value="iv">IV</option>
-              <option value="im">IM</option>
-              <option value="topical">Topical</option>
-              <option value="inhalation">Inhalation</option>
-              <option value="other">Other</option>
-            </select>
-          </div>
+          <Select
+            label="Route"
+            value={form.route}
+            onChange={(e) => setForm((f) => ({ ...f, route: e.target.value }))}
+          >
+            <option value="oral">Oral</option>
+            <option value="iv">IV</option>
+            <option value="im">IM</option>
+            <option value="topical">Topical</option>
+            <option value="inhalation">Inhalation</option>
+            <option value="other">Other</option>
+          </Select>
           <Input label="Notes" value={form.notes} onChange={(e) => setForm((f) => ({ ...f, notes: e.target.value }))} />
         </div>
       )}
@@ -182,12 +181,13 @@ export function AmendmentForm({ record, onSuccess, onClose }: AmendmentFormProps
 
       {t === "nursing_note" && (
         <div className="space-y-3 border-t border-[#E2E8F0] pt-4">
-          <p className="text-xs font-semibold text-[#64748B]">Corrected content (optional)</p>
-          <textarea
-            className="w-full rounded-lg border border-[#CBD5E1] px-3 py-2 text-sm min-h-[80px]"
+          <Textarea
+            label="Corrected content"
             value={form.content}
             onChange={(e) => setForm((f) => ({ ...f, content: e.target.value }))}
-            placeholder="Note content"
+            placeholder="Revised note content"
+            maxLength={1000}
+            showCount
           />
         </div>
       )}
@@ -200,13 +200,34 @@ export function AmendmentForm({ record, onSuccess, onClose }: AmendmentFormProps
         </div>
       )}
 
-      {error && <p className="text-sm text-[#DC2626]">{error}</p>}
-      <div className="flex gap-2 justify-end pt-2">
-        <Button type="button" variant="secondary" onClick={onClose} disabled={loading}>Cancel</Button>
-        <Button type="button" disabled={!reason.trim() || loading} onClick={submit}>
-          {loading ? "Creating..." : "Create amendment"}
-        </Button>
-      </div>
+      {error && <p className="text-sm text-[var(--red-600)]" role="alert">{error}</p>}
+
+      {/* UX-26: ConfirmDialog before amending */}
+      {confirmOpen && (
+        <div className="rounded-lg border border-[var(--amber-600)]/40 bg-[#FFFBEB] p-4">
+          <p className="text-sm font-semibold text-[var(--amber-600)]">⚠ Confirm amendment</p>
+          <p className="mt-1 text-sm text-[var(--gray-700)]">
+            You are about to permanently amend this <strong>{t.replace("_", " ")}</strong> record.
+            This action is <strong>audit-logged and cannot be undone</strong>.
+          </p>
+          <div className="mt-3 flex gap-2">
+            <Button type="button" variant="secondary" onClick={() => setConfirmOpen(false)} disabled={loading}>Cancel</Button>
+            <Button type="button" variant="danger" loading={loading} onClick={submit}>
+              Yes, create amendment
+            </Button>
+          </div>
+        </div>
+      )}
+
+      {!confirmOpen && (
+        <div className="flex gap-2 justify-end pt-2">
+          <Button type="button" variant="secondary" onClick={onClose} disabled={loading}>Cancel</Button>
+          <Button type="button" disabled={!reason.trim() || loading}
+            onClick={() => setConfirmOpen(true)}>
+            Review &amp; confirm →
+          </Button>
+        </div>
+      )}
     </div>
   );
 }

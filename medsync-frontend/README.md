@@ -29,6 +29,17 @@ Next.js 16 frontend for MedSync EMR (Ghana Inter-Hospital Electronic Medical Rec
 
 ---
 
+## 📚 Quick Links to Documentation
+
+**For operators and support teams:**
+- **[API Reference](../medsync-backend/docs/API_REFERENCE.md)** — Complete API documentation (60+ endpoints, request/response schemas, examples, error codes)
+- **[Operations Runbook](../medsync-backend/docs/OPERATIONS_RUNBOOK.md)** — On-call troubleshooting guide, incident response, performance tuning, monitoring
+
+**For end users:**
+- **[Feature User Guide](./docs/FEATURE_GUIDE.md)** — Step-by-step workflows by role (Doctor, Nurse, Lab Tech, Receptionist, Admin)
+
+---
+
 ## Repository context (what else ships with this codebase)
 
 This repo is a full-stack deliverable. In addition to `medsync-frontend/` and `medsync-backend/`, the repo root contains:

@@ -1,0 +1,8 @@
+{
+  "model_version": "1.0.0-hybrid",
+  "training_date": "2026-04-20T13:22:28.650017",
+  "data_source": "hybrid",
+  "data_size": 7000,
+  "n_features": 26,
+  "readmission_rate": 0.2987142857142857
+}

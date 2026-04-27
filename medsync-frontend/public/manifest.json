@@ -1,0 +1,51 @@
+{
+  "name": "MedSync EMR",
+  "short_name": "MedSync",
+  "description": "Multi-hospital Electronic Medical Records System",
+  "display": "standalone",
+  "start_url": "/",
+  "scope": "/",
+  "theme_color": "#0f6e56",
+  "background_color": "#ffffff",
+  "orientation": "any",
+  "icons": [
+    {
+      "src": "/icons/icon-192x192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/icons/icon-512x512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/icons/icon-192x192-maskable.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "maskable"
+    },
+    {
+      "src": "/icons/icon-512x512-maskable.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
+    }
+  ],
+  "shortcuts": [
+    {
+      "name": "Patient Search",
+      "short_name": "Search",
+      "url": "/patients/search",
+      "icons": [{ "src": "/icons/search-96x96.png", "sizes": "96x96" }]
+    },
+    {
+      "name": "Vitals Entry",
+      "short_name": "Vitals",
+      "url": "/patients/vitals",
+      "icons": [{ "src": "/icons/vitals-96x96.png", "sizes": "96x96" }]
+    }
+  ]
+}

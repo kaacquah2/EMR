@@ -14,8 +14,7 @@ from rest_framework.decorators import api_view, permission_classes
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 
-from patients.models import Patient
-from records.models import Encounter, MedicalRecord, Diagnosis, Prescription, Vital
+from records.models import Diagnosis, Prescription, Vital
 from api.utils import (
     get_patient_queryset,
     get_encounter_queryset,
@@ -65,7 +64,13 @@ def _diagnosis_to_fhir(diagnosis):
         "id": str(diagnosis.id),
         "clinicalStatus": {"coding": [{"code": "active"}]},
         "code": {
-            "coding": [{"system": "http://hl7.org/fhir/sid/icd-10", "code": diagnosis.icd10_code, "display": diagnosis.icd10_description}]
+            "coding": [
+                {
+                    "system": "http://hl7.org/fhir/sid/icd-10",
+                    "code": diagnosis.icd10_code,
+                    "display": diagnosis.icd10_description
+                }
+            ]
         },
         "subject": {"reference": f"Patient/{rec.patient_id}"},
         "onsetDateTime": diagnosis.onset_date.isoformat() if diagnosis.onset_date else None,
@@ -83,11 +88,24 @@ def _prescription_to_fhir(prescription):
         "intent": "order",
         "medicationCodeableConcept": {"text": prescription.drug_name},
         "subject": {"reference": f"Patient/{rec.patient_id}"},
-        "dosageInstruction": [{
-            "text": f"{prescription.dosage} {prescription.frequency}",
-            "route": {"text": prescription.route},
-            **({"timing": {"repeat": {"duration": prescription.duration_days, "durationUnit": "d"}}} if prescription.duration_days else {}),
-        }],
+        "dosageInstruction": [
+            {
+                "text": f"{prescription.dosage} {prescription.frequency}",
+                "route": {"text": prescription.route},
+                **(
+                    {
+                        "timing": {
+                            "repeat": {
+                                "duration": prescription.duration_days,
+                                "durationUnit": "d"
+                            }
+                        }
+                    }
+                    if prescription.duration_days
+                    else {}
+                ),
+            }
+        ],
         "note": [{"text": prescription.notes}] if prescription.notes else [],
     }
 
@@ -97,19 +115,25 @@ def _vital_to_fhir(vital):
     rec = vital.record
     components = []
     if vital.temperature_c is not None:
-        components.append({"code": {"text": "Body temperature"}, "valueQuantity": {"value": float(vital.temperature_c), "unit": "Cel"}})
+        components.append({"code": {"text": "Body temperature"}, "valueQuantity": {
+                          "value": float(vital.temperature_c), "unit": "Cel"}})
     if vital.pulse_bpm is not None:
         components.append({"code": {"text": "Heart rate"}, "valueQuantity": {"value": vital.pulse_bpm, "unit": "/min"}})
     if vital.resp_rate is not None:
-        components.append({"code": {"text": "Respiratory rate"}, "valueQuantity": {"value": vital.resp_rate, "unit": "/min"}})
+        components.append({"code": {"text": "Respiratory rate"}, "valueQuantity": {
+                          "value": vital.resp_rate, "unit": "/min"}})
     if vital.bp_systolic is not None or vital.bp_diastolic is not None:
-        components.append({"code": {"text": "Blood pressure"}, "valueString": f"{vital.bp_systolic or ''}/{vital.bp_diastolic or ''} mmHg"})
+        components.append({"code": {"text": "Blood pressure"},
+                           "valueString": f"{vital.bp_systolic or ''}/{vital.bp_diastolic or ''} mmHg"})
     if vital.spo2_percent is not None:
-        components.append({"code": {"text": "SpO2"}, "valueQuantity": {"value": float(vital.spo2_percent), "unit": "%"}})
+        components.append({"code": {"text": "SpO2"}, "valueQuantity": {
+                          "value": float(vital.spo2_percent), "unit": "%"}})
     if vital.weight_kg is not None:
-        components.append({"code": {"text": "Body weight"}, "valueQuantity": {"value": float(vital.weight_kg), "unit": "kg"}})
+        components.append({"code": {"text": "Body weight"}, "valueQuantity": {
+                          "value": float(vital.weight_kg), "unit": "kg"}})
     if vital.height_cm is not None:
-        components.append({"code": {"text": "Body height"}, "valueQuantity": {"value": float(vital.height_cm), "unit": "cm"}})
+        components.append({"code": {"text": "Body height"}, "valueQuantity": {
+                          "value": float(vital.height_cm), "unit": "cm"}})
     if vital.bmi is not None:
         components.append({"code": {"text": "BMI"}, "valueQuantity": {"value": float(vital.bmi), "unit": "kg/m2"}})
     return {
@@ -142,7 +166,11 @@ def fhir_patient_list(request):
     identifier = request.GET.get("identifier")
     if not identifier:
         return Response(_fhir_bundle([], "/fhir/Patient"))
-    qs = get_patient_queryset(request.user, get_effective_hospital(request)).filter(ghana_health_id__icontains=identifier)[:20]
+    qs = get_patient_queryset(
+        request.user,
+        get_effective_hospital(request)).filter(
+        ghana_health_id__icontains=identifier)[
+            :20]
     entries = [_patient_to_fhir(p) for p in qs]
     return Response(_fhir_bundle(entries, "/fhir/Patient"))
 
@@ -175,7 +203,8 @@ def fhir_encounter_list(request):
     patient = get_patient_queryset(request.user, get_effective_hospital(request)).filter(id=patient_id).first()
     if not patient:
         return Response(_fhir_bundle([], "/fhir/Encounter"))
-    qs = get_encounter_queryset(request.user, patient=patient, effective_hospital=get_effective_hospital(request)).order_by("-encounter_date")[:50]
+    qs = get_encounter_queryset(request.user, patient=patient,
+                                effective_hospital=get_effective_hospital(request)).order_by("-encounter_date")[:50]
     entries = [_encounter_to_fhir(e) for e in qs]
     return Response(_fhir_bundle(entries, "/fhir/Encounter"))
 
@@ -208,7 +237,11 @@ def fhir_condition_list(request):
     patient = get_patient_queryset(request.user, get_effective_hospital(request)).filter(id=patient_id).first()
     if not patient:
         return Response(_fhir_bundle([], "/fhir/Condition"))
-    mr_qs = get_medical_record_queryset(request.user, patient=patient, effective_hospital=get_effective_hospital(request)).filter(record_type="diagnosis")
+    mr_qs = get_medical_record_queryset(
+        request.user,
+        patient=patient,
+        effective_hospital=get_effective_hospital(request)).filter(
+        record_type="diagnosis")
     qs = Diagnosis.objects.filter(record__in=mr_qs).select_related("record")[:50]
     entries = [_diagnosis_to_fhir(d) for d in qs]
     return Response(_fhir_bundle(entries, "/fhir/Condition"))
@@ -221,7 +254,11 @@ def fhir_condition_read(request, pk):
     if request.user.role not in _FHIR_ALLOWED_ROLES:
         return Response({"message": "Permission denied"}, status=status.HTTP_403_FORBIDDEN)
     diagnosis = Diagnosis.objects.filter(id=pk).select_related("record").first()
-    if not diagnosis or not get_medical_record_queryset(request.user, patient=diagnosis.record.patient, effective_hospital=get_effective_hospital(request)).filter(id=diagnosis.record_id).exists():
+    if not diagnosis or not get_medical_record_queryset(
+            request.user,
+            patient=diagnosis.record.patient,
+            effective_hospital=get_effective_hospital(request)).filter(
+            id=diagnosis.record_id).exists():
         return Response(
             {"resourceType": "OperationOutcome", "issue": [{"severity": "error", "code": "not-found"}]},
             status=status.HTTP_404_NOT_FOUND,
@@ -242,7 +279,11 @@ def fhir_medication_request_list(request):
     patient = get_patient_queryset(request.user, get_effective_hospital(request)).filter(id=patient_id).first()
     if not patient:
         return Response(_fhir_bundle([], "/fhir/MedicationRequest"))
-    mr_qs = get_medical_record_queryset(request.user, patient=patient, effective_hospital=get_effective_hospital(request)).filter(record_type="prescription")
+    mr_qs = get_medical_record_queryset(
+        request.user,
+        patient=patient,
+        effective_hospital=get_effective_hospital(request)).filter(
+        record_type="prescription")
     qs = Prescription.objects.filter(record__in=mr_qs).select_related("record")[:50]
     entries = [_prescription_to_fhir(p) for p in qs]
     return Response(_fhir_bundle(entries, "/fhir/MedicationRequest"))
@@ -255,7 +296,11 @@ def fhir_medication_request_read(request, pk):
     if request.user.role not in _FHIR_ALLOWED_ROLES:
         return Response({"message": "Permission denied"}, status=status.HTTP_403_FORBIDDEN)
     prescription = Prescription.objects.filter(id=pk).select_related("record").first()
-    if not prescription or not get_medical_record_queryset(request.user, patient=prescription.record.patient, effective_hospital=get_effective_hospital(request)).filter(id=prescription.record_id).exists():
+    if not prescription or not get_medical_record_queryset(
+            request.user,
+            patient=prescription.record.patient,
+            effective_hospital=get_effective_hospital(request)).filter(
+            id=prescription.record_id).exists():
         return Response(
             {"resourceType": "OperationOutcome", "issue": [{"severity": "error", "code": "not-found"}]},
             status=status.HTTP_404_NOT_FOUND,
@@ -276,7 +321,11 @@ def fhir_observation_list(request):
     patient = get_patient_queryset(request.user, get_effective_hospital(request)).filter(id=patient_id).first()
     if not patient:
         return Response(_fhir_bundle([], "/fhir/Observation"))
-    mr_qs = get_medical_record_queryset(request.user, patient=patient, effective_hospital=get_effective_hospital(request)).filter(record_type="vital_signs")
+    mr_qs = get_medical_record_queryset(
+        request.user,
+        patient=patient,
+        effective_hospital=get_effective_hospital(request)).filter(
+        record_type="vital_signs")
     qs = Vital.objects.filter(record__in=mr_qs).select_related("record")[:50]
     entries = [_vital_to_fhir(v) for v in qs]
     return Response(_fhir_bundle(entries, "/fhir/Observation"))
@@ -289,7 +338,11 @@ def fhir_observation_read(request, pk):
     if request.user.role not in _FHIR_ALLOWED_ROLES:
         return Response({"message": "Permission denied"}, status=status.HTTP_403_FORBIDDEN)
     vital = Vital.objects.filter(id=pk).select_related("record").first()
-    if not vital or not get_medical_record_queryset(request.user, patient=vital.record.patient, effective_hospital=get_effective_hospital(request)).filter(id=vital.record_id).exists():
+    if not vital or not get_medical_record_queryset(
+            request.user,
+            patient=vital.record.patient,
+            effective_hospital=get_effective_hospital(request)).filter(
+            id=vital.record_id).exists():
         return Response(
             {"resourceType": "OperationOutcome", "issue": [{"severity": "error", "code": "not-found"}]},
             status=status.HTTP_404_NOT_FOUND,
@@ -303,17 +356,31 @@ def fhir_observation_read(request, pk):
 def hl7_adt_list(request):
     """GET /hl7/adt?patient=<id> - pipe-delimited ADT-style lines (A01 admit)."""
     if request.user.role not in _FHIR_ALLOWED_ROLES:
-        return Response({"message": "Permission denied"}, status=status.HTTP_403_FORBIDDEN)
+        return Response(
+            {"message": "Permission denied"},
+            status=status.HTTP_403_FORBIDDEN
+        )
     patient_id = request.GET.get("patient")
     if not patient_id:
         return Response({"data": []})
-    patient = get_patient_queryset(request.user, get_effective_hospital(request)).filter(id=patient_id).first()
+    patient = (
+        get_patient_queryset(request.user, get_effective_hospital(request))
+        .filter(id=patient_id)
+        .first()
+    )
     if not patient:
         return Response({"data": []})
     # Minimal ADT A01-style: MSH|^~\\&|MEDSYC|FAC|... | PID|1||<id>|<ghana_health_id>^^^GHA^GH|<name>^...
     lines = []
     msh = "MSH|^~\\&|MEDSYC|FACILITY|||20250101000000||ADT^A01|1|P|2.5"
-    pid = f"PID|1||{patient.id}||{patient.full_name.replace('^', ' ')}^^{patient.gender or 'U'}|{patient.date_of_birth.isoformat() if patient.date_of_birth else ''}|||{patient.ghana_health_id or ''}^^^GHA^GH"
+    pid = f"PID|1||{
+        patient.id}||{
+        patient.full_name.replace(
+            '^',
+            ' ')}^^{
+                patient.gender or 'U'}|{
+                    patient.date_of_birth.isoformat() if patient.date_of_birth else ''}|||{
+                        patient.ghana_health_id or ''}^^^GHA^GH"
     pv1 = "PV1|1|O"
     lines.extend([msh, pid, pv1])
     return Response({"data": lines, "format": "HL7v2.5 ADT A01"})
@@ -323,7 +390,10 @@ def hl7_adt_list(request):
 @api_view(["POST"])
 @permission_classes([IsAuthenticated])
 def fhir_push(request):
-    """Push a FHIR resource to an external URL. Body: target_url, resource_type (Patient|Encounter|Condition|MedicationRequest|Observation), resource_id."""
+    """
+    Push a FHIR resource to an external URL. Body: target_url, resource_type
+    (Patient|Encounter|Condition|MedicationRequest|Observation), resource_id.
+    """
     if request.user.role not in ("super_admin", "hospital_admin", "doctor"):
         return Response(
             {"message": "Permission denied"},
@@ -354,16 +424,28 @@ def fhir_push(request):
             resource = _encounter_to_fhir(enc)
     elif resource_type == "Condition":
         diag = Diagnosis.objects.filter(id=resource_id).select_related("record").first()
-        if diag and get_medical_record_queryset(request.user, patient=diag.record.patient, effective_hospital=effective).filter(id=diag.record_id).exists():
+        if diag and get_medical_record_queryset(
+                request.user,
+                patient=diag.record.patient,
+                effective_hospital=effective).filter(
+                id=diag.record_id).exists():
             resource = _diagnosis_to_fhir(diag)
     elif resource_type == "MedicationRequest":
         from records.models import Prescription
         rx = Prescription.objects.filter(id=resource_id).select_related("record").first()
-        if rx and get_medical_record_queryset(request.user, patient=rx.record.patient, effective_hospital=effective).filter(id=rx.record_id).exists():
+        if rx and get_medical_record_queryset(
+                request.user,
+                patient=rx.record.patient,
+                effective_hospital=effective).filter(
+                id=rx.record_id).exists():
             resource = _prescription_to_fhir(rx)
     elif resource_type == "Observation":
         vital = Vital.objects.filter(id=resource_id).select_related("record").first()
-        if vital and get_medical_record_queryset(request.user, patient=vital.record.patient, effective_hospital=effective).filter(id=vital.record_id).exists():
+        if vital and get_medical_record_queryset(
+                request.user,
+                patient=vital.record.patient,
+                effective_hospital=effective).filter(
+                id=vital.record_id).exists():
             resource = _vital_to_fhir(vital)
     if not resource:
         return Response(

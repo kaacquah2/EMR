@@ -14,3 +14,5 @@ def test_health_returns_200_and_ok(api_client):
     data = res.json()
     assert data.get("status") == "ok"
     assert data.get("database") == "ok"
+
+

@@ -1,0 +1,150 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+            line-height: 1.6;
+            color: #333;
+        }
+        .container {
+            max-width: 600px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+        .header {
+            background-color: #1e40af;
+            color: white;
+            padding: 20px;
+            text-align: center;
+            border-radius: 8px 8px 0 0;
+        }
+        .content {
+            background-color: #f9fafb;
+            padding: 30px 20px;
+            border: 1px solid #e5e7eb;
+            border-top: none;
+        }
+        .footer {
+            background-color: #f3f4f6;
+            padding: 15px 20px;
+            text-align: center;
+            font-size: 12px;
+            color: #6b7280;
+            border-radius: 0 0 8px 8px;
+            border: 1px solid #e5e7eb;
+            border-top: none;
+        }
+        .button {
+            display: inline-block;
+            background-color: #1e40af;
+            color: white;
+            padding: 12px 24px;
+            text-decoration: none;
+            border-radius: 6px;
+            margin: 20px 0;
+            font-weight: 500;
+        }
+        .button:hover {
+            background-color: #1e3a8a;
+        }
+        .password-policy {
+            background-color: #eff6ff;
+            border-left: 4px solid #1e40af;
+            padding: 15px;
+            margin: 20px 0;
+            border-radius: 4px;
+        }
+        .password-policy ul {
+            margin: 10px 0;
+            padding-left: 20px;
+        }
+        .password-policy li {
+            margin: 5px 0;
+        }
+        .highlight {
+            background-color: #fef3c7;
+            padding: 2px 4px;
+            border-radius: 2px;
+        }
+        .expiry-warning {
+            background-color: #fef2f2;
+            border-left: 4px solid #dc2626;
+            padding: 15px;
+            margin: 20px 0;
+            border-radius: 4px;
+            color: #7f1d1d;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>Welcome to MedSync EMR</h1>
+        </div>
+
+        <div class="content">
+            <p>Hello <strong>{{ user_name }}</strong>,</p>
+
+            <p>Your account at <strong>{{ hospital_name }}</strong> has been created. You're one step away from accessing the system!</p>
+
+            <h2>Complete Your Account Setup</h2>
+            <p>Click the button below to activate your account and set up your security credentials:</p>
+
+            <div style="text-align: center;">
+                <a href="{{ activation_url }}" class="button">Activate Your Account</a>
+            </div>
+
+            <p><strong>Or copy this link:</strong><br>
+            <code style="background-color: #f3f4f6; padding: 8px; border-radius: 4px; word-break: break-all;">{{ activation_url }}</code></p>
+
+            <h2>What Happens Next</h2>
+            <ol>
+                <li><strong>Activate your account:</strong> Click the link above</li>
+                <li><strong>Set your password:</strong> Follow the password requirements below</li>
+                <li><strong>Enable two-factor authentication (MFA):</strong> Scan a QR code with your authenticator app (Google Authenticator, Authy, Microsoft Authenticator, etc.)</li>
+                <li><strong>Save backup codes:</strong> Store 8 recovery codes in a safe place</li>
+                <li><strong>Log in:</strong> Use your credentials to access MedSync</li>
+            </ol>
+
+            <div class="password-policy">
+                <h3 style="margin-top: 0;">Password Requirements</h3>
+                <p>Your password must contain:</p>
+                <ul>
+                    <li>At least <span class="highlight">12 characters</span></li>
+                    <li>At least one <span class="highlight">uppercase letter</span> (A-Z)</li>
+                    <li>At least one <span class="highlight">lowercase letter</span> (a-z)</li>
+                    <li>At least one <span class="highlight">number</span> (0-9)</li>
+                    <li>At least one <span class="highlight">special symbol</span> (!@#$%^&* etc.)</li>
+                </ul>
+            </div>
+
+            <div class="expiry-warning">
+                <strong>⚠️ Important:</strong> This activation link expires in <strong>{{ expiry_hours }} hours</strong> ({{ expiry_time }}). 
+                After that, you'll need to request a new invitation.
+            </div>
+
+            <h2>Two-Factor Authentication (MFA)</h2>
+            <p>During activation, you'll set up MFA for extra security. You'll need one of these authenticator apps:</p>
+            <ul>
+                <li>Google Authenticator</li>
+                <li>Authy</li>
+                <li>Microsoft Authenticator</li>
+                <li>Any standard TOTP app</li>
+            </ul>
+
+            <p>After activation, you'll receive 8 backup codes. <strong>Save these in a safe place</strong> — you can use them to access your account if you lose your authenticator app.</p>
+
+            <h2>Need Help?</h2>
+            <p>If you didn't request this account or have any questions, please contact your hospital administrator at <strong>{{ hospital_admin_email }}</strong>.</p>
+        </div>
+
+        <div class="footer">
+            <p>MedSync EMR - Multi-Hospital Health Information Exchange System</p>
+            <p>This is an automated message. Please do not reply to this email.</p>
+            <p><a href="{{ support_url }}" style="color: #1e40af; text-decoration: none;">Help & Support</a></p>
+        </div>
+    </div>
+</body>
+</html>

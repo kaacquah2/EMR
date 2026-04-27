@@ -1,0 +1,160 @@
+============================= test session starts =============================
+platform win32 -- Python 3.13.2, pytest-9.0.2, pluggy-1.6.0 -- C:\Users\OSCARPACK\Downloads\EMR\.venv\Scripts\python.exe
+cachedir: .pytest_cache
+django: version: 4.2.29
+rootdir: C:\Users\OSCARPACK\Downloads\EMR\medsync-backend
+configfile: pytest.ini
+plugins: anyio-4.12.1, django-4.12.0
+collecting ... collected 1 item
+
+Creating test database for alias 'default' ('file:memorydb_default?mode=memory&cache=shared')...
+
+api/tests/test_webauthn_passkey.py::PasskeyRegistrationBeginTestCase::test_passkey_register_begin_returns_challenge Operations to perform:
+  Synchronize unmigrated apps: channels, corsheaders, daphne, debug_toolbar, django_otp, messages, rest_framework, rest_framework_simplejwt, staticfiles
+  Apply all migrations: admin, api, auth, contenttypes, core, django_celery_beat, django_celery_results, interop, otp_totp, patients, records, sessions, token_blacklist
+Synchronizing apps without migrations:
+  Creating tables...
+    Running deferred SQL...
+Running migrations:
+  Applying contenttypes.0001_initial... OK
+  Applying contenttypes.0002_remove_content_type_name... OK
+  Applying auth.0001_initial... OK
+  Applying auth.0002_alter_permission_name_max_length... OK
+  Applying auth.0003_alter_user_email_max_length... OK
+  Applying auth.0004_alter_user_username_opts... OK
+  Applying auth.0005_alter_user_last_login_null... OK
+  Applying auth.0006_require_contenttypes_0002... OK
+  Applying auth.0007_alter_validators_add_error_messages... OK
+  Applying auth.0008_alter_user_username_max_length... OK
+  Applying auth.0009_alter_user_last_name_max_length... OK
+  Applying auth.0010_alter_group_name_max_length... OK
+  Applying auth.0011_update_proxy_permissions... OK
+  Applying auth.0012_alter_user_first_name_max_length... OK
+  Applying core.0001_initial... OK
+  Applying admin.0001_initial... OK
+  Applying admin.0002_logentry_remove_auto_add... OK
+  Applying admin.0003_logentry_add_action_flag_choices... OK
+  Applying core.0002_hie_shared_record_access_consent_referral... OK
+  Applying core.0003_blueprint_alerts_encounters... OK
+  Applying core.0004_audit_log_chain_hash_default... OK
+  Applying core.0005_workflow_department_lab_unit... OK
+  Applying core.0006_patient_identifiers_duplicates... OK
+  Applying core.0007_invoice_billing... OK
+  Applying core.0008_alter_auditlog_action... OK
+  Applying core.0009_userpasswordhistory... OK
+  Applying core.0010_superadminhospitalaccess... OK
+  Applying core.0011_phase7_password_recovery... OK
+  Applying core.0012_mfasession_and_more... OK
+  Applying core.0013_beds... OK
+  Applying core.0014_auditlog_signature_and_more... OK
+  Applying core.0015_backupcoderatelimit... OK
+  Applying core.0016_tasksubmission... OK
+  Applying core.0017_superadminhospitalaccess_accepted_at... OK
+  Applying core.0018_mfasession_email_otp_hash... OK
+  Applying core.0019_user_last_role_reviewed_at... OK
+  Applying core.0020_add_mfa_failure_model... OK
+  Applying core.0021_add_password_reset_attempt_model... OK
+  Applying core.0022_add_hospital_ai_enabled... OK
+  Applying core.0023_add_version_field... OK
+  Applying core.0024_auditlog_audit_resource_idx... OK
+  Applying patients.0001_blueprint_alerts_encounters... OK
+  Applying api.0001_initial_ai_models... OK
+  Applying api.0002_rename_ai_analysis_patient_created_idx_ai_analysis_patient_34fc39_idx_and_more... OK
+  Applying api.0003_ai_analysis_job... OK
+  Applying api.0004_batchimportitem_batchimportjob_bulkinvitationitem_and_more... OK
+  Applying api.0005_alter_aianalysis_analysis_type_and_more... OK
+  Applying core.0025_announcement... OK
+  Applying core.0026_userpasskey... OK
+  Applying core.0027_userpasskey_is_synced_userpasskey_last_ip_address_and_more... OK
+  Applying django_celery_beat.0001_initial... OK
+  Applying django_celery_beat.0002_auto_20161118_0346... OK
+  Applying django_celery_beat.0003_auto_20161209_0049... OK
+  Applying django_celery_beat.0004_auto_20170221_0000... OK
+  Applying django_celery_beat.0005_add_solarschedule_events_choices... OK
+  Applying django_celery_beat.0006_auto_20180322_0932... OK
+  Applying django_celery_beat.0007_auto_20180521_0826... OK
+  Applying django_celery_beat.0008_auto_20180914_1922... OK
+  Applying django_celery_beat.0006_auto_20180210_1226... OK
+  Applying django_celery_beat.0006_periodictask_priority... OK
+  Applying django_celery_beat.0009_periodictask_headers... OK
+  Applying django_celery_beat.0010_auto_20190429_0326... OK
+  Applying django_celery_beat.0011_auto_20190508_0153... OK
+  Applying django_celery_beat.0012_periodictask_expire_seconds... OK
+  Applying django_celery_beat.0013_auto_20200609_0727... OK
+  Applying django_celery_beat.0014_remove_clockedschedule_enabled... OK
+  Applying django_celery_beat.0015_edit_solarschedule_events_choices... OK
+  Applying django_celery_beat.0016_alter_crontabschedule_timezone... OK
+  Applying django_celery_beat.0017_alter_crontabschedule_month_of_year... OK
+  Applying django_celery_beat.0018_improve_crontab_helptext... OK
+  Applying django_celery_beat.0019_alter_periodictasks_options... OK
+  Applying django_celery_results.0001_initial... OK
+  Applying django_celery_results.0002_add_task_name_args_kwargs... OK
+  Applying django_celery_results.0003_auto_20181106_1101... OK
+  Applying django_celery_results.0004_auto_20190516_0412... OK
+  Applying django_celery_results.0005_taskresult_worker... OK
+  Applying django_celery_results.0006_taskresult_date_created... OK
+  Applying django_celery_results.0007_remove_taskresult_hidden... OK
+  Applying django_celery_results.0008_chordcounter... OK
+  Applying django_celery_results.0009_groupresult... OK
+  Applying django_celery_results.0010_remove_duplicate_indices... OK
+  Applying django_celery_results.0011_taskresult_periodic_task_name... OK
+  Applying django_celery_results.0012_taskresult_date_started... OK
+  Applying django_celery_results.0013_taskresult_django_cele_periodi_1993cf_idx... OK
+  Applying django_celery_results.0014_alter_taskresult_status... OK
+  Applying interop.0001_initial... OK
+  Applying interop.0002_hie_shared_record_access_consent_referral... OK
+  Applying interop.0003_global_patient_identifiers... OK
+  Applying interop.0004_add_break_glass_expires_at... OK
+  Applying interop.0005_breakglass_review_fields... OK
+  Applying interop.0006_breakglass_reason_code... OK
+  Applying interop.0007_add_version_field... OK
+  Applying otp_totp.0001_initial... OK
+  Applying otp_totp.0002_auto_20190420_0723... OK
+  Applying otp_totp.0003_add_timestamps... OK
+  Applying patients.0002_clinical_alert... OK
+  Applying patients.0003_appointment_scheduling... OK
+  Applying patients.0004_patient_identifiers_duplicates... OK
+  Applying patients.0005_invoice_billing... OK
+  Applying patients.0006_admission_bed... OK
+  Applying patients.0007_add_no_show_fields... OK
+  Applying patients.0008_encrypt_phi_fields... OK
+  Applying patients.0009_add_version_field... OK
+  Applying patients.0010_add_walkin_fields... OK
+  Applying patients.0011_emergency_triage... OK
+  Applying patients.0012_alter_appointment_chief_complaint_and_more... OK
+  Applying records.0001_blueprint_alerts_encounters... OK
+  Applying records.0002_encounter... OK
+  Applying records.0003_workflow_encounter_lab... OK
+  Applying records.0004_rename_records_enc_dept_st_idx_records_enc_assigne_51c098_idx_and_more... OK
+  Applying records.0005_clinical_docs_visit_status... OK
+  Applying records.0006_radiology_order... OK
+  Applying records.0007_nurseshift_shifthandover_and_more... OK
+  Applying records.0008_nursingnote_handover_signatures... OK
+  Applying records.0009_laborder_state_machine_fields... OK
+  Applying records.0010_encounter_draft... OK
+  Applying records.0011_sbar_handover_signatures... OK
+  Applying records.0012_add_encounter_template... OK
+  Applying records.0013_add_version_field... OK
+  Applying records.0014_incident_medicationadministration_and_more... OK
+  Applying records.0015_pharmacy_dispensing... OK
+  Applying records.0016_medication_schedule... OK
+  Applying records.0017_rename_records_enc_patient_fa1f48_idx_encounter_patient_0dba2d_idx_and_more... OK
+  Applying records.0018_remove_encounter_records_enc_patient_fa1f48_idx_and_more... OK
+  Applying sessions.0001_initial... OK
+  Applying token_blacklist.0001_initial... OK
+  Applying token_blacklist.0002_outstandingtoken_jti_hex... OK
+  Applying token_blacklist.0003_auto_20171017_2007... OK
+  Applying token_blacklist.0004_auto_20171017_2013... OK
+  Applying token_blacklist.0005_remove_outstandingtoken_jti... OK
+  Applying token_blacklist.0006_auto_20171017_2113... OK
+  Applying token_blacklist.0007_auto_20171017_2214... OK
+  Applying token_blacklist.0008_migrate_to_bigautofield... OK
+  Applying token_blacklist.0010_fix_migrate_to_bigautofield... OK
+  Applying token_blacklist.0011_linearizes_history... OK
+  Applying token_blacklist.0012_alter_outstandingtoken_user... OK
+  Applying token_blacklist.0013_alter_blacklistedtoken_options_and_more... OK
+Destroying test database for alias 'default' ('file:memorydb_default?mode=memory&cache=shared')...
+
+PASSED
+
+============================= 1 passed in 33.01s ==============================

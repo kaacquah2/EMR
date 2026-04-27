@@ -8,14 +8,17 @@ export function useEncounters(patientId: string | null) {
   const api = useApi();
   const [encounters, setEncounters] = useState<Encounter[]>([]);
   const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   const fetch = useCallback(async () => {
     if (!patientId) return;
     setLoading(true);
+    setError(null);
     try {
       const data = await api.get<{ data: Encounter[] }>(`/patients/${patientId}/encounters`);
       setEncounters(data.data || []);
-    } catch {
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to load encounters");
       setEncounters([]);
     } finally {
       setLoading(false);
@@ -26,7 +29,7 @@ export function useEncounters(patientId: string | null) {
     if (patientId) fetch();
   }, [patientId, fetch]);
 
-  return { encounters, loading, fetch };
+  return { encounters, loading, error, fetch };
 }
 
 export function useCreateEncounter(patientId: string | null) {
@@ -125,9 +128,13 @@ export function useWorklistEncounters() {
     referrals: 0,
   });
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
   const fetch = useCallback(async (silent = false, filters?: { department_id?: string; encounter_type?: string }) => {
-    if (!silent) setLoading(true);
+    if (!silent) {
+      setLoading(true);
+      setError(null);
+    }
     try {
       const params = new URLSearchParams();
       if (filters?.department_id) params.set("department_id", filters.department_id);
@@ -136,7 +143,8 @@ export function useWorklistEncounters() {
       const data = await api.get<{ data: WorklistEncounter[]; summary?: WorklistSummary }>(`/worklist/encounters${suffix}`);
       setEncounters(data.data || []);
       if (data.summary) setSummary(data.summary);
-    } catch {
+    } catch (err) {
+      if (!silent) setError(err instanceof Error ? err.message : "Failed to load worklist encounters");
       setEncounters([]);
       setSummary({ queue_count: 0, pending_labs: 0, pending_prescriptions: 0, alerts: 0, referrals: 0 });
     } finally {
@@ -148,5 +156,5 @@ export function useWorklistEncounters() {
     fetch();
   }, [fetch]);
 
-  return { encounters, summary, loading, fetch };
+  return { encounters, summary, loading, error, fetch };
 }

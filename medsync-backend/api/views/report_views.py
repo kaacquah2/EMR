@@ -9,7 +9,7 @@ from rest_framework.decorators import api_view, permission_classes
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 
-from patients.models import Patient, Invoice
+from patients.models import Invoice
 from core.models import AuditLog
 from api.utils import get_patient_queryset, get_effective_hospital, get_request_hospital
 
@@ -121,7 +121,8 @@ def invoice_list_create(request):
         except Hospital.DoesNotExist:
             return Response({"data": []})
     if request.method == "GET":
-        qs = Invoice.objects.filter(hospital=hospital).select_related("patient", "created_by").order_by("-created_at")[:100]
+        qs = Invoice.objects.filter(hospital=hospital).select_related(
+            "patient", "created_by").order_by("-created_at")[:100]
         if request.GET.get("patient_id"):
             qs = qs.filter(patient_id=request.GET.get("patient_id"))
         if request.GET.get("status"):
@@ -157,18 +158,17 @@ def invoice_list_create(request):
             return Response({"message": "Patient not found or not at this hospital"}, status=status.HTTP_404_NOT_FOUND)
         amount_cents = int(request.data.get("amount_cents") or 0)
         inv = Invoice.objects.create(
-            patient=patient,
-            hospital=hospital,
-            amount_cents=amount_cents,
-            currency=(request.data.get("currency") or "GHS").strip()[:3],
-            status=request.data.get("status") if request.data.get("status") in ("draft", "issued", "paid", "partial", "cancelled") else "draft",
-            notes=(request.data.get("notes") or "").strip() or None,
-            created_by=request.user,
-        )
-        return Response(
-            {"id": str(inv.id), "patient_id": str(inv.patient_id), "amount_cents": inv.amount_cents, "status": inv.status},
-            status=status.HTTP_201_CREATED,
-        )
+            patient=patient, hospital=hospital, amount_cents=amount_cents, currency=(
+                request.data.get("currency") or "GHS").strip()[
+                :3], status=request.data.get("status") if request.data.get("status") in (
+                "draft", "issued", "paid", "partial", "cancelled") else "draft", notes=(
+                    request.data.get("notes") or "").strip() or None, created_by=request.user, )
+        return Response({"id": str(inv.id),
+                         "patient_id": str(inv.patient_id),
+                         "amount_cents": inv.amount_cents,
+                         "status": inv.status},
+                        status=status.HTTP_201_CREATED,
+                        )
     return Response(status=status.HTTP_405_METHOD_NOT_ALLOWED)
 
 

@@ -1,0 +1,54 @@
+{
+  "overall_auc_roc": 0.7296,
+  "overall_sensitivity": 0.9062,
+  "overall_specificity": 0.5187,
+  "diseases": {
+    "readmission_risk": {
+      "auc_roc": 0.7296,
+      "sensitivity": 0.9062,
+      "specificity": 0.5187,
+      "samples": 2000,
+      "positive_rate": 0.108,
+      "optimal_threshold": 0.1234,
+      "data_source": "synthetic"
+    }
+  },
+  "metadata": {
+    "test_data_size": 300,
+    "test_data_source": "SYNTHETIC Dataset",
+    "training_date": "2026-04-20",
+    "cross_validation_folds": 5,
+    "model_names": [
+      "LogisticRegression",
+      "RandomForest",
+      "XGBoost"
+    ],
+    "ensemble_weights": [
+      0.2,
+      0.3,
+      0.5
+    ],
+    "data_size": 2000,
+    "readmission_rate": 0.108
+  },
+  "individual_models": {
+    "logistic_regression": {
+      "auc_roc": 0.7074,
+      "sensitivity": 0.8438,
+      "specificity": 0.4851,
+      "optimal_threshold": 0.3044
+    },
+    "random_forest": {
+      "auc_roc": 0.7303,
+      "sensitivity": 0.9375,
+      "specificity": 0.4739,
+      "optimal_threshold": 0.0904
+    },
+    "xgboost": {
+      "auc_roc": 0.7241,
+      "sensitivity": 0.7188,
+      "specificity": 0.6642,
+      "optimal_threshold": 0.0708
+    }
+  }
+}

@@ -19,8 +19,8 @@ const roleDashboardLoading = (
 
 const NurseWardDashboard = dynamic(
   () =>
-    import("@/components/features/NurseWardDashboard").then((m) => ({
-      default: m.NurseWardDashboard,
+    import("@/components/features/NurseWardDashboardEnhanced").then((m) => ({
+      default: m.NurseWardDashboardEnhanced,
     })),
   { loading: () => roleDashboardLoading },
 );

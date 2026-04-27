@@ -3,6 +3,7 @@ from django.db import models
 from django.utils import timezone
 from core.models import Hospital, User
 from patients.models import Patient
+from django_cryptography.fields import encrypt
 
 
 class GlobalPatient(models.Model):
@@ -27,19 +28,19 @@ class GlobalPatient(models.Model):
     ]
 
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
-    national_id = models.CharField(max_length=50, unique=True, null=True, blank=True)
-    ghana_health_id = models.CharField(max_length=50, blank=True, null=True)
-    nhis_number = models.CharField(max_length=50, blank=True, null=True)
-    passport_number = models.CharField(max_length=50, blank=True, null=True)
-    first_name = models.CharField(max_length=100)
-    last_name = models.CharField(max_length=100)
-    date_of_birth = models.DateField()
+    national_id = encrypt(models.CharField(max_length=50, unique=True, null=True, blank=True))
+    ghana_health_id = encrypt(models.CharField(max_length=50, blank=True, null=True))
+    nhis_number = encrypt(models.CharField(max_length=50, blank=True, null=True))
+    passport_number = encrypt(models.CharField(max_length=50, blank=True, null=True))
+    first_name = encrypt(models.CharField(max_length=100))
+    last_name = encrypt(models.CharField(max_length=100))
+    date_of_birth = encrypt(models.DateField())
     gender = models.CharField(max_length=10, choices=GENDERS)
     blood_group = models.CharField(
         max_length=10, choices=BLOOD_GROUPS, default="unknown", blank=True
     )
-    phone = models.CharField(max_length=20, blank=True, null=True)
-    email = models.EmailField(blank=True, null=True)
+    phone = encrypt(models.CharField(max_length=20, blank=True, null=True))
+    email = encrypt(models.EmailField(blank=True, null=True))
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
     version = models.IntegerField(default=1)
@@ -48,6 +49,9 @@ class GlobalPatient(models.Model):
         indexes = [
             models.Index(fields=["last_name", "first_name"]),
             models.Index(fields=["national_id"]),
+            models.Index(fields=["ghana_health_id"]),
+            models.Index(fields=["nhis_number"]),
+            models.Index(fields=["passport_number"]),
         ]
 
     @property
@@ -80,7 +84,10 @@ class FacilityPatient(models.Model):
 
     class Meta:
         unique_together = ("facility", "global_patient")
-        indexes = [models.Index(fields=["facility", "global_patient"])]
+        indexes = [
+            models.Index(fields=["facility", "global_patient"]),
+            models.Index(fields=["local_patient_id"]),
+        ]
 
 
 class Consent(models.Model):
@@ -110,6 +117,17 @@ class Consent(models.Model):
         indexes = [
             models.Index(fields=["global_patient", "granted_to_facility", "is_active"]),
         ]
+
+    def is_expired(self):
+        """Check if consent has expired."""
+        if self.expires_at is None:
+            return False  # No expiry = never expires
+        return timezone.now() > self.expires_at
+
+    def is_valid(self):
+        """Check if consent is both active and not expired."""
+        return self.is_active and not self.is_expired()
+
 
 
 class Referral(models.Model):
@@ -154,6 +172,7 @@ class Referral(models.Model):
     )
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
+    version = models.IntegerField(default=1, help_text="Version for optimistic locking")
 
     class Meta:
         indexes = [models.Index(fields=["to_facility", "status"])]

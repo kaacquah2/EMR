@@ -2,7 +2,7 @@ import re
 
 from django.test import TestCase
 
-from api.permissions import PERMISSION_MATRIX
+from shared.permissions import PERMISSION_MATRIX
 from api.urls import urlpatterns
 
 
@@ -27,3 +27,5 @@ class TestAllRoutesHavePermissions(TestCase):
             [],
             "Routes missing permission coverage:\n" + "\n".join(f"  - {route}" for route in uncovered),
         )
+
+

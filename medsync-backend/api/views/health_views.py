@@ -50,8 +50,10 @@ def build_health_payload(*, deep: bool = False) -> tuple[dict, bool]:
     if deep:
         try:
             from django.conf import settings
-            # Prefer explicit REDIS_URL (Channels / cloud) over CELERY_BROKER_URL, which defaults to localhost in settings.
-            url = (getattr(settings, "REDIS_URL", "") or "").strip() or (getattr(settings, "CELERY_BROKER_URL", "") or "").strip()
+            # Prefer explicit REDIS_URL (Channels / cloud) over CELERY_BROKER_URL,
+            # which defaults to localhost in settings.
+            url = (getattr(settings, "REDIS_URL", "") or "").strip() or (
+                getattr(settings, "CELERY_BROKER_URL", "") or "").strip()
             if not url:
                 redis_ok = False
             else:
@@ -65,7 +67,8 @@ def build_health_payload(*, deep: bool = False) -> tuple[dict, bool]:
     else:
         try:
             from django.conf import settings
-            url = (getattr(settings, "REDIS_URL", "") or "").strip() or (getattr(settings, "CELERY_BROKER_URL", "") or "").strip()
+            url = (getattr(settings, "REDIS_URL", "") or "").strip() or (
+                getattr(settings, "CELERY_BROKER_URL", "") or "").strip()
             if not url:
                 redis_ok = False
         except Exception:
@@ -105,8 +108,8 @@ def build_health_payload(*, deep: bool = False) -> tuple[dict, bool]:
     if deep:
         audit_ok = True
         try:
-            from api.views.superadmin_views import _compute_audit_chain_status  # local import
-            out = _compute_audit_chain_status(max_users=50, max_logs_per_user=200)
+            from api.services.audit_service import compute_audit_chain_status  # local import
+            out = compute_audit_chain_status(max_users=50, max_logs_per_user=200)
             audit_ok = out.get("status") == "valid"
             audit_extra["last_validated"] = out.get("last_checked_at")
         except Exception:

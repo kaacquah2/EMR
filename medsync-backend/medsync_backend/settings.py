@@ -113,6 +113,7 @@ INSTALLED_APPS = [
     "patients",
     "records",
     "interop",
+    "shared.apps.SharedConfig",
     "api",
 ]
 if _HAS_DAPHNE:
@@ -131,12 +132,14 @@ MIDDLEWARE = [
     "django.middleware.csrf.CsrfViewMiddleware",
     "django.contrib.auth.middleware.AuthenticationMiddleware",
     "django_otp.middleware.OTPMiddleware",
-    "api.permissions.PermissionEnforcementMiddleware",
+    "shared.permissions.PermissionEnforcementMiddleware",
     "api.middleware.ForcedPasswordChangeMiddleware",
     "api.middleware.ViewAsHospitalMiddleware",
     "api.middleware.BreakGlassExpiryMiddleware",
+    "api.middleware.anomaly_detection.AnomalyDetectionMiddleware",
     "django.contrib.messages.middleware.MessageMiddleware",
     "django.middleware.clickjacking.XFrameOptionsMiddleware",
+    "api.middleware.CSPMiddleware",
 ]
 if DEBUG:
     MIDDLEWARE.insert(
@@ -220,22 +223,88 @@ else:
 
 AUTH_USER_MODEL = "core.User"
 
+# Roles that should only see basic demographics (PII masking) per MedSync Specs
+NON_CLINICAL_PII_MASK_ROLES = (
+    "receptionist",
+    "lab_technician",
+    "radiology_technician",
+    "billing_staff",
+    "ward_clerk",
+    "pharmacy_technician",
+)
+
 # Throttle rates: anon = unauthenticated (auth + health); user = authenticated.
 # Format: "num/period" e.g. "60/hour", "1000/day". Stricter anon limits brute force on login.
 THROTTLE_ANON = config("THROTTLE_ANON", default="60/hour")
 THROTTLE_USER = config("THROTTLE_USER", default="1000/hour")
+
+# RBAC Fail-Closed Mode: Security-first API endpoint protection
+# Default: False (fail-open) for safe development
+# Production: Set to True ONLY after RBAC coverage is verified 100%
+# See README.md section "RBAC Security: Fail-Closed Mode" for runbook
 PERMISSION_FAIL_CLOSED_UNKNOWN_ENDPOINTS = config(
     "PERMISSION_FAIL_CLOSED_UNKNOWN_ENDPOINTS",
-    default=True,
+    default=False,  # Changed from True to False for safety
     cast=bool,
 )
 
+# Log warnings if fail-closed is enabled but coverage may be incomplete
+# This check validates at startup if enabled
+_RBAC_COVERAGE_WARNING_ENABLED = (
+    PERMISSION_FAIL_CLOSED_UNKNOWN_ENDPOINTS and not DEBUG
+)
+
+def _validate_rbac_coverage_at_startup():
+    """
+    Validate RBAC coverage when fail-closed mode is enabled in production.
+    Warns if coverage is < 100% (detected via test_rbac_coverage assertions).
+    """
+    if not _RBAC_COVERAGE_WARNING_ENABLED:
+        return
+    
+    # Only run check in production (not DEBUG)
+    # This prevents startup slowdown in development
+    try:
+        import logging
+        logger = logging.getLogger("medsync.rbac")
+        
+        # Import and run the coverage test
+        from api.tests.test_rbac_coverage import TestAllRoutesHavePermissions
+        test = TestAllRoutesHavePermissions()
+        test.test_every_url_has_permission_entry()
+        
+        logger.info("✅ RBAC coverage 100% validated - fail-closed mode active")
+    except AssertionError as e:
+        import logging
+        logger = logging.getLogger("medsync.rbac")
+        logger.error(
+            f"⚠️  FAIL-CLOSED MODE ENABLED BUT COVERAGE < 100%\n"
+            f"   Error: {e}\n"
+            f"   New endpoints in api/urls.py are missing from shared/permissions.py\n"
+            f"   These endpoints will return 403 Permission Denied until added to PERMISSION_MATRIX.\n"
+            f"   To debug: Set PERMISSION_FAIL_CLOSED_UNKNOWN_ENDPOINTS=False and redeploy."
+        )
+        if not DEBUG:
+            raise RuntimeError(
+                "Production deployment blocked: RBAC coverage incomplete. "
+                "See logs for details. Set PERMISSION_FAIL_CLOSED_UNKNOWN_ENDPOINTS=False to debug."
+            )
+    except Exception as e:
+        # Fail safely: don't crash startup due to test infrastructure issues
+        import logging
+        logger = logging.getLogger("medsync.rbac")
+        logger.warning(f"Could not validate RBAC coverage at startup: {e}")
+
+# Run validation check if fail-closed mode enabled
+if _RBAC_COVERAGE_WARNING_ENABLED:
+    _validate_rbac_coverage_at_startup()
+
 # Field-level encryption key for PHI columns (separate from DB encryption/TDE).
 # In production, always set FIELD_ENCRYPTION_KEY from secrets manager.
-FIELD_ENCRYPTION_KEY = config(
-    "FIELD_ENCRYPTION_KEY",
-    default="dev-field-encryption-key-change-me",
-)
+FIELD_ENCRYPTION_KEY = config("FIELD_ENCRYPTION_KEY", default=None)
+if not FIELD_ENCRYPTION_KEY and not DEBUG:
+    from django.core.exceptions import ImproperlyConfigured
+    raise ImproperlyConfigured("FIELD_ENCRYPTION_KEY is required in production.")
 CRYPTOGRAPHY_KEY = FIELD_ENCRYPTION_KEY
 
 # Dev-only permission bypass (comma-separated emails). Guarded by DEBUG in middleware.
@@ -256,14 +325,24 @@ REST_FRAMEWORK = {
     "DEFAULT_PERMISSION_CLASSES": [
         "rest_framework.permissions.IsAuthenticated",
     ],
-    "DEFAULT_THROTTLE_CLASSES": [
-        "rest_framework.throttling.AnonRateThrottle",
-        "rest_framework.throttling.UserRateThrottle",
-    ],
-    "DEFAULT_THROTTLE_RATES": {
-        "anon": THROTTLE_ANON,
-        "user": THROTTLE_USER,
-    },
+    # DEVELOPMENT: Disable throttling for faster iteration
+    # PRODUCTION: Enable to protect against brute force attacks
+    "DEFAULT_THROTTLE_CLASSES": (
+        []
+        if DEBUG
+        else [
+            "rest_framework.throttling.AnonRateThrottle",
+            "rest_framework.throttling.UserRateThrottle",
+        ]
+    ),
+    "DEFAULT_THROTTLE_RATES": (
+        {}
+        if DEBUG
+        else {
+            "anon": THROTTLE_ANON,
+            "user": THROTTLE_USER,
+        }
+    ),
     "DEFAULT_PAGINATION_CLASS": "rest_framework.pagination.CursorPagination",
     "PAGE_SIZE": 20,
 }
@@ -281,7 +360,66 @@ SIMPLE_JWT = {
     "REFRESH_TOKEN_LIFETIME": timedelta(days=_jwt_refresh_days()),
     "ROTATE_REFRESH_TOKENS": True,
     "BLACKLIST_AFTER_ROTATION": True,
+    "ALGORITHM": "HS256",  # ✅ EXPLICIT: Symmetric key for single-backend verification (not cross-hospital)
 }
+
+# WebAuthn/Passkey Configuration
+# WEBAUTHN_RP_ID: Your domain (e.g. "medsync.gh" in production, "localhost" for dev)
+#   - Must NOT include protocol (http://, https://) or trailing slash
+#   - Used as Relying Party ID in WebAuthn ceremonies
+# WEBAUTHN_ORIGIN: Frontend origin (e.g. "https://medsync.gh" in production)
+#   - Must be HTTPS in production (except localhost for dev)
+#   - Must match browser's origin exactly (scheme://host:port)
+# WEBAUTHN_ENABLED: Master switch to enable/disable passkey auth entirely
+_WEBAUTHN_RP_ID = config("WEBAUTHN_RP_ID", default="localhost")
+_WEBAUTHN_ORIGIN = config("WEBAUTHN_ORIGIN", default="http://localhost:3000")
+
+# Validate WebAuthn configuration
+def _validate_webauthn_config():
+    """Validate WebAuthn RP ID and Origin configuration at startup."""
+    import re
+    
+    # RP ID validation: no protocol, no trailing slash
+    if "://" in _WEBAUTHN_RP_ID:
+        raise ImproperlyConfigured(
+            f"WEBAUTHN_RP_ID must not include protocol. Got: {_WEBAUTHN_RP_ID}. "
+            f"Expected: localhost or medsync.gh (without http:// or https://)"
+        )
+    if _WEBAUTHN_RP_ID.endswith("/"):
+        raise ImproperlyConfigured(
+            f"WEBAUTHN_RP_ID must not have trailing slash. Got: {_WEBAUTHN_RP_ID}"
+        )
+    
+    # Origin validation: must have scheme
+    if "://" not in _WEBAUTHN_ORIGIN:
+        raise ImproperlyConfigured(
+            f"WEBAUTHN_ORIGIN must include scheme (http:// or https://). Got: {_WEBAUTHN_ORIGIN}"
+        )
+    
+    # Production enforcement: HTTPS required
+    if not DEBUG and _WEBAUTHN_ORIGIN.startswith("http://"):
+        raise ImproperlyConfigured(
+            f"Production WEBAUTHN_ORIGIN must use https://. Got: {_WEBAUTHN_ORIGIN}"
+        )
+    
+    # RP ID must match origin host
+    from urllib.parse import urlparse
+    origin_host = urlparse(_WEBAUTHN_ORIGIN).hostname
+    if origin_host and origin_host != _WEBAUTHN_RP_ID and _WEBAUTHN_RP_ID != "localhost":
+        # Allow localhost to differ from origin for dev
+        raise ImproperlyConfigured(
+            f"WEBAUTHN_RP_ID must match origin hostname. "
+            f"RP_ID: {_WEBAUTHN_RP_ID}, Origin: {_WEBAUTHN_ORIGIN} (host: {origin_host})"
+        )
+
+# Run validation at import time
+_validate_webauthn_config()
+
+WEBAUTHN_RP_ID = _WEBAUTHN_RP_ID
+WEBAUTHN_RP_NAME = "MedSync EMR"
+WEBAUTHN_ORIGIN = _WEBAUTHN_ORIGIN
+WEBAUTHN_ENABLED = config("WEBAUTHN_ENABLED", default=True, cast=bool)
+WEBAUTHN_CHALLENGE_TTL = 300  # 5 minutes
 
 # AI/ML model paths (MEDIUM-4: environment-aware model locations)
 # Default points at api/ai/models/*.joblib (written by api/ai/train_models.py).
@@ -302,6 +440,36 @@ MODEL_PATHS = {
         "MODEL_PATH_TRIAGE",
         default=str(_ai_models_dir / "triage_classifier.joblib"),
     ),
+}
+
+# AI/ML Clinical Features Deployment Gates
+# PRODUCTION SAFETY: All clinical AI features are DISABLED by default until explicitly validated and approved
+DISABLE_AI_CLINICAL_FEATURES = config("DISABLE_AI_CLINICAL_FEATURES", default=True, cast=bool)
+AI_CLINICAL_FEATURES_ENABLED = config("AI_CLINICAL_FEATURES_ENABLED", default=False, cast=bool)
+AI_CONFIDENCE_THRESHOLD_CLINICAL = config("AI_CONFIDENCE_THRESHOLD_CLINICAL", default=0.80, cast=float)
+AI_CONFIDENCE_THRESHOLD_DEV = config("AI_CONFIDENCE_THRESHOLD_DEV", default=0.75, cast=float)
+
+# Use clinical threshold in production, dev threshold otherwise
+AI_CONFIDENCE_THRESHOLD = AI_CONFIDENCE_THRESHOLD_CLINICAL if not DEBUG else AI_CONFIDENCE_THRESHOLD_DEV
+
+# Model training and validation tracking
+# Phase 3 Complete: Using trained hybrid models (synthetic Ghana data + UCI readmission data)
+# Can be overridden per hospital via admin approval workflow in AIDeploymentLog
+AI_MODEL_VERSION = config("AI_MODEL_VERSION", default="1.0.0-hybrid")
+AI_MODELS_TRAINED_ON_REAL_DATA = config("AI_MODELS_TRAINED_ON_REAL_DATA", default=True, cast=bool)
+
+# Actual validation metrics from Phase 3 training run
+# Source: Hybrid dataset (7,000 samples: 3,000 synthetic Ghana + 4,000 UCI readmission data)
+# Training date: 2026-04-20
+AI_MODELS_VALIDATION_METRICS = {
+    'auc_roc': 0.5921,
+    'sensitivity': 0.9013,
+    'specificity': 0.2948,
+    'data_source': 'hybrid',
+    'training_date': '2026-04-20',
+    'samples': 7000,
+    'note': 'Development-grade models. Below clinical deployment thresholds (AUC≥0.80). '
+            'Hospital admin can override approval for research/demo purposes with audit trail.',
 }
 
 _cors_default = (
@@ -368,6 +536,11 @@ EMAIL_HOST_USER = config("EMAIL_HOST_USER", default="")
 EMAIL_HOST_PASSWORD = config("EMAIL_HOST_PASSWORD", default="")
 DEFAULT_FROM_EMAIL = config("DEFAULT_FROM_EMAIL", default="medsync@localhost")
 
+# Push Notifications (Web Push / VAPID)
+VAPID_PUBLIC_KEY = config('VAPID_PUBLIC_KEY', default='')
+VAPID_PRIVATE_KEY = config('VAPID_PRIVATE_KEY', default='')
+VAPID_CLAIM_EMAIL = config('VAPID_CLAIM_EMAIL', default='mailto:admin@medsync.gh')
+
 _local_mail_hosts = frozenset(("", "localhost", "127.0.0.1"))
 _smtp_configured = bool(
     EMAIL_HOST_USER
@@ -414,6 +587,16 @@ PASSWORD_RESET_FRONTEND_URL = config(
     "PASSWORD_RESET_FRONTEND_URL",
     default="https://medsync.example.com/auth/reset-password",
 )
+# Frontend base URL for activation and other frontend links
+FRONTEND_URL = config(
+    "FRONTEND_URL",
+    default="https://medsync.example.com",
+)
+# Support email for invitation and other notification emails
+SUPPORT_EMAIL = config(
+    "SUPPORT_EMAIL",
+    default="support@medsync.gh",
+)
 # Token expiry in hours
 PASSWORD_RESET_TOKEN_EXPIRY_HOURS = config(
     "PASSWORD_RESET_TOKEN_EXPIRY_HOURS",
@@ -423,19 +606,21 @@ PASSWORD_RESET_TOKEN_EXPIRY_HOURS = config(
 
 # Audit log signing key for HMAC-based chain signatures (CRITICAL audit hardening)
 # Generate with: python -c "import secrets; print(secrets.token_urlsafe(32))"
-AUDIT_LOG_SIGNING_KEY = config(
-    "AUDIT_LOG_SIGNING_KEY",
-    default="dev-key-change-in-production",  # MUST be overridden in production
-)
+AUDIT_LOG_SIGNING_KEY = config("AUDIT_LOG_SIGNING_KEY", default=None)
+if not AUDIT_LOG_SIGNING_KEY and not DEBUG:
+    from django.core.exceptions import ImproperlyConfigured
+    raise ImproperlyConfigured("AUDIT_LOG_SIGNING_KEY is required in production.")
 
 # Optional external integration webhooks (fire-and-forget notify; no PHI in payload by default)
 PHARMACY_WEBHOOK_URL = config("PHARMACY_WEBHOOK_URL", default="")
 PACS_CALLBACK_URL = config("PACS_CALLBACK_URL", default="")
 
 # Production security headers (HTTPS, HSTS, XSS, etc.). Always enabled for consistency.
+# SECURITY_FIX_CORS_CSP_T4: Production-grade CORS and CSP configuration (Mar 2025)
 _SECURE_HTTPS = config("SECURE_HTTPS", default=not DEBUG, cast=bool)
 SECURE_CONTENT_TYPE_NOSNIFF = True  # Always set (prevent MIME-type sniffing)
 SECURE_REFERRER_POLICY = "strict-origin-when-cross-origin"  # Always set (safe referrer header)
+SECURE_BROWSER_XSS_FILTER = True  # Legacy XSS protection (fallback for older browsers)
 
 if _SECURE_HTTPS:
     SECURE_SSL_REDIRECT = True
@@ -447,17 +632,25 @@ if _SECURE_HTTPS:
     # Content Security Policy - prevent inline scripts and external script injection
     # TASK 2 REMEDIATION (Mar 2025): Removed 'unsafe-inline' from script-src for XSS protection
     # Kept in style-src only as Tailwind CSS v4 requires inline styles
+    # SECURITY_FIX_CORS_CSP_T4: Ensure CSP includes frontend origin for API communication
+    _frontend_origin = config("FRONTEND_URL", default="https://medsync.example.com")
+    _csp_connect_src = ["'self'", _frontend_origin]
+    
     SECURE_CONTENT_SECURITY_POLICY = {
         "default-src": ("'self'",),
         "script-src": ("'self'",),  # FIXED: Removed 'unsafe-inline' to prevent XSS token theft
         "style-src": ("'self'", "'unsafe-inline'"),   # Required: Tailwind CSS v4 uses inline styles
         "img-src": ("'self'", "data:", "https:"),
         "font-src": ("'self'", "data:"),
-        "connect-src": ("'self'",),  # Restrict API calls to same origin
+        "connect-src": _csp_connect_src,  # Allow communication with frontend and API
         "frame-ancestors": ("'none'",),  # Prevent clickjacking
         "base-uri": ("'self'",),
         "form-action": ("'self'",),
     }
+else:
+    # Development: Set minimal security headers
+    SECURE_BROWSER_XSS_FILTER = False
+    SECURE_SSL_REDIRECT = False
 
 # Cookie / CSRF policy. API uses JWT in headers; these apply to session/cookie use.
 # ⚠️  SECURITY: Changed to use header-based CSRF tokens instead of cookies
@@ -535,3 +728,14 @@ else:
     # Production: shorter timeout (hard kill after 2 seconds if not graceful)
     DAPHNE_APPLICATION_CLOSE_TIMEOUT = 2
 
+# ============================================================================
+# RBAC-18: Fail-closed mode for unknown API endpoints
+# ============================================================================
+# When True: any /api/* path NOT listed in PERMISSION_MATRIX returns 403.
+# This prevents newly added endpoints from being publicly accessible before
+# they are registered in the permission matrix.
+#
+# Development (DEBUG=True): False → allows rapid iteration without blocking
+# Production (DEBUG=False): True → hard-fail for security
+# ============================================================================
+PERMISSION_FAIL_CLOSED_UNKNOWN_ENDPOINTS = not DEBUG

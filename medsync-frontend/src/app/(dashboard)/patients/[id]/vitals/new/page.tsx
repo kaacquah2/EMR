@@ -105,12 +105,13 @@ export default function NewVitalsPage() {
                 placeholder={key}
                 value={form[key]}
                 onChange={(e) => update(key, e.target.value)}
+                data-testid={`vitals-${key}`}
                 onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); nextFocus(idx); } }}
               />
             ))}
             <div className="text-sm text-[#64748B]">BMI: {bmi || "—"}</div>
             <div className="md:col-span-2">
-              <Button onClick={() => void saveSingle()}>Save Vitals</Button>
+              <Button onClick={() => void saveSingle()} data-testid="vitals-submit">Save Vitals</Button>
             </div>
           </CardContent>
         </Card>
@@ -131,6 +132,7 @@ export default function NewVitalsPage() {
                         className="min-h-[44px] rounded border border-[#CBD5E1] px-2 text-xs"
                         placeholder={k}
                         value={row[k]}
+                        data-testid={`vitals-batch-${pid}-${k}`}
                         onChange={(e) => setBatchRows((prev) => ({ ...prev, [pid]: { ...(prev[pid] || initialForm), [k]: e.target.value } }))}
                       />
                     ))}
@@ -138,7 +140,7 @@ export default function NewVitalsPage() {
                 </div>
               );
             })}
-            <Button onClick={() => void saveBatch()}>Save all</Button>
+            <Button onClick={() => void saveBatch()} data-testid="vitals-batch-submit">Save all</Button>
           </CardContent>
         </Card>
       )}
