@@ -121,7 +121,11 @@ if _HAS_DAPHNE:
 if _HAS_CHANNELS:
     INSTALLED_APPS.insert(INSTALLED_APPS.index("rest_framework"), "channels")
 if DEBUG:
-    INSTALLED_APPS += ["debug_toolbar"]
+    try:
+        import debug_toolbar
+        INSTALLED_APPS += ["debug_toolbar"]
+    except ImportError:
+        pass
 
 MIDDLEWARE = [
     "django.middleware.security.SecurityMiddleware",
@@ -142,10 +146,14 @@ MIDDLEWARE = [
     "api.middleware.CSPMiddleware",
 ]
 if DEBUG:
-    MIDDLEWARE.insert(
-        MIDDLEWARE.index("django.middleware.gzip.GZipMiddleware") + 1,
-        "debug_toolbar.middleware.DebugToolbarMiddleware",
-    )
+    try:
+        import debug_toolbar
+        MIDDLEWARE.insert(
+            MIDDLEWARE.index("django.middleware.gzip.GZipMiddleware") + 1,
+            "debug_toolbar.middleware.DebugToolbarMiddleware",
+        )
+    except ImportError:
+        pass
 
 ROOT_URLCONF = "medsync_backend.urls"
 WSGI_APPLICATION = "medsync_backend.wsgi.application"
