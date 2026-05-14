@@ -13,6 +13,12 @@ jobs:
     defaults:
       run:
         working-directory: medsync-backend
+    env:
+      SECRET_KEY: "django-insecure-ci-test-key-replace-in-prod"
+      DEBUG: "True"
+      DATABASE_URL: "sqlite:///:memory:"
+      FIELD_ENCRYPTION_KEY: "ci-test-encryption-key-32-chars-long-at-least"
+      AUDIT_LOG_SIGNING_KEY: "ci-test-audit-signing-key"
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5

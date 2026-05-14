@@ -327,15 +327,13 @@ REST_FRAMEWORK = {
             "rest_framework.throttling.UserRateThrottle",
         ]
     ),
-    "DEFAULT_THROTTLE_RATES": (
-        {}
-        if DEBUG
-        else {
-            "anon": THROTTLE_ANON,
-            "user": THROTTLE_USER,
-            "ai": "20/day",
-        }
-    ),
+    "DEFAULT_THROTTLE_RATES": {
+        "anon": THROTTLE_ANON,
+        "user": THROTTLE_USER,
+        "ai": "20/day",
+        "ai_endpoint": "20/hour",
+        "ai_hospital": "200/hour",
+    },
     "DEFAULT_PAGINATION_CLASS": "rest_framework.pagination.CursorPagination",
     "PAGE_SIZE": 20,
     "DEFAULT_VERSIONING_CLASS": "rest_framework.versioning.URLPathVersioning",
