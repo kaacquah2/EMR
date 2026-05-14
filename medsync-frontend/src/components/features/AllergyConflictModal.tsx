@@ -57,15 +57,15 @@ export function AllergyConflictModal({
           </DialogHeader>
           {conflict && (
             <>
-              <p className="text-sm text-[#64748B]">
+              <p className="text-sm text-slate-500 dark:text-slate-500">
                 Patient allergy: <strong>{conflict.allergen}</strong>. Reaction: {conflict.reaction || "—"} ({conflict.severity || "—"}).
               </p>
               {(drugName || dosage) && (
-                <p className="text-sm text-[#64748B] mt-1">
+                <p className="text-sm text-slate-500 dark:text-slate-500 mt-1">
                   Your prescription: <strong>{[drugName, dosage].filter(Boolean).join(" ")}</strong>
                 </p>
               )}
-              <p className="text-sm text-[#64748B] mt-2">
+              <p className="text-sm text-slate-500 dark:text-slate-500 mt-2">
                 This medication may cause a serious allergic reaction. Clinical override reason (min {MIN_OVERRIDE_CHARS} characters):
               </p>
               <Input

@@ -196,3 +196,67 @@ body {
   animation: float 6s ease-in-out infinite;
   animation-delay: 2s;
 }
+
+/* Auth card input fixes: force light mode even if global theme is dark */
+.auth-card .auth-input,
+.auth-card input[type="email"],
+.auth-card input[type="password"],
+.auth-card input[type="text"] {
+  background-color: #ffffff !important;
+  color: #1a1a2e !important;
+  border: 1px solid #e2e8f0;
+  caret-color: #1a1a2e;
+}
+
+.auth-card input[type="email"]:focus,
+.auth-card input[type="password"]:focus,
+.auth-card input[type="text"]:focus {
+  background-color: #ffffff !important;
+  color: #1a1a2e !important;
+  outline: 2px solid #0b8a96;
+  border-color: #0b8a96;
+}
+
+/* Fix browser autofill dark overlay in auth cards */
+.auth-card input:-webkit-autofill,
+.auth-card input:-webkit-autofill:hover,
+.auth-card input:-webkit-autofill:focus,
+.auth-card input:-webkit-autofill:active,
+.autofill-override:-webkit-autofill,
+.autofill-override:-webkit-autofill:hover,
+.autofill-override:-webkit-autofill:focus,
+.autofill-override:-webkit-autofill:active {
+  -webkit-box-shadow: 0 0 0 40px #ffffff inset !important;
+  -webkit-text-fill-color: #1a1a2e !important;
+  caret-color: #1a1a2e !important;
+}
+/* Auth card checkbox fixes: force visibility regardless of dark mode */
+.auth-card .checkbox-label {
+  color: #334155 !important; /* text-slate-800 for even better contrast */
+}
+
+.auth-card .checkbox-label span {
+  color: #334155 !important;
+  opacity: 1 !important;
+}
+
+.auth-card .checkbox-box {
+  background-color: #ffffff !important;
+  border: 1.5px solid #64748b !important; /* border-slate-500 for high visibility */
+  box-shadow: 0 1px 2px rgba(0,0,0,0.05);
+}
+
+.auth-card .checkbox-box:hover {
+  border-color: #0b8a96 !important; /* var(--teal-500) */
+}
+
+.auth-card input[type="checkbox"]:checked ~ div {
+  background-color: #0b8a96 !important;
+  opacity: 1 !important;
+  border-color: #0b8a96 !important;
+}
+
+.auth-card input[type="checkbox"]:checked ~ div svg {
+  color: #ffffff !important;
+  opacity: 1 !important;
+}

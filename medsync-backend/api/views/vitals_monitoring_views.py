@@ -235,7 +235,7 @@ def patient_vital_trends(request, patient_id):
         details={"period": period},
     )
     
-    return Response({
+    return Response({"data": {
         "patient_id": str(patient.id),
         "patient_name": patient.full_name,
         "period": period,
@@ -245,7 +245,7 @@ def patient_vital_trends(request, patient_id):
             "total_readings": len(data_points),
             "abnormal_count": len(abnormal_events),
         },
-    })
+    }})
 
 
 @api_view(["GET"])
@@ -408,7 +408,7 @@ def ward_vitals_dashboard(request, ward_id):
         request=request,
     )
     
-    return Response({
+    return Response({"data": {
         "ward_id": str(ward.id),
         "ward_name": ward.name,
         "timestamp": timezone.now().isoformat(),
@@ -418,7 +418,7 @@ def ward_vitals_dashboard(request, ward_id):
             "patients_with_abnormals": patients_with_abnormals,
             "critical_count": critical_count,
         },
-    })
+    }})
 
 
 @api_view(["POST"])
@@ -560,11 +560,11 @@ def escalate_alert(request, alert_id):
             resource_id=alert.id,
         )
     
-    return Response({
+    return Response({"data": {
         "alert_id": str(alert.id),
         "escalated_at": timezone.now().isoformat(),
         "escalated_to_role": escalate_to_role,
         "escalated_to_users": escalated_to_names,
         "escalation_reason": escalation_reason,
         "status": "escalated",
-    })
+    }})

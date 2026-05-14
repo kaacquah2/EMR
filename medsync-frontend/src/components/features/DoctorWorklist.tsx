@@ -1,45 +1,22 @@
 "use client";
 
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { useWorklistEncounters } from "@/hooks/use-encounters";
 import { usePollWhenVisible } from "@/hooks/use-poll-when-visible";
-import { useApi } from "@/hooks/use-api";
+import { useDashboardStats } from "@/hooks/use-dashboard-stats";
+import { Skeleton } from "@/components/ui/skeleton";
+import { EmptyState } from "@/components/ui/empty-state";
+import { ClipboardList } from "lucide-react";
 
 export function DoctorWorklist() {
   const router = useRouter();
-  const api = useApi();
   const [departmentFilter, setDepartmentFilter] = useState("");
   const [encounterTypeFilter, setEncounterTypeFilter] = useState("");
   const { encounters, summary, loading, fetch } = useWorklistEncounters();
-  const [dashboardStats, setDashboardStats] = useState<{ new_lab_results: number; critical_alerts: number; pending_prescriptions: number; referrals_awaiting: number }>({
-    new_lab_results: 0,
-    critical_alerts: 0,
-    pending_prescriptions: 0,
-    referrals_awaiting: 0,
-  });
-  useEffect(() => {
-    (async () => {
-      try {
-        const stats = await api.get<{
-          new_lab_results?: number;
-          critical_alerts?: number;
-          pending_prescriptions?: number;
-          referrals_awaiting?: number;
-        }>("/dashboard");
-        setDashboardStats({
-          new_lab_results: Number(stats.new_lab_results || 0),
-          critical_alerts: Number(stats.critical_alerts || 0),
-          pending_prescriptions: Number(stats.pending_prescriptions || 0),
-          referrals_awaiting: Number(stats.referrals_awaiting || 0),
-        });
-      } catch {
-        setDashboardStats({ new_lab_results: 0, critical_alerts: 0, pending_prescriptions: 0, referrals_awaiting: 0 });
-      }
-    })();
-  }, [api]);
+  const { stats: dashboardStats } = useDashboardStats();
   usePollWhenVisible(() => fetch(true, { department_id: departmentFilter || undefined, encounter_type: encounterTypeFilter || undefined }), 60_000, true);
 
   const departments = useMemo(() => {
@@ -52,7 +29,25 @@ export function DoctorWorklist() {
   const encounterTypes = useMemo(() => [...new Set(encounters.map((e) => e.encounter_type))], [encounters]);
 
   if (loading) {
-    return <div className="text-center py-8">Loading worklist...</div>;
+    return (
+      <div className="space-y-6">
+        <div>
+          <Skeleton className="h-8 w-48 mb-2" />
+          <Skeleton className="h-4 w-64" />
+        </div>
+        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-5">
+          {Array.from({ length: 5 }).map((_, i) => (
+            <Card key={i}><CardContent className="pt-6"><Skeleton className="h-16 w-full" /></CardContent></Card>
+          ))}
+        </div>
+        <Card><CardContent className="pt-6"><Skeleton className="h-10 w-full" /></CardContent></Card>
+        <div className="space-y-3">
+          {Array.from({ length: 3 }).map((_, i) => (
+            <Card key={i}><CardContent className="pt-6"><Skeleton className="h-24 w-full" /></CardContent></Card>
+          ))}
+        </div>
+      </div>
+    );
   }
 
   const handleViewPatient = (patientId: string) => {
@@ -252,9 +247,11 @@ export function DoctorWorklist() {
         ))}
 
         {encounters.length === 0 && (
-          <div className="text-center py-12 text-slate-500">
-            No patients in your worklist
-          </div>
+          <EmptyState
+            icon={<ClipboardList className="h-12 w-12" />}
+            title="No patients in your worklist"
+            description="Active encounters sorted by priority will appear here."
+          />
         )}
       </div>
     </div>

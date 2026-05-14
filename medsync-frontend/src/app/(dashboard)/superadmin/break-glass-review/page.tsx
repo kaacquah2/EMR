@@ -74,8 +74,8 @@ export default function SuperAdminBreakGlassReviewPage() {
     <div className="space-y-6">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
-          <h1 className="font-sora text-2xl font-bold text-[#0F172A]">Break-glass review</h1>
-          <p className="text-sm text-[#64748B]">Review emergency access events and flag suspicious usage</p>
+          <h1 className="font-sora text-2xl font-bold text-slate-900 dark:text-slate-100">Break-glass review</h1>
+          <p className="text-sm text-slate-500 dark:text-slate-500">Review emergency access events and flag suspicious usage</p>
         </div>
         <Button variant="secondary" onClick={() => setShowReviewed((v) => !v)}>
           {showReviewed ? "Show unreviewed" : "Show reviewed"}
@@ -84,17 +84,17 @@ export default function SuperAdminBreakGlassReviewPage() {
 
       <Card className="p-6">
         {rows.length === 0 ? (
-          <div className="text-sm text-[#64748B]">No events.</div>
+          <div className="text-sm text-slate-500 dark:text-slate-500">No events.</div>
         ) : (
           <div className="space-y-2 text-sm">
             {rows.slice(0, 200).map((e) => (
-              <div key={e.break_glass_id} className="rounded border border-[#E2E8F0] px-3 py-2">
+              <div key={e.break_glass_id} className="rounded border border-slate-200 dark:border-slate-800 px-3 py-2">
                 <div className="flex flex-wrap items-center justify-between gap-3">
                   <div className="flex flex-wrap items-center gap-2">
                     <Badge variant={e.excessive_usage ? "critical" : "default"}>{e.excessive_usage ? "abuse" : "event"}</Badge>
-                    <span className="font-medium text-[#0F172A]">{e.user_name || e.user_email}</span>
-                    <span className="text-[#64748B]">{e.hospital_name}</span>
-                    <span className="font-mono text-xs text-[#64748B]">{e.created_at?.slice(0, 19)}</span>
+                    <span className="font-medium text-slate-900 dark:text-slate-100">{e.user_name || e.user_email}</span>
+                    <span className="text-slate-500 dark:text-slate-500">{e.hospital_name}</span>
+                    <span className="font-mono text-xs text-slate-500 dark:text-slate-500">{e.created_at?.slice(0, 19)}</span>
                   </div>
                   <div className="flex items-center gap-2">
                     {!e.reviewed && (
@@ -109,7 +109,7 @@ export default function SuperAdminBreakGlassReviewPage() {
                     )}
                   </div>
                 </div>
-                <div className="mt-2 text-[#64748B]">{e.reason}</div>
+                <div className="mt-2 text-slate-500 dark:text-slate-500">{e.reason}</div>
               </div>
             ))}
           </div>

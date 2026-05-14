@@ -65,29 +65,29 @@ export default function AlertsPage() {
         </CardHeader>
         <CardContent>
           {loading ? (
-            <p className="text-[#64748B]">Loading...</p>
+            <p className="text-slate-500 dark:text-slate-500">Loading...</p>
           ) : alerts.length === 0 ? (
-            <p className="text-[#64748B]">No alerts</p>
+            <p className="text-slate-500 dark:text-slate-500">No alerts</p>
           ) : (
             <ul className="space-y-3">
               {alerts.map((a) => (
                 <li
                   key={a.id}
-                  className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-[#E2E8F0] p-3"
+                  className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-slate-200 dark:border-slate-800 p-3"
                 >
                   <div className="min-w-0 flex-1">
                     <div className="flex flex-wrap items-center gap-2">
                       <Badge variant={severityColor[a.severity] ?? "default"}>{a.severity}</Badge>
-                      <span className="text-sm text-[#64748B]">{a.status}</span>
+                      <span className="text-sm text-slate-500 dark:text-slate-500">{a.status}</span>
                     </div>
-                    <p className="mt-1 font-medium text-[#0F172A]">{a.message}</p>
-                    <p className="mt-1 text-sm text-[#64748B]">
+                    <p className="mt-1 font-medium text-slate-900 dark:text-slate-100">{a.message}</p>
+                    <p className="mt-1 text-sm text-slate-500 dark:text-slate-500">
                       Patient:{" "}
                       <Link href={`/patients/${a.patient_id}`} className="text-[#0EAFBE] hover:underline">
                         {a.patient_name} ({a.ghana_health_id})
                       </Link>
                     </p>
-                    <p className="text-xs text-[#64748B]">{new Date(a.created_at).toLocaleString()}</p>
+                    <p className="text-xs text-slate-500 dark:text-slate-500">{new Date(a.created_at).toLocaleString()}</p>
                   </div>
                   {canResolve && a.status === "active" && (
                     <Button

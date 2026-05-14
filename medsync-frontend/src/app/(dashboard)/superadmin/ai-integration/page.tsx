@@ -3,6 +3,7 @@
 import React, { useEffect, useState } from "react";
 import { useApi } from "@/hooks/use-api";
 import { Card } from "@/components/ui/card";
+import { AIDisclaimer } from "@/components/ui/AIDisclaimer";
 
 type AiStatusResponse = {
   status: string;
@@ -36,31 +37,32 @@ export default function SuperAdminAiIntegrationPage() {
 
   return (
     <div className="space-y-6">
+      <AIDisclaimer />
       <div>
-        <h1 className="font-sora text-2xl font-bold text-[#0F172A]">AI integration</h1>
-        <p className="text-sm text-[#64748B]">Status and configuration overview</p>
+        <h1 className="font-sora text-2xl font-bold text-slate-900 dark:text-slate-100">AI integration</h1>
+        <p className="text-sm text-slate-500 dark:text-slate-500">Status and configuration overview</p>
       </div>
 
       <Card className="p-6">
         {!s ? (
-          <div className="text-sm text-[#64748B]">No AI status.</div>
+          <div className="text-sm text-slate-500 dark:text-slate-500">No AI status.</div>
         ) : (
           <div className="grid gap-4 md:grid-cols-2">
             <div className="space-y-2 text-sm">
-              <div><span className="text-[#64748B]">Status:</span> <span className="font-medium text-[#0F172A]">{s.status}</span></div>
-              <div><span className="text-[#64748B]">Analyses (24h):</span> <span className="font-medium text-[#0F172A]">{Math.trunc(s.analyses_24h)}</span></div>
+              <div><span className="text-slate-500 dark:text-slate-500">Status:</span> <span className="font-medium text-slate-900 dark:text-slate-100">{s.status}</span></div>
+              <div><span className="text-slate-500 dark:text-slate-500">Analyses (24h):</span> <span className="font-medium text-slate-900 dark:text-slate-100">{Math.trunc(s.analyses_24h)}</span></div>
               <div>
-                <span className="text-[#64748B]">Avg response:</span>{" "}
-                <span className="font-medium text-[#0F172A]">
+                <span className="text-slate-500 dark:text-slate-500">Avg response:</span>{" "}
+                <span className="font-medium text-slate-900 dark:text-slate-100">
                   {typeof s.avg_response_ms === "number" && Number.isFinite(s.avg_response_ms)
                     ? `${Math.trunc(s.avg_response_ms)}ms`
                     : "—"}
                 </span>
               </div>
-              <div><span className="text-[#64748B]">Target:</span> <span className="font-medium text-[#0F172A]">{Math.trunc(s.target_response_ms)}ms</span></div>
+              <div><span className="text-slate-500 dark:text-slate-500">Target:</span> <span className="font-medium text-slate-900 dark:text-slate-100">{Math.trunc(s.target_response_ms)}ms</span></div>
               <div>
-                <span className="text-[#64748B]">Uptime (7d):</span>{" "}
-                <span className="font-medium text-[#0F172A]">
+                <span className="text-slate-500 dark:text-slate-500">Uptime (7d):</span>{" "}
+                <span className="font-medium text-slate-900 dark:text-slate-100">
                   {typeof s.uptime_7d_pct === "number" && Number.isFinite(s.uptime_7d_pct)
                     ? `${Math.trunc(s.uptime_7d_pct)}%`
                     : "—"}
@@ -68,11 +70,11 @@ export default function SuperAdminAiIntegrationPage() {
               </div>
             </div>
             <div className="space-y-2 text-sm">
-              <div className="font-medium text-[#0F172A]">Modules</div>
+              <div className="font-medium text-slate-900 dark:text-slate-100">Modules</div>
               {Object.entries(s.modules || {}).map(([k, v]) => (
-                <div key={k} className="flex items-center justify-between rounded border border-[#E2E8F0] px-3 py-2">
+                <div key={k} className="flex items-center justify-between rounded border border-slate-200 dark:border-slate-800 px-3 py-2">
                   <span className="capitalize">{k.replaceAll("_", " ")}</span>
-                  <span className="text-[#64748B]">{v}</span>
+                  <span className="text-slate-500 dark:text-slate-500">{v}</span>
                 </div>
               ))}
             </div>

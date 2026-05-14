@@ -7,6 +7,9 @@ Provides:
 - TriageService
 - SimilaritySearchService
 - ReferralRecommendationService
+
+All responses include demo disclaimers and data provenance metadata.
+Predictions are recorded for model performance monitoring.
 """
 
 import logging
@@ -26,6 +29,8 @@ from api.ai.ml_models import (
     get_triage_classifier,
     get_similarity_matcher,
 )
+from api.ai.clinical_validation import get_clinical_disclaimer, get_model_provenance
+from api.ai.model_monitor import get_model_monitor
 from api.utils import get_effective_hospital
 
 logger = logging.getLogger(__name__)
@@ -80,6 +85,49 @@ class BaseAIService:
         patient_data = self.data_processor.extract_complete_patient_data(patient)
         features = self.feature_engineer.create_feature_vector(patient_data)
         return features
+
+    @staticmethod
+    def _add_demo_metadata(result: Dict[str, Any], model_name: str = 'risk_predictor') -> Dict[str, Any]:
+        """
+        Add demo disclaimer and data provenance to every AI response.
+        Enforces safety flags based on ModelVersion approval.
+        """
+        from api.models import ModelVersion
+        
+        # Determine clinical approval status from ModelVersion
+        prod_model = ModelVersion.objects.filter(model_type=model_name, is_production=True).first()
+        is_approved = prod_model.clinical_use_approved if prod_model else False
+        version_tag = prod_model.version_tag if prod_model else "v1.0.0-synthetic"
+        
+        result['clinical_use_approved'] = is_approved
+        result['model_version'] = version_tag
+        result['demo_mode'] = not is_approved
+        
+        if not is_approved:
+            result['disclaimer'] = (
+                "This prediction is based on synthetic training data and must not "
+                "be used for clinical decision-making."
+            )
+            result['clinical_validation_status'] = 'PENDING'
+        else:
+            result['disclaimer'] = f"Clinically validated model ({version_tag})"
+            result['clinical_validation_status'] = 'APPROVED'
+            
+        result['data_provenance'] = get_model_provenance(model_name)
+        return result
+
+    @staticmethod
+    def _record_prediction(model_name: str, features: Dict[str, Any], prediction: Dict[str, Any]) -> None:
+        """
+        Record a prediction for model performance monitoring.
+
+        Non-blocking — monitoring failures never break the prediction path.
+        """
+        try:
+            monitor = get_model_monitor()
+            monitor.record_prediction(model_name, features, prediction)
+        except Exception as e:
+            logger.warning(f"Failed to record prediction for monitoring: {e}")
 
 
 class RiskPredictionService(BaseAIService):
@@ -151,6 +199,12 @@ class RiskPredictionService(BaseAIService):
                 'cached': False,
                 'timestamp': datetime.now().isoformat(),
             }
+
+            # Add demo metadata and provenance
+            self._add_demo_metadata(result, 'risk_prediction')
+
+            # Record for monitoring
+            self._record_prediction('risk_predictor', features, result)
 
             # Cache result
             cache.set(cache_key, result, self.CACHE_TTL)
@@ -278,6 +332,12 @@ class DiagnosisService(BaseAIService):
                 top_n=top_n,
             )
 
+            # Add demo metadata
+            self._add_demo_metadata(suggestions, 'diagnosis')
+
+            # Record for monitoring
+            self._record_prediction('diagnosis_classifier', features, suggestions)
+
             logger.info(
                 f"CDS for patient {patient_id}: {
                     suggestions['suggestions'][0]['diagnosis'] if suggestions['suggestions'] else 'None'}")
@@ -344,6 +404,12 @@ class TriageService(BaseAIService):
             classifier = get_triage_classifier()
             triage_result = classifier.classify_patient(chief_complaint, vitals, features)
 
+            # Add demo metadata
+            self._add_demo_metadata(triage_result, 'triage')
+
+            # Record for monitoring
+            self._record_prediction('triage_classifier', features, triage_result)
+
             logger.info(f"Triage for patient {patient_id}: {triage_result['triage_level'].upper()}")
             return triage_result
 
@@ -365,103 +431,41 @@ class SimilaritySearchService(BaseAIService):
         k: int = 10,
     ) -> Dict[str, Any]:
         """
-        **CRITICAL FIX #5:** Find similar patients for comparison/benchmarking.
-
-        Uses k-NN with cosine similarity to find comparable cases based on:
-        - Demographics (age, gender)
-        - Vitals (BP, pulse, O2, temperature, weight, BMI)
-        - Medical conditions (comorbidities)
-        - Active medications
-
-        Args:
-            patient_id: UUID of query patient
-            k: Number of similar patients to return (max 50)
-
-        Returns:
-            {
-                'patient_id': str,
-                'query_patient_age': int,
-                'query_patient_conditions': ['Hypertension', 'Diabetes'],
-                'similar_patients': [
-                    {
-                        'rank': 1,
-                        'patient_id': str (similar patient ID),
-                        'similarity_score': 0.92,  # 0-1, higher = more similar
-                        'age': 52,
-                        'conditions': ['Hypertension', 'Diabetes'],
-                        'medications': 5,  # Active medication count
-                        'treatment_outcome': str or None,
-                        'outcome_success_rate': float or None,
-                    },
-                    ...
-                ],
-                'model_version': '1.0.0',
-                'timestamp': str,
-            }
+        Find similar patients using pre-built FAISS index.
         """
         try:
+            from django.conf import settings
+            import os
+
             # Get query patient and extract features
             query_patient = self._get_patient_or_raise(patient_id)
             query_features = self._extract_and_engineer_features(query_patient)
+            query_features['patient_id'] = str(patient_id)
 
             # Get similarity matcher
             matcher = get_similarity_matcher()
 
-            # Build index of all hospital patients (or cached patients)
-            # Query patients in same hospital (or all if super_admin)
-            from patients.models import Patient as PatientModel
+            # Load index from disk if not already in memory
+            if not matcher.indexer.get_index_stats()['ready']:
+                index_path = os.path.join(settings.BASE_DIR, 'data', 'ai_models', 'patient_similarity.faiss')
+                if os.path.exists(index_path):
+                    matcher.load_from_disk(index_path)
+                else:
+                    logger.warning(f"Similarity index not found at {index_path}. Returning empty results.")
+                    return {
+                        'patient_id': str(patient_id),
+                        'query_patient_age': query_features.get('age'),
+                        'similar_patients': [],
+                        'message': 'Similarity index is being initialized. Please try again later.',
+                        'model_version': '1.0.0',
+                        'timestamp': datetime.now().isoformat(),
+                    }
 
-            hospital_query = PatientModel.objects.all() if self.user.role == 'super_admin' else \
-                PatientModel.objects.filter(registered_at=self.effective_hospital)
-
-            # Extract features for all hospital patients for indexing
-            all_patients = hospital_query.values_list('id', flat=True)[:1000]  # Cap at 1000 for performance
-
-            if not all_patients or patient_id not in [str(p) for p in all_patients]:
-                return {
-                    'patient_id': str(patient_id),
-                    'query_patient_age': query_features.get('age'),
-                    'query_patient_conditions': [],
-                    'similar_patients': [],
-                    'message': 'Not enough patients in hospital for similarity search',
-                    'model_version': '1.0.0',
-                    'timestamp': datetime.now().isoformat(),
-                }
-
-            # Extract features for all patients for indexing
-            all_patient_features = []
-            for pid in all_patients:
-                try:
-                    p = PatientModel.objects.get(id=pid)
-                    pfeatures = self._extract_and_engineer_features(p)
-                    pfeatures['patient_id'] = str(pid)
-                    all_patient_features.append(pfeatures)
-                except Exception as e:
-                    logger.warning(f"Could not extract features for patient {pid}: {e}")
-                    continue
-
-            if not all_patient_features:
-                return {
-                    'patient_id': str(patient_id),
-                    'query_patient_age': query_features.get('age'),
-                    'query_patient_conditions': [],
-                    'similar_patients': [],
-                    'message': 'Could not extract features for hospital patients',
-                    'model_version': '1.0.0',
-                    'timestamp': datetime.now().isoformat(),
-                }
-
-            # Index all patients
-            matcher.index_patients(all_patient_features)
-
-            # Add patient_id to query features for self-filtering
-            query_features['patient_id'] = str(patient_id)
-
-            # Find similar patients
+            # Find similar patients using FAISS
             similarity_results = matcher.find_similar_patients(query_features, k=k)
 
             logger.info(
-                f"Found {len(similarity_results.get('similar_patients', []))} "
+                f"FAISS search found {len(similarity_results.get('similar_patients', []))} "
                 f"similar patients for {patient_id}"
             )
             return similarity_results

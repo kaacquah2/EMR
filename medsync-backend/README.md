@@ -1787,3 +1787,407 @@ Optional: Redis, Pillow (see `requirements-local.txt`).
 | [docs/CONSENT_BREAKGLASS_REFERRALS_ALERTS.md](../docs/CONSENT_BREAKGLASS_REFERRALS_ALERTS.md) | Interop UX and APIs |
 
 **Role changes mid-session:** `docs/ROLE_BASED_USERS_AND_PAGES.md` + `api/tests/test_role_change_session.py`.
+
+
+## Backend Codebase Map
+
+<details>
+<summary>Directory Tree</summary>
+
+```text
+├── api
+│   ├── ai
+│   │   ├── agents
+│   │   │   ├── __init__.py
+│   │   │   └── orchestrator.py
+│   │   ├── ml_models
+│   │   │   ├── __init__.py
+│   │   │   ├── diagnosis_classifier.py
+│   │   │   ├── risk_predictor.py
+│   │   │   ├── similarity_matcher.py
+│   │   │   └── triage_classifier.py
+│   │   ├── models
+│   │   │   ├── v1.0-test
+│   │   │   │   ├── logistic_regression.joblib
+│   │   │   │   ├── metadata.json
+│   │   │   │   ├── metrics.json
+│   │   │   │   ├── random_forest.joblib
+│   │   │   │   ├── scaler.joblib
+│   │   │   │   └── xgboost.joblib
+│   │   │   ├── v1.0.0-hybrid
+│   │   │   │   ├── logistic_regression.joblib
+│   │   │   │   ├── metadata.json
+│   │   │   │   ├── metrics.json
+│   │   │   │   ├── random_forest.joblib
+│   │   │   │   ├── scaler.joblib
+│   │   │   │   └── xgboost.joblib
+│   │   │   ├── v1.0.0-hybrid-mixed
+│   │   │   │   ├── logistic_regression.joblib
+│   │   │   │   ├── metadata.json
+│   │   │   │   ├── metrics.json
+│   │   │   │   ├── random_forest.joblib
+│   │   │   │   ├── scaler.joblib
+│   │   │   │   └── xgboost.joblib
+│   │   │   ├── v1.0.0-mgmt-test
+│   │   │   │   ├── logistic_regression.joblib
+│   │   │   │   ├── metadata.json
+│   │   │   │   ├── metrics.json
+│   │   │   │   ├── random_forest.joblib
+│   │   │   │   ├── scaler.joblib
+│   │   │   │   └── xgboost.joblib
+│   │   │   ├── v1.0.0-synthetic
+│   │   │   │   ├── logistic_regression.joblib
+│   │   │   │   ├── metadata.json
+│   │   │   │   ├── metrics.json
+│   │   │   │   ├── random_forest.joblib
+│   │   │   │   ├── scaler.joblib
+│   │   │   │   └── xgboost.joblib
+│   │   │   ├── v1.0.0-uci
+│   │   │   │   ├── logistic_regression.joblib
+│   │   │   │   ├── metadata.json
+│   │   │   │   ├── metrics.json
+│   │   │   │   ├── random_forest.joblib
+│   │   │   │   ├── scaler.joblib
+│   │   │   │   └── xgboost.joblib
+│   │   │   ├── .gitkeep
+│   │   │   ├── diagnosis_classifier.joblib
+│   │   │   ├── risk_predictor.joblib
+│   │   │   ├── similarity_matcher.joblib
+│   │   │   └── triage_classifier.joblib
+│   │   ├── prompts
+│   │   │   ├── templates
+│   │   │   │   └── summary_v1.0.0.txt
+│   │   │   └── prompt_manager.py
+│   │   ├── services
+│   │   │   ├── __init__.py
+│   │   │   └── services.py
+│   │   ├── __init__.py
+│   │   ├── data_processor.py
+│   │   ├── datasets.py
+│   │   ├── faiss_indexer.py
+│   │   ├── feature_engineering.py
+│   │   ├── governance.py
+│   │   ├── model_config.py
+│   │   ├── model_registry.py
+│   │   ├── persistence.py
+│   │   ├── safety_gates.py
+│   │   ├── synthetic_data.py
+│   │   └── train_models.py
+│   ├── db
+│   │   ├── __init__.py
+│   │   └── base.py
+│   ├── management
+│   │   ├── commands
+│   │   │   ├── __init__.py
+│   │   │   ├── load_demo_patients.py
+│   │   │   ├── runserver.py
+│   │   │   └── train_ai_models.py
+│   │   └── __init__.py
+│   ├── middleware
+│   │   ├── __init__.py
+│   │   └── anomaly_detection.py
+│   ├── migrations
+│   │   ├── 0001_initial_ai_models.py
+│   │   ├── 0002_rename_ai_analysis_patient_created_idx_ai_analysis_patient_34fc39_idx_and_more.py
+│   │   ├── 0003_ai_analysis_job.py
+│   │   ├── 0004_batchimportitem_batchimportjob_bulkinvitationitem_and_more.py
+│   │   ├── 0005_alter_aianalysis_analysis_type_and_more.py
+│   │   ├── 0006_add_ai_deployment_log.py
+│   │   ├── 0007_modelmetrics_aideploymentapproval.py
+│   │   └── __init__.py
+│   ├── services
+│   │   ├── __init__.py
+│   │   ├── audit_service.py
+│   │   └── consent_service.py
+│   ├── tasks
+│   │   ├── __init__.py
+│   │   ├── ai_tasks.py
+│   │   ├── appointment_tasks.py
+│   │   ├── export_tasks.py
+│   │   └── fallback.py
+│   ├── tests
+│   │   ├── __init__.py
+│   │   ├── conftest.py
+│   │   ├── test_ai_clinical_deployment.py
+│   │   ├── test_ai_services.py
+│   │   ├── test_ai_views.py
+│   │   ├── test_alert_policy.py
+│   │   ├── test_appointment_bulk_import.py
+│   │   ├── test_async_ai_analysis.py
+│   │   ├── test_auth.py
+│   │   ├── test_break_glass.py
+│   │   ├── test_break_glass_middleware.py.disabled
+│   │   ├── test_break_glass_time_window.py
+│   │   ├── test_celery_beat_schedule.py
+│   │   ├── test_celery_fallback.py
+│   │   ├── test_celery_infrastructure.py
+│   │   ├── test_consent_scoping.py
+│   │   ├── test_dashboard_hospital_admin.py
+│   │   ├── test_encounter_draft.py
+│   │   ├── test_fhir_compliance.py
+│   │   ├── test_health.py
+│   │   ├── test_integration_three_phases.py
+│   │   ├── test_jwt_algorithm.py
+│   │   ├── test_lab_role_spec.py
+│   │   ├── test_lab_tech_data_guard.py
+│   │   ├── test_no_show_feature.py
+│   │   ├── test_no_show_override.py
+│   │   ├── test_nurse_role_spec.py
+│   │   ├── test_orchestrator.py
+│   │   ├── test_password_policy.py
+│   │   ├── test_password_policy_alignment.py
+│   │   ├── test_password_reset_security.py
+│   │   ├── test_permissions.py
+│   │   ├── test_phase7_password_recovery.py
+│   │   ├── test_phi_encryption.py
+│   │   ├── test_rate_limiting_edge_cases.py
+│   │   ├── test_rbac_conditional_enforcement.py
+│   │   ├── test_rbac_coverage.py
+│   │   ├── test_rbac_hospital_scoping.py
+│   │   ├── test_referral_edge_cases.py
+│   │   ├── test_referral_state_machine.py
+│   │   ├── test_role_change_session.py
+│   │   ├── test_role_spec_gap_alignment.py
+│   │   ├── test_security_fixes.py
+│   │   ├── test_task_endpoints.py
+│   │   ├── test_utils.py
+│   │   ├── test_vitals_overdue.py
+│   │   ├── test_walkin_queue.py
+│   │   └── test_webauthn_passkey.py
+│   ├── views
+│   │   ├── __init__.py
+│   │   ├── admin_ai_views.py
+│   │   ├── admin_views.py
+│   │   ├── admission_views.py
+│   │   ├── ai_admin_views.py
+│   │   ├── ai_views.py
+│   │   ├── alert_views.py
+│   │   ├── appointment_views.py
+│   │   ├── audit_views.py
+│   │   ├── auth_views.py
+│   │   ├── batch_operations_views.py
+│   │   ├── bed_views.py
+│   │   ├── billing_views.py
+│   │   ├── break_glass_views.py
+│   │   ├── consent_views.py
+│   │   ├── dashboard_views.py
+│   │   ├── emergency_views.py
+│   │   ├── encounter_views.py
+│   │   ├── fhir_views.py
+│   │   ├── global_patient_views.py
+│   │   ├── health_views.py
+│   │   ├── lab_views.py
+│   │   ├── mar_views.py
+│   │   ├── nurse_views.py
+│   │   ├── password_recovery_views.py
+│   │   ├── patient_views.py
+│   │   ├── pharmacy_views.py
+│   │   ├── push_views.py
+│   │   ├── record_views.py
+│   │   ├── referral_views.py
+│   │   ├── report_views.py
+│   │   ├── root_views.py
+│   │   ├── shift_views.py
+│   │   ├── superadmin_views.py
+│   │   ├── task_views.py
+│   │   └── vitals_monitoring_views.py
+│   ├── __init__.py
+│   ├── apps.py
+│   ├── audit_logging.py
+│   ├── batch_models.py
+│   ├── circuit_breaker.py
+│   ├── consumers.py
+│   ├── decorators.py
+│   ├── integrations.py
+│   ├── models.py
+│   ├── models_deployment_log.py
+│   ├── optimistic_locking.py
+│   ├── pagination.py
+│   ├── password_policy.py
+│   ├── permissions.py
+│   ├── permissions_helpers.py
+│   ├── rate_limiting.py
+│   ├── routing.py
+│   ├── serializers.py
+│   ├── signals_alerts.py
+│   ├── state_machines.py
+│   ├── urls.py
+│   ├── utils.py
+│   ├── validators.py
+│   └── vitals_utils.py
+├── core
+│   ├── management
+│   │   └── commands
+│   │       ├── dev_totp_code.py
+│   │       ├── enable_mfa.py
+│   │       ├── fix_migration_history.py
+│   │       ├── manage_superadmin_access.py
+│   │       └── setup_dev.py
+│   ├── migrations
+│   │   ├── 0001_initial.py
+│   │   ├── 0002_hie_shared_record_access_consent_referral.py
+│   │   ├── 0003_blueprint_alerts_encounters.py
+│   │   ├── 0004_audit_log_chain_hash_default.py
+│   │   ├── 0005_workflow_department_lab_unit.py
+│   │   ├── 0006_patient_identifiers_duplicates.py
+│   │   ├── 0007_invoice_billing.py
+│   │   ├── 0008_alter_auditlog_action.py
+│   │   ├── 0009_userpasswordhistory.py
+│   │   ├── 0010_superadminhospitalaccess.py
+│   │   ├── 0011_phase7_password_recovery.py
+│   │   ├── 0012_mfasession_and_more.py
+│   │   ├── 0013_beds.py
+│   │   ├── 0014_auditlog_signature_and_more.py
+│   │   ├── 0015_backupcoderatelimit.py
+│   │   ├── 0016_tasksubmission.py
+│   │   ├── 0017_superadminhospitalaccess_accepted_at.py
+│   │   ├── 0018_mfasession_email_otp_hash.py
+│   │   ├── 0019_user_last_role_reviewed_at.py
+│   │   ├── 0020_add_mfa_failure_model.py
+│   │   ├── 0021_add_password_reset_attempt_model.py
+│   │   ├── 0022_add_hospital_ai_enabled.py
+│   │   ├── 0023_add_version_field.py
+│   │   ├── 0024_auditlog_audit_resource_idx.py
+│   │   ├── 0025_announcement.py
+│   │   ├── 0026_userpasskey.py
+│   │   ├── 0027_userpasskey_is_synced_userpasskey_last_ip_address_and_more.py
+│   │   ├── 0028_add_ai_deployment_log.py
+│   │   ├── 0029_hospital_archive_reason_hospital_archived_at_and_more.py
+│   │   ├── 0030_alter_auditlog_chain_hash_alter_auditlog_signature_and_more.py
+│   │   └── __init__.py
+│   ├── __init__.py
+│   ├── admin.py
+│   ├── apps.py
+│   ├── models.py
+│   └── reference_data.py
+├── data
+│   └── datasets
+│       └── uci_readmission.csv
+├── docs
+│   ├── API_REFERENCE.md
+│   ├── OPERATIONS_RUNBOOK.md
+│   └── REDIS.md
+├── interop
+│   ├── management
+│   │   ├── commands
+│   │   │   ├── __init__.py
+│   │   │   └── backfill_global_patients.py
+│   │   └── __init__.py
+│   ├── migrations
+│   │   ├── 0001_initial.py
+│   │   ├── 0002_hie_shared_record_access_consent_referral.py
+│   │   ├── 0003_global_patient_identifiers.py
+│   │   ├── 0004_add_break_glass_expires_at.py
+│   │   ├── 0005_breakglass_review_fields.py
+│   │   ├── 0006_breakglass_reason_code.py
+│   │   ├── 0007_add_version_field.py
+│   │   ├── 0008_alter_globalpatient_date_of_birth_and_more.py
+│   │   └── __init__.py
+│   ├── __init__.py
+│   ├── admin.py
+│   ├── apps.py
+│   └── models.py
+├── medsync_backend
+│   ├── __init__.py
+│   ├── asgi.py
+│   ├── celery.py
+│   ├── settings.py
+│   ├── urls.py
+│   └── wsgi.py
+├── ml
+│   └── synthea_converter.py
+├── patients
+│   ├── migrations
+│   │   ├── 0001_blueprint_alerts_encounters.py
+│   │   ├── 0002_clinical_alert.py
+│   │   ├── 0003_appointment_scheduling.py
+│   │   ├── 0004_patient_identifiers_duplicates.py
+│   │   ├── 0005_invoice_billing.py
+│   │   ├── 0006_admission_bed.py
+│   │   ├── 0007_add_no_show_fields.py
+│   │   ├── 0008_encrypt_phi_fields.py
+│   │   ├── 0009_add_version_field.py
+│   │   ├── 0010_add_walkin_fields.py
+│   │   ├── 0011_emergency_triage.py
+│   │   ├── 0012_alter_appointment_chief_complaint_and_more.py
+│   │   ├── 0013_invoiceitem_appointment_updated_at_and_more.py
+│   │   └── __init__.py
+│   ├── __init__.py
+│   ├── admin.py
+│   ├── apps.py
+│   └── models.py
+├── records
+│   ├── migrations
+│   │   ├── 0001_blueprint_alerts_encounters.py
+│   │   ├── 0002_encounter.py
+│   │   ├── 0003_workflow_encounter_lab.py
+│   │   ├── 0004_rename_records_enc_dept_st_idx_records_enc_assigne_51c098_idx_and_more.py
+│   │   ├── 0005_clinical_docs_visit_status.py
+│   │   ├── 0006_radiology_order.py
+│   │   ├── 0007_nurseshift_shifthandover_and_more.py
+│   │   ├── 0008_nursingnote_handover_signatures.py
+│   │   ├── 0009_laborder_state_machine_fields.py
+│   │   ├── 0010_encounter_draft.py
+│   │   ├── 0011_sbar_handover_signatures.py
+│   │   ├── 0012_add_encounter_template.py
+│   │   ├── 0013_add_version_field.py
+│   │   ├── 0014_incident_medicationadministration_and_more.py
+│   │   ├── 0015_pharmacy_dispensing.py
+│   │   ├── 0016_medication_schedule.py
+│   │   ├── 0017_rename_records_enc_patient_fa1f48_idx_encounter_patient_0dba2d_idx_and_more.py
+│   │   ├── 0018_remove_encounter_records_enc_patient_fa1f48_idx_and_more.py
+│   │   ├── 0019_encounter_updated_at_and_more.py
+│   │   └── __init__.py
+│   ├── __init__.py
+│   ├── admin.py
+│   ├── apps.py
+│   └── models.py
+├── scripts
+│   ├── pip-audit.sh
+│   ├── production_security_fixes.py
+│   └── validate-rbac-coverage.py
+├── shared
+│   ├── migrations
+│   │   └── __init__.py
+│   ├── utils
+│   │   └── __init__.py
+│   ├── __init__.py
+│   ├── apps.py
+│   ├── models.py
+│   └── permissions.py
+├── templates
+│   ├── force_password_reset_email.html
+│   ├── invitation_email.html
+│   ├── password_reset_email.html
+│   └── super_admin_password_reset_notification.html
+├── .env
+├── .env.example
+├── .gitignore
+├── activate_mfa.py
+├── check_emergency_fields.py
+├── check_mfa.py
+├── check_verify_sig.py
+├── conftest.py
+├── db.sqlite3
+├── dev_server.py
+├── download_datasets.py
+├── full_test_results.txt
+├── grant_admin_access.py
+├── integration_test_e2e.py
+├── load-test.js
+├── manage.py
+├── mfa_diagnostic.py
+├── pyrightconfig.json
+├── pytest.ini
+├── README.md
+├── requirements-local.txt
+├── run_training.py
+├── SETUP_COMPLETE.txt
+├── test_hospital_approval.py
+├── test_mfa_endpoint.py
+├── test_ml_pipeline.py
+├── test_output.txt
+└── test_results.txt
+
+```
+</details>

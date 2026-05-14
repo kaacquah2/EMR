@@ -25,17 +25,33 @@ export function ViewAsBanner() {
   };
 
   return (
-    <div className="bg-[#0B8A96] text-white px-6 py-3 flex items-center justify-between">
-      <div className="text-sm font-medium">
-        Viewing as: <span className="font-semibold">{viewAsHospitalName || 'Unknown Hospital'}</span> — all actions scoped to this hospital
+    <div className="relative overflow-hidden bg-gradient-to-r from-indigo-700 via-indigo-600 to-indigo-700 text-white px-6 py-3 flex items-center justify-between shadow-xl border-b border-white/20">
+      {/* Decorative pulse effect background */}
+      <div className="absolute inset-0 bg-white/5 animate-pulse pointer-events-none" />
+      
+      <div className="flex items-center gap-4 relative z-10">
+        <div className="flex items-center gap-2">
+          <div className="relative">
+            <span className="absolute inset-0 rounded-full bg-emerald-400 animate-ping opacity-75" />
+            <span className="relative flex h-3 w-3 rounded-full bg-emerald-400 shadow-[0_0_8px_rgba(52,211,153,0.8)]" />
+          </div>
+          <span className="text-[11px] font-bold tracking-widest uppercase bg-white/25 backdrop-blur-sm px-2 py-1 rounded shadow-inner border border-white/10">
+            Super Admin Mode
+          </span>
+        </div>
+        <div className="text-[15px] font-medium tracking-tight">
+          Viewing as: <span className="font-bold underline decoration-white/60 underline-offset-4 decoration-2">{viewAsHospitalName || 'Unknown Hospital'}</span>
+          <span className="ml-3 text-white/90 hidden sm:inline font-normal border-l border-white/20 pl-3">All clinical actions are scoped to this facility</span>
+        </div>
       </div>
+      
       <button
         onClick={handleClear}
-        className="text-white hover:opacity-80 transition-opacity"
-        aria-label="Clear view-as selection"
-        title="Return to viewing all hospitals"
+        className="relative z-10 flex items-center gap-2 bg-white/15 hover:bg-white/25 active:scale-95 px-4 py-1.5 rounded-lg text-xs font-bold transition-all group border border-white/10 hover:border-white/30 shadow-sm"
+        aria-label="Exit view-as mode"
       >
-        <X className="w-5 h-5" />
+        <span>Exit Session</span>
+        <X className="w-4 h-4 group-hover:rotate-90 transition-transform" />
       </button>
     </div>
   );

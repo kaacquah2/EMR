@@ -74,22 +74,23 @@ export function useAsyncAIAnalysis(patientId: string | null) {
         setCurrentStep("");
 
         const api = apiRef.current;
-        const response = await api.post<AIAnalysisJobResponse>(
+        const response = await api.post<{ data: AIAnalysisJobResponse }>(
           `/ai/async-analysis/${patientId}`,
           {
             analysis_type: options?.analysisType || "comprehensive",
           }
         );
 
-        if (response && response.job_id) {
-          setJobId(response.job_id);
+        if (response?.data && response.data.job_id) {
+          const jobData = response.data;
+          setJobId(jobData.job_id);
           backoffStateRef.current = {
             pollCount: 0,
             currentInterval: INITIAL_POLL_INTERVAL,
             startTime: Date.now(),
           };
           setIsLoading(false);
-          return response.job_id;
+          return jobData.job_id;
         } else {
           throw new Error("Invalid response: missing job_id");
         }
@@ -113,25 +114,27 @@ export function useAsyncAIAnalysis(patientId: string | null) {
 
     try {
       const api = apiRef.current;
-      const response = await api.get<AIAnalysisJobResponse>(
+      const response = await api.get<{ data: AIAnalysisJobResponse }>(
         `/ai/async-analysis/status/${jobId}`
       );
 
-      if (!response) {
+      if (!response?.data) {
         throw new Error("Empty response from API");
       }
 
-      // Update state based on response
-      setStatus((response.status || "processing") as typeof status);
-      setProgressPercent(response.progress_percent ?? 0);
-      setCurrentStep(response.current_step || "");
+      const jobData = response.data;
 
-      if (response.status === "completed" && response.analysis) {
-        setAnalysis(response.analysis);
+      // Update state based on response
+      setStatus((jobData.status || "processing") as typeof status);
+      setProgressPercent(jobData.progress_percent ?? 0);
+      setCurrentStep(jobData.current_step || "");
+
+      if (jobData.status === "completed" && jobData.analysis) {
+        setAnalysis(jobData.analysis);
       }
 
       backoffStateRef.current.pollCount += 1;
-      return response;
+      return jobData;
     } catch (err) {
       // Handle 404: Job not found
       if (err instanceof Error && err.message.includes("404")) {

@@ -4,11 +4,14 @@ import React, { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/lib/auth-context";
 import { useApi } from "@/hooks/use-api";
+import { useForm } from "@/hooks/use-form";
 import { useFacilities } from "@/hooks/use-interop";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select } from "@/components/ui/select";
+import { DatePicker } from "@/components/ui/DatePicker";
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
+import { SuccessState } from "@/components/ui/SuccessState";
 import { REGISTER_PATIENT_ROLES } from "@/lib/permissions";
 
 // UX-05: step metadata
@@ -33,25 +36,48 @@ export default function RegisterPatientPage() {
   const { user, viewAsHospitalId } = useAuth();
   const api = useApi();
   const { facilities, fetch: fetchFacilities } = useFacilities();
-  const [step, setStep] = useState(1);
-  const [form, setForm] = useState({
-    full_name: "",
-    date_of_birth: "",
-    gender: "male" as "male" | "female" | "other" | "unknown",
-    ghana_health_id: "",
-    phone: "",
-    national_id: "",
-    blood_group: "",
-    allergies: [] as { allergen: string; reaction_type: string; severity: string }[],
+  const {
+    values: form,
+    errors,
+    isSubmitting: loading,
+    handleChange,
+    handleSubmit: handleFinalSubmit,
+  } = useForm({
+    initialValues: {
+      full_name: "",
+      date_of_birth: "",
+      gender: "male" as "male" | "female" | "other" | "unknown",
+      ghana_health_id: "",
+      phone: "",
+      national_id: "",
+      blood_group: "",
+      allergies: [] as { allergen: string; reaction_type: string; severity: string }[],
+    },
+    validate: (v) => {
+      const errs: Record<string, string> = {};
+      if (!v.full_name) errs.full_name = "Full name is required";
+      if (!v.date_of_birth) errs.date_of_birth = "Date of birth is required";
+      if (!v.ghana_health_id) errs.ghana_health_id = "Ghana Health ID is required";
+      return errs;
+    },
+    onSubmit: async (values) => {
+      const payload = {
+        ...values,
+        hospital_id: effectiveHospitalId,
+      };
+      const res = await api.post<{ id: string }>("/patients", payload);
+      setRegisteredPatientId(res.id);
+    },
   });
-  const [error, setError] = useState("");
-  const [loading, setLoading] = useState(false);
+
+  const [step, setStep] = useState(1);
   const [hospitalId, setHospitalId] = useState("");
   const [duplicateResult, setDuplicateResult] = useState<{
     duplicate: boolean;
     existing?: { full_name?: string; ghana_health_id?: string };
   } | null>(null);
   const [checkingDuplicate, setCheckingDuplicate] = useState(false);
+  const [registeredPatientId, setRegisteredPatientId] = useState<string | null>(null);
 
   const canAccess = user?.role && REGISTER_PATIENT_ROLES.includes(user.role);
   const isSuperAdminNoHospital = user?.role === "super_admin" && !user.hospital_id;
@@ -73,7 +99,7 @@ export default function RegisterPatientPage() {
   if (user && !canAccess) return <div className="flex min-h-[200px] items-center justify-center text-[var(--gray-500)]">Redirecting…</div>;
 
   const handleGhanaIdChange = (v: string) => {
-    setForm((f) => ({ ...f, ghana_health_id: formatGhanaId(v) }));
+    handleChange("ghana_health_id", formatGhanaId(v));
     // Clear stale duplicate result when ID changes
     setDuplicateResult(null);
   };
@@ -99,32 +125,30 @@ export default function RegisterPatientPage() {
     }
   };
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
+  const handleSubmit = (e: React.FormEvent) => {
     if (!canSubmit) return;
-    setError("");
-    setLoading(true);
-    try {
-      const body: Record<string, unknown> = {
-        full_name: form.full_name,
-        date_of_birth: form.date_of_birth,
-        gender: form.gender,
-        ghana_health_id: form.ghana_health_id,
-        phone: form.phone || undefined,
-        national_id: form.national_id || undefined,
-        blood_group: form.blood_group || "unknown",
-        allergies: form.allergies,
-      };
-      if (user?.role === "super_admin" && effectiveHospitalId) body.hospital_id = effectiveHospitalId;
-      // UX-07: redirect to patient profile, not search page
-      const patient = await api.post<{ patient_id: string }>("/patients", body);
-      router.push(`/patients/${patient.patient_id}?registered=1`);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Registration failed");
-    } finally {
-      setLoading(false);
-    }
+    handleFinalSubmit(e);
   };
+
+  if (registeredPatientId) {
+    return (
+      <SuccessState
+        title="Patient Registered"
+        description={`Successfully registered ${form.full_name}. You can now view their profile or register another patient.`}
+        actions={[
+          {
+            label: "View Patient Profile",
+            href: `/patients/${registeredPatientId}`,
+          },
+          {
+            label: "Register Another Patient",
+            href: "/patients/register",
+            variant: "secondary",
+          },
+        ]}
+      />
+    );
+  }
 
   return (
     <div className="mx-auto max-w-2xl space-y-6">
@@ -175,15 +199,30 @@ export default function RegisterPatientPage() {
               )}
 
               <Input label="Full Name" value={form.full_name}
-                onChange={(e) => setForm((f) => ({ ...f, full_name: e.target.value }))} required />
+                error={errors.full_name}
+                onChange={(e) => handleChange("full_name", e.target.value)} required />
 
-              <Input label="Date of Birth" type="date" value={form.date_of_birth}
-                onChange={(e) => setForm((f) => ({ ...f, date_of_birth: e.target.value }))} required />
+              <DatePicker
+                label="Date of Birth"
+                error={errors.date_of_birth}
+                value={form.date_of_birth ? new Date(form.date_of_birth + "T12:00:00") : null}
+                onChange={(date) => {
+                  if (date) {
+                    const y = date.getFullYear();
+                    const m = String(date.getMonth() + 1).padStart(2, '0');
+                    const d = String(date.getDate()).padStart(2, '0');
+                    handleChange("date_of_birth", `${y}-${m}-${d}`);
+                  } else {
+                    handleChange("date_of_birth", "");
+                  }
+                }}
+                format="YYYY-MM-DD"
+              />
 
               <Select
                 label="Gender"
                 value={form.gender}
-                onChange={(e) => setForm((f) => ({ ...f, gender: e.target.value as typeof form.gender }))}
+                onChange={(e) => handleChange("gender", e.target.value)}
               >
                 <option value="male">Male</option>
                 <option value="female">Female</option>
@@ -194,6 +233,7 @@ export default function RegisterPatientPage() {
               {/* UX-06: onBlur triggers duplicate check */}
               <div>
                 <Input label="Ghana Health ID" value={form.ghana_health_id}
+                  error={errors.ghana_health_id}
                   onChange={(e) => handleGhanaIdChange(e.target.value)}
                   onBlur={() => { if (form.ghana_health_id.trim()) void checkDuplicate(); }}
                   placeholder="GH-ACC-2025-003847" required />
@@ -208,8 +248,8 @@ export default function RegisterPatientPage() {
                 )}
               </div>
 
-              <Input label="Phone (optional)" type="tel" value={form.phone} onChange={(e) => setForm((f) => ({ ...f, phone: e.target.value }))} />
-              <Input label="National ID (optional)" value={form.national_id} onChange={(e) => setForm((f) => ({ ...f, national_id: e.target.value }))} />
+              <Input label="Phone (optional)" type="tel" value={form.phone} onChange={(e) => handleChange("phone", e.target.value)} />
+              <Input label="National ID (optional)" value={form.national_id} onChange={(e) => handleChange("national_id", e.target.value)} />
 
               {/* UX-08: "Continue" not "Next: Medical" */}
               <Button type="button"
@@ -232,7 +272,7 @@ export default function RegisterPatientPage() {
               <Select
                 label="Blood Group"
                 value={form.blood_group}
-                onChange={(e) => setForm((f) => ({ ...f, blood_group: e.target.value }))}
+                onChange={(e) => handleChange("blood_group", e.target.value)}
               >
                 <option value="">Select</option>
                 {["A+", "A-", "B+", "B-", "AB+", "AB-", "O+", "O-", "unknown"].map((bg) => (
@@ -250,7 +290,7 @@ export default function RegisterPatientPage() {
           </Card>
         )}
 
-        {error && <p className="mt-4 text-sm text-[var(--red-600)]" role="alert">{error}</p>}
+        {errors.form && <p className="mt-4 text-sm text-[var(--red-600)]" role="alert">{errors.form}</p>}
       </form>
     </div>
   );

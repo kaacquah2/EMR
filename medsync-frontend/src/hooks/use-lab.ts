@@ -1,7 +1,9 @@
 "use client";
-
-import { useState, useCallback, useEffect } from "react";
+import { useState } from "react";
+import useSWR from "swr";
 import { useApi } from "./use-api";
+import { useAuth } from "@/lib/auth-context";
+import { useHospitalWS } from "./use-hospital-ws";
 
 export interface LabOrderItem {
   id: string;
@@ -56,88 +58,75 @@ export interface LabResultsResponse {
   data: LabResultItem[];
 }
 
+
 export function useLabOrders(tab: "all" | "pending" | "in_progress" | "resulted_today" | "verified") {
   const api = useApi();
-  const [orders, setOrders] = useState<LabOrderItem[]>([]);
-  const [stats, setStats] = useState<LabOrdersResponse["stats"]>({
-    stat_orders: 0,
-    urgent_orders: 0,
-    routine_orders: 0,
-    in_progress_orders: 0,
-  });
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-
-  const fetch = useCallback(async () => {
-    setLoading(true);
-    setError(null);
-    try {
-      const data = await api.get<LabOrdersResponse>(`/lab/orders?tab=${tab}&ordering=urgency_rank,created_at`);
-      setOrders(data.data || []);
-      setStats(data.stats || { stat_orders: 0, urgent_orders: 0, routine_orders: 0, in_progress_orders: 0 });
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to load lab orders");
-      setOrders([]);
-      setStats({ stat_orders: 0, urgent_orders: 0, routine_orders: 0, in_progress_orders: 0 });
-    } finally {
-      setLoading(false);
+  const { user } = useAuth();
+  
+  const { data, error, isLoading, mutate } = useSWR<{ data: LabOrdersResponse }>(
+    [`/lab/orders`, tab],
+    ([url]) => api.get<{ data: LabOrdersResponse }>(`${url}?tab=${tab}&ordering=urgency_rank,created_at`),
+    {
+      revalidateOnFocus: true,
+      dedupingInterval: 30000,
     }
-  }, [api, tab]);
+  );
 
-  useEffect(() => {
-    fetch();
-  }, [fetch]);
+  // Listen for real-time lab updates
+  useHospitalWS(user?.hospital_id, (event) => {
+    if (event.type === "lab_event") {
+      mutate();
+    }
+  });
 
-  return { orders, stats, loading, error, fetch };
+  return { 
+    orders: data?.data?.data || [], 
+    stats: data?.data?.stats || { stat_orders: 0, urgent_orders: 0, routine_orders: 0, in_progress_orders: 0 },
+    loading: isLoading, 
+    error: error?.message || null, 
+    fetch: mutate 
+  };
 }
 
 export function useLabResults(filters?: { status?: string[]; date_from?: string; date_to?: string }) {
   const api = useApi();
-  const [results, setResults] = useState<LabResultItem[]>([]);
-  const [total, setTotal] = useState(0);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-  const [limit] = useState(50);
+  const { user } = useAuth();
   const [offset, setOffset] = useState(0);
+  const limit = 50;
 
-  const fetch = useCallback(
-    async (newOffset: number = 0) => {
-      setLoading(true);
-      setError(null);
-      try {
-        const params = new URLSearchParams();
-        params.set("limit", limit.toString());
-        params.set("offset", newOffset.toString());
-
-        if (filters?.status?.length) {
-          params.set("status", filters.status.join(","));
-        }
-        if (filters?.date_from) {
-          params.set("date_from", filters.date_from);
-        }
-        if (filters?.date_to) {
-          params.set("date_to", filters.date_to);
-        }
-
-        const data = await api.get<LabResultsResponse>(`/lab/results?${params.toString()}`);
-        setResults(data.data || []);
-        setTotal(data.count || 0);
-        setOffset(newOffset);
-      } catch (err) {
-        setError(err instanceof Error ? err.message : "Failed to load lab results");
-        setResults([]);
-        setTotal(0);
-      } finally {
-        setLoading(false);
-      }
+  const { data, error, isLoading, mutate } = useSWR<{ data: LabResultsResponse }>(
+    [`/lab/results`, filters, offset],
+    () => {
+      const params = new URLSearchParams();
+      params.set("limit", limit.toString());
+      params.set("offset", offset.toString());
+      if (filters?.status?.length) params.set("status", filters.status.join(","));
+      if (filters?.date_from) params.set("date_from", filters.date_from);
+      if (filters?.date_to) params.set("date_to", filters.date_to);
+      return api.get<{ data: LabResultsResponse }>(`/lab/results?${params.toString()}`);
     },
-    [api, filters, limit]
+    {
+      revalidateOnFocus: true,
+      dedupingInterval: 30000,
+    }
   );
 
-  useEffect(() => {
-    fetch(0);
-  }, [fetch]);
+  // Listen for real-time lab updates
+  useHospitalWS(user?.hospital_id, (event) => {
+    if (event.type === "lab_event") {
+      mutate();
+    }
+  });
 
-  return { results, total, loading, error, limit, offset, setOffset, fetch };
+  return { 
+    results: data?.data?.data || [], 
+    total: data?.data?.count || 0, 
+    loading: isLoading, 
+    error: error?.message || null, 
+    limit, 
+    offset, 
+    setOffset, 
+    fetch: mutate 
+  };
 }
 

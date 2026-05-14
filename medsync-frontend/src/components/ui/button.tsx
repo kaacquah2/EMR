@@ -3,8 +3,8 @@ import { LoadingSpinner } from "./loading-spinner";
 
 export interface ButtonProps
   extends React.ButtonHTMLAttributes<HTMLButtonElement> {
-  variant?: "primary" | "secondary" | "danger" | "ghost" | "outline";
-  size?: "default" | "sm" | "lg";
+  variant?: "primary" | "secondary" | "danger" | "warning" | "ghost" | "outline" | "link";
+  size?: "default" | "sm" | "lg" | "icon";
   fullWidth?: boolean;
   loading?: boolean;
 }
@@ -29,18 +29,23 @@ const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
       primary:
         "bg-[var(--teal-500)] text-white hover:bg-[#0A7A85] active:bg-[#096B75] dark:hover:bg-[#0EAFBE] shadow-sm",
       secondary:
-        "bg-white dark:bg-[#1E293B] border-[1.5px] border-[var(--gray-300)] dark:border-[#334155] text-[var(--navy-900)] dark:text-[var(--gray-100)] hover:bg-[var(--gray-100)] dark:hover:bg-[#334155]",
+        "bg-white dark:bg-slate-800 border-[1.5px] border-[var(--gray-300)] dark:border-[#334155] text-[var(--navy-900)] dark:text-[var(--gray-100)] hover:bg-[var(--gray-100)] dark:hover:bg-[#334155]",
       danger:
         "bg-[var(--red-600)] text-white hover:bg-[#B91C1C] active:bg-[#991B1B] shadow-sm",
+      warning:
+        "bg-[#F59E0B] text-white hover:bg-[#D97706] active:bg-[#B45309] shadow-sm",
       ghost:
         "bg-transparent text-[var(--navy-900)] dark:text-[var(--gray-100)] hover:bg-[var(--gray-100)] dark:hover:bg-[#334155]",
       outline:
-        "bg-transparent border border-[var(--gray-300)] dark:border-[#334155] text-[var(--navy-900)] dark:text-[var(--gray-100)] hover:bg-[var(--gray-100)] dark:hover:bg-[#334155]",
+        "bg-transparent border-[1.5px] border-[var(--gray-300)] dark:border-[#334155] text-[var(--navy-900)] dark:text-[var(--gray-100)] hover:bg-[var(--gray-100)] dark:hover:bg-[#334155]",
+      link:
+        "bg-transparent text-[var(--teal-500)] p-0 h-auto font-normal hover:underline",
     };
     const sizes = {
       default: "h-11 px-4 text-[15px]",
       sm: "h-9 px-3 text-sm",
       lg: "h-12 px-6 text-base",
+      icon: "h-11 w-11 p-2.5",
     };
 
     const isDisabled = disabled || loading;

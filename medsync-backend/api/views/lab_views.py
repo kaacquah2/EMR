@@ -186,11 +186,11 @@ def lab_attachment_upload(request):
             f.write(chunk)
     relative_url = f"{settings.MEDIA_URL.rstrip('/')}/lab_attachments/{name}"
     absolute_url = request.build_absolute_uri(relative_url)
-    return Response({
+    return Response({"data": {
         "url": absolute_url,
         "attachment_content_type": ALLOWED_ATTACHMENT_CONTENT_TYPE,
         "attachment_size_bytes": file.size,
-    })
+    }})
 
 
 @api_view(["GET"])
@@ -285,7 +285,7 @@ def lab_order_detail(request, order_id):
             if result
             else None
         )
-        return Response(payload)
+        return Response({"data": payload})
 
     next_status = (request.data.get("status") or "").strip().lower()
     transition = {
@@ -333,7 +333,7 @@ def lab_order_detail(request, order_id):
             result.verified_at = now
             result.save(update_fields=["status", "verified_by", "verified_at"])
     lab_order.save(update_fields=update_fields)
-    return Response(_lab_order_payload(lab_order))
+    return Response({"data": _lab_order_payload(lab_order)})
 
 
 @api_view(["POST"])
@@ -451,12 +451,12 @@ def lab_order_result(request, order_id):
         )
 
     return Response(
-        {
+        {"data": {
             "message": "Result submitted",
             "lab_result_id": str(lab_result.id),
             "status": lab_order.status,
             "critical_value_notified": critical and critical_notified,
-        }
+        }}
     )
 
 
@@ -572,11 +572,11 @@ def lab_results_bulk_submit(request):
         request,
     )
 
-    return Response({
+    return Response({"data": {
         "submitted": submitted,
         "failed": failed,
         "details": details,
-    }, status=status.HTTP_200_OK if submitted > 0 else status.HTTP_400_BAD_REQUEST)
+    }}, status=status.HTTP_200_OK if submitted > 0 else status.HTTP_400_BAD_REQUEST)
 
 
 @api_view(["GET"])
@@ -717,7 +717,7 @@ def lab_analytics_trends(request):
     seven_day_avg = round(seven_day_total / 7, 2)
 
     return Response(
-        {
+        {"data": {
             "avg_tat_by_urgency": avg_tat,
             "breach_count": breach_count,
             "breached_orders": breached_rows[:20],
@@ -727,5 +727,5 @@ def lab_analytics_trends(request):
                 "yesterday": throughput_yesterday,
                 "seven_day_avg": seven_day_avg,
             },
-        }
+        }}
     )

@@ -76,7 +76,7 @@ export default function CrossFacilityActivityLogPage() {
 
   if (user && !canAccess) {
     return (
-      <div className="flex min-h-[200px] items-center justify-center text-[#64748B]">
+      <div className="flex min-h-[200px] items-center justify-center text-slate-500 dark:text-slate-500">
         Redirecting...
       </div>
     );
@@ -86,17 +86,17 @@ export default function CrossFacilityActivityLogPage() {
     <div className="space-y-6">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
-          <h1 className="font-sora text-2xl font-bold text-[#0F172A]">Cross-Facility Monitor</h1>
-          <p className="text-sm text-[#64748B]">System-wide activity across facilities</p>
+          <h1 className="font-sora text-2xl font-bold text-slate-900 dark:text-slate-100">Cross-Facility Monitor</h1>
+          <p className="text-sm text-slate-500 dark:text-slate-500">System-wide activity across facilities</p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
-          <label className="text-xs font-semibold uppercase tracking-wide text-[#64748B]">
+          <label className="text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-500">
             Period
           </label>
           <select
             value={days}
             onChange={(e) => setDays(Number(e.target.value))}
-            className="rounded border border-[#CBD5E1] bg-white px-2 py-1 text-sm text-[#0F172A]"
+            className="rounded border border-slate-300 dark:border-slate-700 bg-white px-2 py-1 text-sm text-slate-900 dark:text-slate-100"
           >
             <option value={7}>Last 7 days</option>
             <option value={30}>Last 30 days</option>
@@ -111,20 +111,20 @@ export default function CrossFacilityActivityLogPage() {
       <div className="grid gap-4 md:grid-cols-3">
         <Card accent="teal">
           <CardContent className="pt-6">
-            <p className="text-sm font-medium text-[#64748B]">Consents</p>
-            <p className="mt-1 text-2xl font-bold text-[#0F172A]">{summary ? summary.total_consents : "—"}</p>
+            <p className="text-sm font-medium text-slate-500 dark:text-slate-500">Consents</p>
+            <p className="mt-1 text-2xl font-bold text-slate-900 dark:text-slate-100">{summary ? summary.total_consents : "—"}</p>
           </CardContent>
         </Card>
         <Card accent="navy">
           <CardContent className="pt-6">
-            <p className="text-sm font-medium text-[#64748B]">Referrals</p>
-            <p className="mt-1 text-2xl font-bold text-[#0F172A]">{summary ? summary.total_referrals : "—"}</p>
+            <p className="text-sm font-medium text-slate-500 dark:text-slate-500">Referrals</p>
+            <p className="mt-1 text-2xl font-bold text-slate-900 dark:text-slate-100">{summary ? summary.total_referrals : "—"}</p>
           </CardContent>
         </Card>
         <Card accent="amber">
           <CardContent className="pt-6">
-            <p className="text-sm font-medium text-[#64748B]">Break-glass events</p>
-            <p className="mt-1 text-2xl font-bold text-[#0F172A]">{summary ? summary.total_break_glass : "—"}</p>
+            <p className="text-sm font-medium text-slate-500 dark:text-slate-500">Break-glass events</p>
+            <p className="mt-1 text-2xl font-bold text-slate-900 dark:text-slate-100">{summary ? summary.total_break_glass : "—"}</p>
           </CardContent>
         </Card>
       </div>
@@ -135,35 +135,35 @@ export default function CrossFacilityActivityLogPage() {
         </CardHeader>
         <CardContent>
           {loading ? (
-            <p className="text-sm text-[#64748B]">Loading…</p>
+            <p className="text-sm text-slate-500 dark:text-slate-500">Loading…</p>
           ) : !data ? (
-            <p className="text-sm text-[#64748B]">No activity.</p>
+            <p className="text-sm text-slate-500 dark:text-slate-500">No activity.</p>
           ) : (
             <div className="space-y-6">
               <div>
-                <h3 className="font-sora text-lg font-semibold text-[#0F172A]">Break-glass</h3>
+                <h3 className="font-sora text-lg font-semibold text-slate-900 dark:text-slate-100">Break-glass</h3>
                 {data.break_glass_events.length === 0 ? (
-                  <p className="mt-1 text-sm text-[#64748B]">No break-glass events.</p>
+                  <p className="mt-1 text-sm text-slate-500 dark:text-slate-500">No break-glass events.</p>
                 ) : (
                   <div className="mt-2 overflow-x-auto">
                     <table className="w-full text-sm">
                       <thead>
-                        <tr className="border-b border-[#E2E8F0]">
-                          <th className="py-2 text-left font-medium text-[#64748B]">Time</th>
-                          <th className="py-2 text-left font-medium text-[#64748B]">User</th>
-                          <th className="py-2 text-left font-medium text-[#64748B]">Hospital</th>
-                          <th className="py-2 text-left font-medium text-[#64748B]">Patient</th>
-                          <th className="py-2 text-left font-medium text-[#64748B]">Reason</th>
+                        <tr className="border-b border-slate-200 dark:border-slate-800">
+                          <th className="py-2 text-left font-medium text-slate-500 dark:text-slate-500">Time</th>
+                          <th className="py-2 text-left font-medium text-slate-500 dark:text-slate-500">User</th>
+                          <th className="py-2 text-left font-medium text-slate-500 dark:text-slate-500">Hospital</th>
+                          <th className="py-2 text-left font-medium text-slate-500 dark:text-slate-500">Patient</th>
+                          <th className="py-2 text-left font-medium text-slate-500 dark:text-slate-500">Reason</th>
                         </tr>
                       </thead>
                       <tbody>
                         {data.break_glass_events.slice(0, 50).map((e) => (
-                          <tr key={e.id} className="border-b border-[#F1F5F9]">
+                          <tr key={e.id} className="border-b border-slate-100 dark:border-slate-900">
                             <td className="py-2 font-mono text-xs">{e.created_at.slice(0, 19)}</td>
                             <td className="py-2">{e.accessed_by__full_name}</td>
                             <td className="py-2">{e.facility__name}</td>
                             <td className="py-2">{e.global_patient__full_name}</td>
-                            <td className="py-2 text-[#64748B]">{String(e.reason ?? "").slice(0, 64)}</td>
+                            <td className="py-2 text-slate-500 dark:text-slate-500">{String(e.reason ?? "").slice(0, 64)}</td>
                           </tr>
                         ))}
                       </tbody>
@@ -173,30 +173,30 @@ export default function CrossFacilityActivityLogPage() {
               </div>
 
               <div>
-                <h3 className="font-sora text-lg font-semibold text-[#0F172A]">Referrals</h3>
+                <h3 className="font-sora text-lg font-semibold text-slate-900 dark:text-slate-100">Referrals</h3>
                 {data.referrals.length === 0 ? (
-                  <p className="mt-1 text-sm text-[#64748B]">No referrals.</p>
+                  <p className="mt-1 text-sm text-slate-500 dark:text-slate-500">No referrals.</p>
                 ) : (
                   <div className="mt-2 overflow-x-auto">
                     <table className="w-full text-sm">
                       <thead>
-                        <tr className="border-b border-[#E2E8F0]">
-                          <th className="py-2 text-left font-medium text-[#64748B]">Time</th>
-                          <th className="py-2 text-left font-medium text-[#64748B]">Patient</th>
-                          <th className="py-2 text-left font-medium text-[#64748B]">From</th>
-                          <th className="py-2 text-left font-medium text-[#64748B]">To</th>
-                          <th className="py-2 text-left font-medium text-[#64748B]">Status</th>
+                        <tr className="border-b border-slate-200 dark:border-slate-800">
+                          <th className="py-2 text-left font-medium text-slate-500 dark:text-slate-500">Time</th>
+                          <th className="py-2 text-left font-medium text-slate-500 dark:text-slate-500">Patient</th>
+                          <th className="py-2 text-left font-medium text-slate-500 dark:text-slate-500">From</th>
+                          <th className="py-2 text-left font-medium text-slate-500 dark:text-slate-500">To</th>
+                          <th className="py-2 text-left font-medium text-slate-500 dark:text-slate-500">Status</th>
                         </tr>
                       </thead>
                       <tbody>
                         {data.referrals.slice(0, 50).map((r) => (
-                          <tr key={r.id} className="border-b border-[#F1F5F9]">
+                          <tr key={r.id} className="border-b border-slate-100 dark:border-slate-900">
                             <td className="py-2 font-mono text-xs">{r.created_at.slice(0, 19)}</td>
                             <td className="py-2">{r.global_patient__full_name}</td>
                             <td className="py-2">{r.from_facility__name}</td>
                             <td className="py-2">{r.to_facility__name}</td>
                             <td className="py-2">
-                              <span className="rounded bg-[#E2E8F0] px-2 py-0.5 text-xs font-semibold text-[#0F172A]">
+                              <span className="rounded bg-slate-200 dark:bg-slate-800 px-2 py-0.5 text-xs font-semibold text-slate-900 dark:text-slate-100">
                                 {r.status}
                               </span>
                             </td>
@@ -209,28 +209,28 @@ export default function CrossFacilityActivityLogPage() {
               </div>
 
               <div>
-                <h3 className="font-sora text-lg font-semibold text-[#0F172A]">Consents</h3>
+                <h3 className="font-sora text-lg font-semibold text-slate-900 dark:text-slate-100">Consents</h3>
                 {data.consents.length === 0 ? (
-                  <p className="mt-1 text-sm text-[#64748B]">No consents.</p>
+                  <p className="mt-1 text-sm text-slate-500 dark:text-slate-500">No consents.</p>
                 ) : (
                   <div className="mt-2 overflow-x-auto">
                     <table className="w-full text-sm">
                       <thead>
-                        <tr className="border-b border-[#E2E8F0]">
-                          <th className="py-2 text-left font-medium text-[#64748B]">Time</th>
-                          <th className="py-2 text-left font-medium text-[#64748B]">Patient</th>
-                          <th className="py-2 text-left font-medium text-[#64748B]">Facility</th>
-                          <th className="py-2 text-left font-medium text-[#64748B]">Scope</th>
+                        <tr className="border-b border-slate-200 dark:border-slate-800">
+                          <th className="py-2 text-left font-medium text-slate-500 dark:text-slate-500">Time</th>
+                          <th className="py-2 text-left font-medium text-slate-500 dark:text-slate-500">Patient</th>
+                          <th className="py-2 text-left font-medium text-slate-500 dark:text-slate-500">Facility</th>
+                          <th className="py-2 text-left font-medium text-slate-500 dark:text-slate-500">Scope</th>
                         </tr>
                       </thead>
                       <tbody>
                         {data.consents.slice(0, 50).map((c) => (
-                          <tr key={c.id} className="border-b border-[#F1F5F9]">
+                          <tr key={c.id} className="border-b border-slate-100 dark:border-slate-900">
                             <td className="py-2 font-mono text-xs">{c.created_at.slice(0, 19)}</td>
                             <td className="py-2">{c.global_patient__full_name}</td>
                             <td className="py-2">{c.granted_to_facility__name}</td>
                             <td className="py-2">
-                              <span className="rounded bg-[#E2E8F0] px-2 py-0.5 text-xs font-semibold text-[#0F172A]">
+                              <span className="rounded bg-slate-200 dark:bg-slate-800 px-2 py-0.5 text-xs font-semibold text-slate-900 dark:text-slate-100">
                                 {c.scope}
                               </span>
                             </td>

@@ -113,14 +113,14 @@ def _appointment_create_impl(request):
         created_by=request.user,
     )
     return Response(
-        {
+        {"data": {
             "id": str(apt.id),
             "patient_id": str(apt.patient_id),
             "appointment_date": apt.scheduled_at.isoformat(),
             "scheduled_at": apt.scheduled_at.isoformat(),
             "status": apt.status,
             "appointment_type": apt.appointment_type,
-        },
+        }},
         status=status.HTTP_201_CREATED,
     )
 
@@ -217,7 +217,7 @@ def appointment_check_availability(request):
         ).first()
 
     if not conflict:
-        return Response({"available": True, "conflict": False, "available_slots": []})
+        return Response({"data": {"available": True, "conflict": False, "available_slots": []}})
 
     provider_name = conflict.provider.full_name if conflict.provider else "Selected provider"
     slot_offsets = (-15, 15, 30)
@@ -234,12 +234,12 @@ def appointment_check_availability(request):
             suggested.append(candidate.strftime("%H:%M"))
 
     return Response(
-        {
+        {"data": {
             "available": False,
             "conflict": True,
             "message": f"{provider_name} already has a patient at {conflict.scheduled_at.strftime('%H:%M')}.",
             "available_slots": suggested,
-        },
+        }},
         status=status.HTTP_200_OK,
     )
 
@@ -278,11 +278,11 @@ def appointment_update(request, pk):
     if "notes" in data:
         apt.notes = (data["notes"] or "").strip() or None
     apt.save(update_fields=["status", "scheduled_at", "notes"])
-    return Response({
+    return Response({"data": {
         "id": str(apt.id),
         "status": apt.status,
         "scheduled_at": apt.scheduled_at.isoformat(),
-    })
+    }})
 
 
 @api_view(["DELETE"])
@@ -385,12 +385,12 @@ def appointment_check_in(request, pk):
             request,
         )
 
-    return Response({
+    return Response({"data": {
         "id": str(apt.id),
         "status": apt.status,
         "verified_at": verified_at.isoformat(),
         "checked_in_at": verified_at.isoformat(),
-    })
+    }})
 
 
 @api_view(["POST"])
@@ -482,11 +482,11 @@ def appointment_reschedule(request, pk):
         request,
     )
 
-    return Response({
+    return Response({"data": {
         "id": str(apt.id),
         "scheduled_at": apt.scheduled_at.isoformat(),
         "status": apt.status,
-    })
+    }})
 
 
 # PHASE 6: Receptionist Advanced Features
@@ -572,11 +572,11 @@ def appointment_mark_no_show(request, pk):
         request,
     )
 
-    return Response({
+    return Response({"data": {
         "id": str(apt.id),
         "status": apt.status,
         "marked_at": timezone.now().isoformat(),
-    })
+    }})
 
 
 @api_view(["GET"])
@@ -694,7 +694,7 @@ def appointment_no_show_statistics(request):
 
     daily_no_shows.sort(key=lambda x: x["date"])
 
-    return Response({
+    return Response({"data": {
         "period_days": days,
         "total_appointments": total_apts,
         "no_show_count": no_show_count,
@@ -702,7 +702,7 @@ def appointment_no_show_statistics(request):
         "by_provider": by_provider,
         "by_appointment_type": by_apt_type,
         "daily_no_shows": daily_no_shows,
-    })
+    }})
 
 
 @api_view(["POST"])
@@ -789,11 +789,11 @@ def appointment_unmark_no_show(request, pk):
         extra_data={"reason": reason},
     )
 
-    return Response({
+    return Response({"data": {
         "id": str(apt.id),
         "status": apt.status,
         "no_show_override_reason": apt.no_show_override_reason,
-    })
+    }})
 
 
 @api_view(["POST"])

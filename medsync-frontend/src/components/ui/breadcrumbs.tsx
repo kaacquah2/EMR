@@ -7,7 +7,7 @@ export type BreadcrumbItem = { label: string; href?: string };
 export function Breadcrumbs({ items }: { items: BreadcrumbItem[] }) {
   if (!items.length) return null;
   return (
-    <nav aria-label="Breadcrumb" className="text-sm text-[#64748B]">
+    <nav aria-label="Breadcrumb" className="text-sm text-slate-500 dark:text-slate-500">
       <ol className="flex flex-wrap items-center gap-1">
         {items.map((item, i) => {
           const isLast = i === items.length - 1;
@@ -22,7 +22,7 @@ export function Breadcrumbs({ items }: { items: BreadcrumbItem[] }) {
                   {item.label}
                 </Link>
               ) : (
-                <span className={isLast ? "font-medium text-[#0F172A]" : undefined}>
+                <span className={isLast ? "font-medium text-slate-900 dark:text-slate-100" : undefined}>
                   {item.label}
                 </span>
               )}

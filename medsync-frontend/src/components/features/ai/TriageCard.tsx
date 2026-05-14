@@ -8,6 +8,7 @@
 
 import React from 'react';
 import { AlertTriangle, Activity } from 'lucide-react';
+import { DisclaimerBadge } from '@/components/ai/DisclaimerBadge';
 
 interface TriageCardProps {
   triageLevel: 'critical' | 'high' | 'medium' | 'low';
@@ -16,6 +17,8 @@ interface TriageCardProps {
   recommendedAction: string;
   indicators: Array<{ indicator: string; severity: string }>;
   isLoading?: boolean;
+  clinical_use_approved?: boolean;
+  model_version?: string;
 }
 
 export function TriageCard({
@@ -25,6 +28,8 @@ export function TriageCard({
   recommendedAction,
   indicators = [],
   isLoading = false,
+  clinical_use_approved = false,
+  model_version,
 }: TriageCardProps) {
   const getTriageColor = (level: string): { bg: string; border: string; text: string; icon: string } => {
     switch (level) {
@@ -81,6 +86,9 @@ export function TriageCard({
             {triageLevel.toUpperCase()}
           </h3>
           <p className={`text-sm ${colors.text}`}>ESI Level {esiLevel}</p>
+        </div>
+        <div className="ml-auto">
+          <DisclaimerBadge clinical_use_approved={clinical_use_approved} version={model_version} />
         </div>
       </div>
 

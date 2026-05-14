@@ -1,9 +1,10 @@
 import * as React from "react";
 
 export interface InputProps
-  extends React.InputHTMLAttributes<HTMLInputElement> {
+  extends Omit<React.InputHTMLAttributes<HTMLInputElement>, "size"> {
   label?: string;
   error?: string;
+  size?: "default" | "lg";
 }
 
 const EyeIcon = () => (
@@ -20,12 +21,14 @@ const EyeOffIcon = () => (
 );
 
 const Input = React.forwardRef<HTMLInputElement, InputProps>(
-  ({ className = "", label, error, type, id: idProp, ...props }, ref) => {
+  ({ className = "", label, error, type, size = "default", id: idProp, ...props }, ref) => {
     const generatedId = React.useId();
     const id = idProp ?? generatedId;
     const [revealed, setRevealed] = React.useState(false);
     const isPassword = type === "password";
     const inputType = isPassword && revealed ? "text" : type;
+
+    const sizeClasses = size === "lg" ? "h-12 px-4 text-base" : "h-11 px-3 text-sm";
 
     return (
       <div className="w-full">
@@ -41,7 +44,7 @@ const Input = React.forwardRef<HTMLInputElement, InputProps>(
             type={inputType}
             aria-invalid={error ? "true" : undefined}
             aria-describedby={error ? `${id}-error` : undefined}
-            className={`h-11 w-full rounded-lg border-[1.5px] border-[var(--gray-300)] bg-white dark:bg-[#0F172A] dark:border-[#334155] px-3 py-2 text-sm text-[var(--gray-900)] placeholder:text-[var(--gray-500)] focus:border-[var(--teal-500)] focus:outline-none focus:ring-[3px] focus:ring-[rgba(11,138,150,0.12)] disabled:cursor-not-allowed disabled:opacity-50 ${
+            className={`${sizeClasses} w-full rounded-lg border-[1.5px] border-[var(--gray-300)] bg-white dark:bg-slate-900 dark:border-[#334155] py-2 text-[var(--gray-900)] dark:text-slate-100 placeholder:text-[var(--gray-500)] focus:border-[var(--teal-500)] focus:outline-none focus:ring-[3px] focus:ring-[rgba(11,138,150,0.12)] disabled:cursor-not-allowed disabled:opacity-50 ${
               isPassword ? "pr-11" : ""
             } ${
               error ? "border-[var(--red-600)] focus:border-[var(--red-600)] focus:ring-[rgba(220,38,38,0.12)]" : ""

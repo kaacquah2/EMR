@@ -4,7 +4,10 @@ import React, { useEffect } from "react";
 import { useRouter, usePathname } from "next/navigation";
 import { Sidebar } from "@/components/layout/Sidebar";
 import { TopBar } from "@/components/layout/TopBar";
+import { BottomNav } from "@/components/layout/BottomNav";
 import { ViewAsBanner } from "@/components/layout/ViewAsBanner";
+import { NetworkStatusBanner } from "@/components/ui/NetworkStatusBanner";
+import { GracePeriodBanner } from "@/components/ui/GracePeriodBanner";
 import { CommandPalette } from "@/components/ui/CommandPalette";
 import { useAuth } from "@/lib/auth-context";
 import { useSidebar } from "@/lib/sidebar-context";
@@ -63,7 +66,9 @@ function DashboardLayoutContent({
 
   return (
     <>
+      <NetworkStatusBanner />
       <ViewAsBanner />
+      <GracePeriodBanner />
       <div className="flex min-h-screen bg-[var(--cream-bg)]">
         <Sidebar />
         <div
@@ -72,9 +77,10 @@ function DashboardLayoutContent({
           }`}
         >
           <TopBar />
-          <main className="dashboard-main flex-1 p-4 md:p-6 lg:p-8">{children}</main>
+          <main className="dashboard-main flex-1 p-4 pb-20 md:p-6 lg:p-8 md:pb-6 lg:pb-8">{children}</main>
         </div>
       </div>
+      <BottomNav />
       <CommandPalette />
     </>
   );

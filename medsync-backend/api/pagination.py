@@ -16,12 +16,6 @@ def paginate_queryset(queryset, request, page_size=20, max_page_size=100, use_cu
     except (ValueError, TypeError):
         size = min(max_page_size, page_size)
 
-    cursor = request.GET.get("cursor")
-    
-    if use_cursor and cursor:
-        # Assuming queryset is ordered by -created_at or -id
-        queryset = queryset.filter(id__lt=cursor)
-    
     if not use_cursor:
         try:
             page_num = max(1, int(request.GET.get("page", 1)))
@@ -36,11 +30,31 @@ def paginate_queryset(queryset, request, page_size=20, max_page_size=100, use_cu
         return items, next_cursor, has_more
     else:
         # Cursor-based implementation
+        cursor = request.GET.get("cursor")
+        
+        if cursor:
+            # Detect cursor type
+            if "-" in cursor and ":" in cursor: # ISO Timestamp
+                 # We need to know if we are ordering by encounter_date or created_at
+                 # For simplicity, we'll try to filter by the most likely fields
+                 if "encounter_date" in str(queryset.query.order_by):
+                     queryset = queryset.filter(encounter_date__lt=cursor)
+                 else:
+                     queryset = queryset.filter(created_at__lt=cursor)
+            else:
+                 queryset = queryset.filter(id__lt=cursor)
+
         items = list(queryset[:size + 1])
         has_more = len(items) > size
         if has_more:
             items = items[:size]
-            next_cursor = str(items[-1].id)
+            # Determine which field to use for next_cursor
+            if "encounter_date" in str(queryset.query.order_by):
+                next_cursor = items[-1].encounter_date.isoformat() if items[-1].encounter_date else str(items[-1].id)
+            elif "created_at" in str(queryset.query.order_by):
+                next_cursor = items[-1].created_at.isoformat() if items[-1].created_at else str(items[-1].id)
+            else:
+                next_cursor = str(items[-1].id)
         else:
             next_cursor = None
         return items, next_cursor, has_more

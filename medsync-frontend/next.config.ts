@@ -1,5 +1,5 @@
 import type { NextConfig } from "next";
-import withPWA from "next-pwa";
+import withPWA from "@ducanh2912/next-pwa";
 
 const nextConfig: NextConfig = {
   // Reduce dev-time compile cost by letting Next optimize common deps imports.
@@ -101,72 +101,73 @@ const nextConfig: NextConfig = {
 
 const pwaConfig = withPWA({
   dest: "public",
-  register: true,
-  skipWaiting: true,
   disable: process.env.NODE_ENV === "development", // Disable in dev
-  runtimeCaching: [
-    // API calls - network first
-    {
-      urlPattern: /^https?:\/\/.*\/api\/.*/i,
-      handler: "NetworkFirst",
-      options: {
-        cacheName: "api-cache",
-        expiration: {
-          maxEntries: 200,
-          maxAgeSeconds: 60 * 60, // 1 hour
-        },
-        networkTimeoutSeconds: 10,
-      },
-    },
-    // Static assets - cache first
-    {
-      urlPattern: /\.(?:png|jpg|jpeg|svg|gif|webp|ico)$/i,
-      handler: "CacheFirst",
-      options: {
-        cacheName: "image-cache",
-        expiration: {
-          maxEntries: 100,
-          maxAgeSeconds: 60 * 60 * 24 * 30, // 30 days
+  workboxOptions: {
+    skipWaiting: true,
+    runtimeCaching: [
+      // API calls - network first
+      {
+        urlPattern: /^https?:\/\/.*\/api\/.*/i,
+        handler: "NetworkFirst" as const,
+        options: {
+          cacheName: "api-cache",
+          expiration: {
+            maxEntries: 200,
+            maxAgeSeconds: 60 * 60, // 1 hour
+          },
+          networkTimeoutSeconds: 10,
         },
       },
-    },
-    // Fonts - cache first
-    {
-      urlPattern: /\.(?:woff|woff2|ttf|otf|eot)$/i,
-      handler: "CacheFirst",
-      options: {
-        cacheName: "font-cache",
-        expiration: {
-          maxEntries: 20,
-          maxAgeSeconds: 60 * 60 * 24 * 365, // 1 year
+      // Static assets - cache first
+      {
+        urlPattern: /\.(?:png|jpg|jpeg|svg|gif|webp|ico)$/i,
+        handler: "CacheFirst" as const,
+        options: {
+          cacheName: "image-cache",
+          expiration: {
+            maxEntries: 100,
+            maxAgeSeconds: 60 * 60 * 24 * 30, // 30 days
+          },
         },
       },
-    },
-    // JS/CSS - stale while revalidate
-    {
-      urlPattern: /\.(?:js|css)$/i,
-      handler: "StaleWhileRevalidate",
-      options: {
-        cacheName: "static-resources",
-        expiration: {
-          maxEntries: 100,
-          maxAgeSeconds: 60 * 60 * 24 * 7, // 7 days
+      // Fonts - cache first
+      {
+        urlPattern: /\.(?:woff|woff2|ttf|otf|eot)$/i,
+        handler: "CacheFirst" as const,
+        options: {
+          cacheName: "font-cache",
+          expiration: {
+            maxEntries: 20,
+            maxAgeSeconds: 60 * 60 * 24 * 365, // 1 year
+          },
         },
       },
-    },
-    // Reference data endpoints - stale while revalidate with long cache
-    {
-      urlPattern: /\/api\/v1\/(drugs|icd10|wards|departments)/i,
-      handler: "StaleWhileRevalidate",
-      options: {
-        cacheName: "reference-data",
-        expiration: {
-          maxEntries: 50,
-          maxAgeSeconds: 60 * 60 * 24, // 24 hours
+      // JS/CSS - stale while revalidate
+      {
+        urlPattern: /\.(?:js|css)$/i,
+        handler: "StaleWhileRevalidate" as const,
+        options: {
+          cacheName: "static-resources",
+          expiration: {
+            maxEntries: 100,
+            maxAgeSeconds: 60 * 60 * 24 * 7, // 7 days
+          },
         },
       },
-    },
-  ],
+      // Reference data endpoints - stale while revalidate with long cache
+      {
+        urlPattern: /\/api\/v1\/(drugs|icd10|wards|departments)/i,
+        handler: "StaleWhileRevalidate" as const,
+        options: {
+          cacheName: "reference-data",
+          expiration: {
+            maxEntries: 50,
+            maxAgeSeconds: 60 * 60 * 24, // 24 hours
+          },
+        },
+      },
+    ],
+  },
 })(nextConfig);
 
 export default pwaConfig;

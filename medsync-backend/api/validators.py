@@ -44,6 +44,9 @@ def validate_ghana_health_id(value):
     """
     Validates Ghana Health ID format.
     Example: GH-1234567890
+    
+    ROADMAP: This should eventually perform real-time verification against the 
+    Ghana National Health Database (GNHDR) API. Currently validates format only.
     """
     if not value:
         return  # Allow blank

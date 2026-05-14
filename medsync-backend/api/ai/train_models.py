@@ -568,14 +568,39 @@ class HybridTrainingPipeline:
             json.dump(validation_metrics, f, indent=2)
         logger.info(f"Metrics saved to: {metrics_path}")
 
-        # Save metadata
+        # Save metadata with honest provenance
         metadata = {
             'model_version': model_version,
             'training_date': datetime.now().isoformat(),
             'data_source': self.data_source,
             'data_size': len(df),
             'n_features': X.shape[1],
-            'readmission_rate': float(y.mean())
+            'readmission_rate': float(y.mean()),
+            'data_provenance': {
+                'sources': [
+                    {
+                        'name': 'Ghana Synthetic Cohort' if self.data_source != 'uci' else 'UCI Synthetic Fallback',
+                        'type': 'synthetic',
+                        'record_count': len(df),
+                        'description': (
+                            'Randomly generated patient data using numpy. '
+                            'NOT real clinical data.'
+                        ),
+                    }
+                ],
+                'clinical_data_used': False,
+                'public_dataset_used': self.data_source in ('uci', 'hybrid'),
+                'disclaimer': (
+                    'All training data is synthetic or generated. '
+                    'No real patient data was used.'
+                ),
+            },
+            'clinical_validation': {
+                'status': 'NONE',
+                'validated_on_clinical_data': False,
+                'regulatory_approval': 'NOT_SUBMITTED',
+                'safe_for_clinical_use': False,
+            },
         }
         metadata_path = model_dir / "metadata.json"
         with open(metadata_path, 'w') as f:

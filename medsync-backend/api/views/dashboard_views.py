@@ -44,35 +44,27 @@ def dashboard_metrics(request):
         active_alerts = ClinicalAlert.objects.filter(hospital=hospital, status="active").count()
         encounters_today = Encounter.objects.filter(hospital=hospital, encounter_date__date=today).count()
         seven_days_ago = timezone.now() - timezone.timedelta(days=7)
-        patients_with_life_threatening = set(
-            Allergy.objects.filter(severity="life_threatening", is_active=True).values_list("patient_id", flat=True)
-        )
-        recent_record_patient_ids = set(
-            MedicalRecord.objects.filter(
-                hospital=hospital,
-                created_at__gte=seven_days_ago,
-            ).values_list("patient_id", flat=True)
-        )
-        allergy_alert_patient_ids = list(patients_with_life_threatening & recent_record_patient_ids)[:50]
+        # Optimized allergy alert patients: Single query with database-level intersection
         allergy_alert_patients = list(
-            Patient.objects.filter(id__in=allergy_alert_patient_ids).values("id", "full_name", "ghana_health_id")
-        ) if allergy_alert_patient_ids else []
-        seen = []
-        seen_set = set()
-        for pid in (
-            MedicalRecord.objects.filter(hospital=hospital, created_by=user)
-            .order_by("-created_at")
-            .values_list("patient_id", flat=True)
-            .iterator(chunk_size=500)
-        ):
-            if pid not in seen_set:
-                seen_set.add(pid)
-                seen.append(pid)
-            if len(seen) >= 10:
-                break
+            Patient.objects.filter(
+                id__in=MedicalRecord.objects.filter(
+                    hospital=hospital,
+                    created_at__gte=seven_days_ago,
+                ).values('patient_id'),
+                allergy__severity="life_threatening",
+                allergy__is_active=True
+            ).distinct().values("id", "full_name", "ghana_health_id")[:50]
+        )
+
+        # Optimized recent patients: Use database-level distinct and subquery
+        recent_pids = MedicalRecord.objects.filter(
+            hospital=hospital, 
+            created_by=user
+        ).order_by("-created_at").values_list("patient_id", flat=True).distinct()[:10]
+        
         recent_patients = list(
-            Patient.objects.filter(id__in=seen).values("id", "full_name", "ghana_health_id")
-        ) if seen else []
+            Patient.objects.filter(id__in=recent_pids).values("id", "full_name", "ghana_health_id")
+        ) if recent_pids else []
         dashboard_payload = {
             "patients_today": patients_today,
             "active_prescriptions": active_rx,
@@ -96,7 +88,7 @@ def dashboard_metrics(request):
                 else 0
             ),
         }
-        return Response(dashboard_payload)
+        return Response({"data": dashboard_payload})
 
     if user.role == "nurse":
         ward = user.ward
@@ -166,7 +158,7 @@ def dashboard_metrics(request):
             record__patient_id__in=pat_ids,
             dispense_status="pending",
         ).count() if pat_ids else 0
-        return Response({
+        return Response({"data": {
             "ward_name": ward.ward_name,
             "admission_count": count,
             "vitals_overdue": len(vitals_overdue_ids),
@@ -178,7 +170,7 @@ def dashboard_metrics(request):
             "vitals_overdue_count": len(vitals_overdue_ids),
             "pending_dispense_count": pending_dispense_count,
             "current_shift": current_shift,
-        })
+        }})
 
     if user.role == "hospital_admin":
         if not hospital:
@@ -253,7 +245,7 @@ def dashboard_metrics(request):
             "cancelled": apt_agg["cancelled"] or 0,
             "no_show": apt_agg["no_show"] or 0,
         }
-        return Response({
+        return Response({"data": {
             "total_patients": total_patients,
             "total_users": total_users,
             "total_active": total_users,
@@ -270,7 +262,7 @@ def dashboard_metrics(request):
             "recent_audit_events": recent_audit,
             "pending_invitations_list": pending_invitations_list,
             "appointment_summary": appointment_summary,
-        })
+        }})
 
     if user.role == "lab_technician":
         pending_qs = get_lab_order_queryset(user, get_effective_hospital(request)).filter(
@@ -296,14 +288,14 @@ def dashboard_metrics(request):
             lab_tech=user,
             result_date__date=today,
         ).exclude(status="pending").count()
-        return Response({
+        return Response({"data": {
             "pending_orders": pending_total,
             "pending_stat": pending_stat,
             "pending_urgent": pending_urgent,
             "pending_routine": pending_routine,
             "completed_today": completed_today,
             "orders_over_24hr": orders_over_24h,
-        })
+        }})
 
     if user.role == "super_admin":
         active_alerts = ClinicalAlert.objects.filter(status="active").count()
@@ -313,13 +305,13 @@ def dashboard_metrics(request):
             connection.ensure_connection()
         except Exception:
             db_ok = "error"
-        return Response({
+        return Response({"data": {
             "hospitals_count": Hospital.objects.count(),
             "total_users": User.objects.count(),
             "total_patients": total_patients,
             "active_alerts": active_alerts,
             "db_status": db_ok,
-        })
+        }})
 
     if user.role == "receptionist" and hospital:
         today_start = timezone.now().replace(hour=0, minute=0, second=0, microsecond=0)
@@ -353,7 +345,7 @@ def dashboard_metrics(request):
             }
             for a in apt_today.order_by("scheduled_at")[:200]
         ]
-        return Response({
+        return Response({"data": {
             "appointments_today": appointments_today,
             "checked_in_count": checked_in_count,
             "no_show_count": no_show_count,
@@ -364,7 +356,7 @@ def dashboard_metrics(request):
             "appointments_today_confirmed": checked_in_count,
             "appointments_today_cancelled": cancelled_count,
             "appointments_today_no_show": no_show_count,
-        })
+        }})
 
     return Response({})
 
@@ -428,4 +420,4 @@ def dashboard_analytics(request):
         out["encounters_by_day"] = [{"date": d["day"].isoformat(), "count": d["count"]} for d in by_day_enc]
     out["encounters_total"] = qs_enc.count()
 
-    return Response(out)
+    return Response({"data": out})

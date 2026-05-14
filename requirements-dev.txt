@@ -2,5 +2,5 @@
 django-debug-toolbar>=4.2
 pytest>=7.4
 pytest-django>=4.5
-# Heavy transitive deps (chromadb, onnx, etc.); code uses placeholders without importing crewai.
-crewai>=0.1.0
+# crewai removed — was never imported. Orchestrator uses native
+# ThreadPoolExecutor-based parallel execution (see api/ai/agents/orchestrator.py).

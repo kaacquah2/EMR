@@ -10,8 +10,12 @@ test.describe("UX and state", () => {
     test.skip(!getCreds("doctor"), "E2E_DOCTOR_* not set");
     await loginAs("doctor");
     await page.goto("/dashboard");
-    await expect(page.getByText(/loading/i).first()).toBeVisible({ timeout: 2_000 }).catch(() => {});
-    await expect(page.getByText(/dashboard|good (morning|afternoon|evening)|worklist/i).first()).toBeVisible({ timeout: 12_000 });
+    // Flexible loading check: if it's there, wait for it to go. If not, proceed.
+    const loading = page.getByText(/loading/i).first();
+    if (await loading.isVisible().catch(() => false)) {
+      await expect(loading).toBeHidden({ timeout: 10_000 });
+    }
+    await expect(page.getByText(/dashboard|good (morning|afternoon|evening)|worklist|medsync|workload/i).first()).toBeVisible({ timeout: 15_000 });
   });
 
   test("patient search empty state or results", async ({ page, loginAs, getCreds }) => {

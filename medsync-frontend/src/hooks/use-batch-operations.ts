@@ -82,19 +82,21 @@ export function useBatchOperations() {
         setError('');
 
         const response = await api.post<{
-          job_id: string;
-          filename: string;
-          total_records: number;
-          valid_records: number;
-          validation_errors: number;
-          status: string;
-          validation_summary: Record<string, string[]>;
+          data: {
+            job_id: string;
+            filename: string;
+            total_records: number;
+            valid_records: number;
+            validation_errors: number;
+            status: string;
+            validation_summary: Record<string, string[]>;
+          }
         }>('/batch-import', {
           filename,
           items,
         });
 
-        return response;
+        return response.data;
       } catch (err) {
         const message = err instanceof Error ? err.message : 'Failed to create batch import';
         setError(message);
@@ -112,8 +114,8 @@ export function useBatchOperations() {
         setLoading(true);
         setError('');
 
-        const response = await api.get<BatchImportJob>(`/batch-import/${jobId}`);
-        return response;
+        const response = await api.get<{ data: BatchImportJob }>(`/batch-import/${jobId}`);
+        return response.data;
       } catch (err) {
         const message = err instanceof Error ? err.message : 'Failed to fetch import job';
         setError(message);
@@ -132,18 +134,20 @@ export function useBatchOperations() {
         setError('');
 
         const response = await api.post<{
-          items: BatchImportItem[];
-          total: number;
-          page: number;
-          per_page: number;
-          pages: number;
+          data: {
+            items: BatchImportItem[];
+            total: number;
+            page: number;
+            per_page: number;
+            pages: number;
+          }
         }>(`/batch-import/${jobId}/items`, {
           status,
           page,
           per_page: perPage,
         });
 
-        return response;
+        return response.data;
       } catch (err) {
         const message = err instanceof Error ? err.message : 'Failed to fetch import items';
         setError(message);
@@ -161,24 +165,25 @@ export function useBatchOperations() {
         setLoading(true);
         setError('');
 
-        const response = await api.get<{ csv: string; filename: string }>(
+        const response = await api.get<{ data: { csv: string; filename: string } }>(
           `/batch-import/${jobId}/export`
         );
 
-        if (response) {
+        const data = response.data;
+        if (data) {
           // Trigger download
-          const blob = new Blob([response.csv], { type: 'text/csv' });
+          const blob = new Blob([data.csv], { type: 'text/csv' });
           const url = window.URL.createObjectURL(blob);
           const a = document.createElement('a');
           a.href = url;
-          a.download = response.filename;
+          a.download = data.filename;
           document.body.appendChild(a);
           a.click();
           window.URL.revokeObjectURL(url);
           document.body.removeChild(a);
         }
 
-        return response;
+        return data;
       } catch (err) {
         const message = err instanceof Error ? err.message : 'Failed to export results';
         setError(message);
@@ -197,17 +202,19 @@ export function useBatchOperations() {
         setError('');
 
         const response = await api.post<{
-          campaign_id: string;
-          campaign_name: string;
-          total_invitations: number;
-          status: string;
+          data: {
+            campaign_id: string;
+            campaign_name: string;
+            total_invitations: number;
+            status: string;
+          }
         }>('/bulk-invitations', {
           campaign_name: campaignName,
           invitations,
           expiry_days: expiryDays,
         });
 
-        return response;
+        return response.data;
       } catch (err) {
         const message = err instanceof Error ? err.message : 'Failed to create invitation campaign';
         setError(message);
@@ -225,11 +232,11 @@ export function useBatchOperations() {
         setLoading(true);
         setError('');
 
-        const response = await api.get<BulkInvitationJob>(
+        const response = await api.get<{ data: BulkInvitationJob }>(
           `/bulk-invitations/${campaignId}`
         );
 
-        return response;
+        return response.data;
       } catch (err) {
         const message = err instanceof Error ? err.message : 'Failed to fetch campaign details';
         setError(message);
@@ -248,11 +255,13 @@ export function useBatchOperations() {
         setError('');
 
         const response = await api.get<{
-          expiring_soon: ExpiringInvitation[];
-          expired_count: number;
+          data: {
+            expiring_soon: ExpiringInvitation[];
+            expired_count: number;
+          }
         }>('/bulk-invitations/expiration-check');
 
-        return response;
+        return response.data;
       } catch (err) {
         const message = err instanceof Error ? err.message : 'Failed to check expiring invitations';
         setError(message);
@@ -271,48 +280,50 @@ export function useBatchOperations() {
         setError('');
 
         const response = await api.get<{
-          import_jobs: {
-            total: number;
-            active: number;
-            completed: number;
-            failed: number;
-            total_users_imported: number;
-            success_rate: number;
-            recent_jobs: Array<{
-              id: string;
-              filename: string;
-              status: string;
-              progress: number;
-              total_records: number;
-              success_count: number;
-              created_at: string;
-              hospital: string;
-            }>;
-          };
-          invitation_campaigns: {
-            total: number;
-            active: number;
-            completed: number;
-            total_sent: number;
-            total_accepted: number;
-            acceptance_rate: number;
-            expiring_soon: number;
-            recent_campaigns: Array<{
-              id: string;
-              campaign_name: string;
-              status: string;
-              progress: number;
-              total_invitations: number;
-              sent_count: number;
-              accepted_count: number;
-              created_at: string;
-              hospital: string;
-            }>;
-          };
-          timestamp: string;
+          data: {
+            import_jobs: {
+              total: number;
+              active: number;
+              completed: number;
+              failed: number;
+              total_users_imported: number;
+              success_rate: number;
+              recent_jobs: Array<{
+                id: string;
+                filename: string;
+                status: string;
+                progress: number;
+                total_records: number;
+                success_count: number;
+                created_at: string;
+                hospital: string;
+              }>;
+            };
+            invitation_campaigns: {
+              total: number;
+              active: number;
+              completed: number;
+              total_sent: number;
+              total_accepted: number;
+              acceptance_rate: number;
+              expiring_soon: number;
+              recent_campaigns: Array<{
+                id: string;
+                campaign_name: string;
+                status: string;
+                progress: number;
+                total_invitations: number;
+                sent_count: number;
+                accepted_count: number;
+                created_at: string;
+                hospital: string;
+              }>;
+            };
+            timestamp: string;
+          }
         }>('/batch-operations/summary');
 
-        return response;
+        return response.data;
       } catch (err) {
         const message = err instanceof Error ? err.message : 'Failed to fetch batch operations summary';
         setError(message);

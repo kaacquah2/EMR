@@ -3,7 +3,7 @@
 import useSWR from 'swr';
 import { useCallback } from "react";
 import { useApi } from "./use-api";
-import type { Patient, PaginatedResponse } from "@/lib/types";
+import type { Patient, PaginatedResponse, DetailResponse } from "@/lib/types";
 
 export function usePatientSearch() {
   const api = useApi();
@@ -49,9 +49,9 @@ export function usePatientSearch() {
 export function usePatient(id: string | null) {
   const api = useApi();
   
-  const { data, error, isLoading, mutate } = useSWR<Patient>(
+  const { data, error, isLoading, mutate } = useSWR<DetailResponse<Patient>>(
     id ? `/patients/${id}` : undefined,
-    (url: string) => api.get<Patient>(url),
+    (url: string) => api.get<DetailResponse<Patient>>(url),
     {
       dedupingInterval: 60000, // SWR uses dedupingInterval for "stale time"
       revalidateOnFocus: true,
@@ -59,7 +59,7 @@ export function usePatient(id: string | null) {
   );
 
   return { 
-    patient: data || null, 
+    patient: data?.data || null, 
     loading: isLoading, 
     error: error?.message || null, 
     fetch: mutate 

@@ -64,7 +64,7 @@ export default function AdmissionsPage() {
         <Link href={`/patients/${patientId}`}>
           <Button variant="ghost">Back</Button>
         </Link>
-        <h1 className="font-sora text-2xl font-bold text-[#0F172A]">
+        <h1 className="font-sora text-2xl font-bold text-slate-900 dark:text-slate-100">
           Ward Admission
         </h1>
       </div>
@@ -72,7 +72,7 @@ export default function AdmissionsPage() {
       {patientAdmission && (
         <Card className="p-6">
           <h3 className="font-medium">Current Admission</h3>
-          <p className="mt-2 text-sm text-[#64748B]">
+          <p className="mt-2 text-sm text-slate-500 dark:text-slate-500">
             Ward: {patientAdmission.ward_name}
             {patientAdmission.bed_code && ` | Bed: ${patientAdmission.bed_code}`}
             {" | Admitted: "}{patientAdmission.admitted_at?.slice(0, 16)} by {patientAdmission.admitted_by}
@@ -131,11 +131,11 @@ export default function AdmissionsPage() {
             }}
           >
             <div>
-              <label className="mb-1.5 block text-xs font-semibold uppercase text-[#64748B]">Ward</label>
+              <label className="mb-1.5 block text-xs font-semibold uppercase text-slate-500 dark:text-slate-500">Ward</label>
               <select
                 value={wardId}
                 onChange={(e) => setWardId(e.target.value)}
-                className="h-11 w-full rounded-lg border-[1.5px] border-[#CBD5E1] px-3"
+                className="h-11 w-full rounded-lg border-[1.5px] border-slate-300 dark:border-slate-700 px-3"
                 required
               >
                 <option value="">Select ward</option>
@@ -146,11 +146,11 @@ export default function AdmissionsPage() {
             </div>
             {wardId && (
               <div>
-                <label className="mb-1.5 block text-xs font-semibold uppercase text-[#64748B]">Bed (optional)</label>
+                <label className="mb-1.5 block text-xs font-semibold uppercase text-slate-500 dark:text-slate-500">Bed (optional)</label>
                 <select
                   value={bedId}
                   onChange={(e) => setBedId(e.target.value)}
-                  className="h-11 w-full rounded-lg border-[1.5px] border-[#CBD5E1] px-3"
+                  className="h-11 w-full rounded-lg border-[1.5px] border-slate-300 dark:border-slate-700 px-3"
                 >
                   <option value="">No bed</option>
                   {beds.map((b) => (

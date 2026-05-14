@@ -161,7 +161,7 @@ def admission_create(request):
         bed.status = "occupied"
         bed.save(update_fields=["status"])
     return Response(
-        {"admission_id": str(admission.id), "message": "Patient admitted"},
+        {"data": {"admission_id": str(admission.id), "message": "Patient admitted"}},
         status=status.HTTP_201_CREATED,
     )
 
@@ -200,7 +200,7 @@ def admission_discharge(request, admission_id):
     if admission.bed_id:
         admission.bed.status = "available"
         admission.bed.save(update_fields=["status"])
-    return Response({"message": "Patient discharged"})
+    return Response({"data": {"message": "Patient discharged"}})
 
 
 # NURSE DASHBOARD: Enhanced ward endpoint with vitals, dispense, and alert counts

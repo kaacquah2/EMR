@@ -61,7 +61,7 @@ function ResetPasswordForm() {
     return (
       <>
         <div className="rounded-xl border border-[#D97706]/30 bg-[#FEF3C7]/60 p-4 text-[#92400E]">
-          <h2 className="font-sora text-lg font-semibold text-[#0F172A]">Invalid reset link</h2>
+          <h2 className="font-sora text-lg font-semibold text-slate-900 dark:text-slate-100">Invalid reset link</h2>
           <p className="mt-1 text-sm">
             This page requires a valid token. Request a new password reset link.
           </p>
@@ -70,7 +70,7 @@ function ResetPasswordForm() {
           <Link href="/forgot-password" className="text-sm font-medium text-[#0B8A96] hover:underline">
             Forgot password
           </Link>
-          <Link href="/login" className="text-sm text-[#64748B] hover:text-[#0F172A]">
+          <Link href="/login" className="text-sm text-slate-500 dark:text-slate-500 hover:text-slate-900 dark:text-slate-100">
             Back to sign in
           </Link>
         </div>
@@ -81,11 +81,11 @@ function ResetPasswordForm() {
   return (
     <>
       <h2 className="font-sora text-xl font-bold text-[#0C1F3D]">Set new password</h2>
-      <p className="mt-1 text-sm text-[#64748B]">
+      <p className="mt-1 text-sm text-slate-500 dark:text-slate-500">
         Enter your new password below. It must meet the requirements listed.
       </p>
       <div className="mt-3 rounded-lg border border-[#0B8A96]/20 bg-[#F0FDFA]/50 p-3">
-        <ul className="list-inside list-disc text-xs text-[#0F172A]">
+        <ul className="list-inside list-disc text-xs text-slate-900 dark:text-slate-100">
           {PASSWORD_REQUIREMENTS.map((req) => (
             <li key={req}>{req}</li>
           ))}
@@ -114,7 +114,7 @@ function ResetPasswordForm() {
         <Button type="submit" fullWidth disabled={loading}>
           {loading ? "Resetting..." : "Reset password"}
         </Button>
-        <Link href="/login" className="block text-center text-sm text-[#64748B] hover:text-[#0F172A]">
+        <Link href="/login" className="block text-center text-sm text-slate-500 dark:text-slate-500 hover:text-slate-900 dark:text-slate-100">
           Back to sign in
         </Link>
       </form>
@@ -125,7 +125,7 @@ function ResetPasswordForm() {
 export default function ResetPasswordPage() {
   return (
     <AuthLayout title="Reset password" subtitle="Set a new password for your account.">
-      <Suspense fallback={<p className="text-[#64748B]">Loading...</p>}>
+      <Suspense fallback={<p className="text-slate-500 dark:text-slate-500">Loading...</p>}>
         <ResetPasswordForm />
       </Suspense>
     </AuthLayout>

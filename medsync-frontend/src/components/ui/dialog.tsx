@@ -65,11 +65,16 @@ function DialogOverlay({
   );
 }
 
+interface DialogContentProps extends React.HTMLAttributes<HTMLDivElement> {
+  size?: "sm" | "md" | "lg" | "xl" | "full";
+}
+
 function DialogContent({
   className = "",
+  size = "md",
   children,
   ...props
-}: React.HTMLAttributes<HTMLDivElement>) {
+}: DialogContentProps) {
   const ctx = React.useContext(DialogContext);
   const contentRef = React.useRef<HTMLDivElement>(null);
 
@@ -93,13 +98,22 @@ function DialogContent({
   }, [ctx]);
 
   if (!ctx) return null;
+  
+  const sizeClasses = {
+    sm: "max-w-sm",
+    md: "max-w-lg",
+    lg: "max-w-3xl",
+    xl: "max-w-5xl",
+    full: "max-w-[95vw] h-[95vh]",
+  };
+  
   return (
     <div
       ref={contentRef}
       role="dialog"
       aria-modal="true"
       tabIndex={-1}
-      className={`fixed left-1/2 top-1/2 z-50 w-full max-w-lg -translate-x-1/2 -translate-y-1/2 rounded-2xl bg-white dark:bg-[#1E293B] p-8 shadow-[0_20px_60px_rgba(0,0,0,0.15)] focus:outline-none ${className}`}
+      className={`fixed left-1/2 top-1/2 z-50 w-full ${sizeClasses[size]} max-h-[95vh] overflow-y-auto -translate-x-1/2 -translate-y-1/2 rounded-2xl bg-white dark:bg-slate-800 dark:bg-slate-200 p-8 shadow-[0_20px_60px_rgba(0,0,0,0.15)] focus:outline-none ${className}`}
       onClick={(e) => e.stopPropagation()}
       {...props}
     >

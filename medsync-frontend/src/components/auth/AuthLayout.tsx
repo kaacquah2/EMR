@@ -107,7 +107,7 @@ export function AuthLayout({ children, title, subtitle }: AuthLayoutProps) {
           <span className="text-xs text-[#475569]">One record. Every hospital.</span>
         </div>
 
-        <div className="w-full max-w-[420px] login-form-enter rounded-2xl border border-[#BAE6FD] bg-white p-8 shadow-xl ring-1 ring-[#0B8A96]/10">
+        <div className="w-full max-w-[420px] auth-card login-form-enter rounded-2xl border border-[#BAE6FD] bg-white p-8 shadow-xl ring-1 ring-[#0B8A96]/10">
           {(title != null || subtitle != null) && (
             <div className="mb-8 text-center lg:text-left">
               {title && (

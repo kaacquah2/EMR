@@ -4,6 +4,7 @@ import React, { useState, useEffect } from "react";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Checkbox } from "@/components/ui/Checkbox";
 import { AuthLayout } from "@/components/auth/AuthLayout";
 import { useAuth } from "@/lib/auth-context";
 import { usePasskey } from "@/hooks/use-passkey";
@@ -282,6 +283,7 @@ export default function LoginPage() {
             onChange={(e) => setEmail(e.target.value)}
             placeholder="you@hospital.gov.gh"
             data-testid="login-email"
+            className="bg-white text-gray-900 dark:bg-white dark:text-gray-900 autofill-override"
             required
             autoFocus
           />
@@ -305,18 +307,15 @@ export default function LoginPage() {
             onChange={(e) => setPassword(e.target.value)}
             placeholder="••••••••"
             data-testid="login-password"
+            className="bg-white text-gray-900 dark:bg-white dark:text-gray-900 autofill-override"
             required
           />
 
-          <label className="flex items-center gap-2 text-sm text-[var(--gray-500)]">
-            <input
-              type="checkbox"
-              checked={rememberMe}
-              onChange={(e) => setRememberMe(e.target.checked)}
-              className="h-4 w-4 rounded border-[var(--gray-300)] text-[var(--teal-500)] focus:ring-[var(--teal-500)]"
-            />
-            Remember me (keep signed in after closing tab)
-          </label>
+          <Checkbox
+            label="Remember me (keep signed in after closing tab)"
+            checked={rememberMe}
+            onChange={(e) => setRememberMe(e.target.checked)}
+          />
 
           <Link href="/forgot-password" className="block text-sm text-[var(--teal-500)] hover:underline">
             Forgot password?
@@ -370,7 +369,7 @@ export default function LoginPage() {
                         }
                       }}
                       data-testid={`mfa-code-${i}`}
-                      className="h-12 w-10 rounded-lg border-2 border-[var(--gray-300)] text-center font-mono text-lg focus:border-[var(--teal-500)] focus:outline-none focus:ring-2 focus:ring-[rgba(11,138,150,0.2)]"
+                      className="h-12 w-10 rounded-lg border-2 border-[var(--gray-300)] bg-white text-slate-900 dark:bg-white dark:text-slate-900 text-center font-mono text-lg focus:border-[var(--teal-500)] focus:outline-none focus:ring-2 focus:ring-[rgba(11,138,150,0.2)] autofill-override"
                     />
                   ))}
                 </div>
@@ -432,14 +431,13 @@ export default function LoginPage() {
             </>
           ) : (
             <>
-              <p className="text-sm text-[var(--gray-500)]">Enter one of your single-use backup codes.</p>
-              <input
-                type="text"
+              <Input
+                label="Backup Code"
                 value={backupCode}
                 onChange={(e) => setBackupCode(e.target.value)}
                 placeholder="xxxxxxxx"
                 data-testid="mfa-backup-code"
-                className="h-11 w-full rounded-lg border-[1.5px] border-[var(--gray-300)] px-3 font-mono"
+                className="font-mono"
                 required
               />
               <button

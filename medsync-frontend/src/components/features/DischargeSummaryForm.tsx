@@ -10,6 +10,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import { Textarea } from "@/components/ui/textarea";
 import type { Encounter } from "@/lib/types";
 
 const DISCHARGE_TEMPLATE = `Diagnosis:
@@ -76,13 +77,13 @@ export function DischargeSummaryForm({
     <Dialog open={open} onOpenChange={handleOpenChange}>
       <DialogPortal>
         <DialogOverlay />
-        <DialogContent className="max-h-[90vh] overflow-y-auto">
+        <DialogContent size="lg" className="max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>Discharge summary</DialogTitle>
           </DialogHeader>
           <div className="space-y-4 pt-2">
             <div>
-              <label className="block text-sm font-medium text-[#0F172A] mb-1">Encounter</label>
+              <label className="block text-sm font-medium text-slate-900 dark:text-slate-100 mb-1">Encounter</label>
               <select
                 value={selectedEncounterId}
                 onChange={(e) => {
@@ -90,7 +91,7 @@ export function DischargeSummaryForm({
                   const enc = encounters.find((x) => x.id === e.target.value);
                   setSummary(enc?.discharge_summary || "");
                 }}
-                className="w-full rounded-lg border border-[#CBD5E1] px-3 py-2 text-sm"
+                className="w-full rounded-lg border border-slate-300 dark:border-slate-700 px-3 py-2 text-sm"
               >
                 <option value="">Select encounter</option>
                 {encounters.map((e) => (
@@ -102,17 +103,18 @@ export function DischargeSummaryForm({
             </div>
             <div>
               <div className="flex items-center justify-between mb-1">
-                <label className="block text-sm font-medium text-[#0F172A]">Summary</label>
+                <label className="block text-sm font-medium text-slate-900 dark:text-slate-100">Summary</label>
                 <Button type="button" variant="ghost" size="sm" onClick={handleUseTemplate}>
                   Use template
                 </Button>
               </div>
-              <textarea
+              <Textarea
                 value={summary}
                 onChange={(e) => setSummary(e.target.value)}
                 rows={12}
-                className="w-full rounded-lg border border-[#CBD5E1] px-3 py-2 text-sm"
                 placeholder="Enter discharge summary..."
+                showCount
+                maxLength={4000}
               />
             </div>
             {error && <p className="text-sm text-[#DC2626]">{error}</p>}

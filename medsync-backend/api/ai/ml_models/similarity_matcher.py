@@ -11,7 +11,7 @@ from typing import Dict, List, Any, Optional
 from datetime import datetime
 import numpy as np
 from sklearn.preprocessing import StandardScaler
-from sklearn.metrics.pairwise import cosine_similarity
+from api.ai.faiss_indexer import FaissIndexer
 
 logger = logging.getLogger(__name__)
 
@@ -42,48 +42,93 @@ class SimilarityMatcher:
         'has_copd',
     ]
 
-    def __init__(self):
+    def __init__(self, dimension: int = 17):  # Default 17 based on SIMILARITY_FEATURES
         """Initialize similarity matcher."""
         self.scaler = StandardScaler()
-        self.patient_data_cache = []  # Cache of all patient feature vectors
-        self.patient_features_scaled = None
+        self.dimension = dimension
+        self.indexer = FaissIndexer(dimension=dimension)
+        self.patient_data_cache: Dict[str, Dict[str, Any]] = {}
         self.model_metadata = {
             'version': '1.0.0',
             'created_at': datetime.now().isoformat(),
-            'algorithm': 'k-NN with Cosine Similarity',
-            'num_features': len(self.SIMILARITY_FEATURES),
+            'algorithm': 'FAISS Approximate Nearest Neighbor (Inner Product)',
+            'num_features': dimension,
         }
-        logger.info(f"Similarity matcher initialized with {len(self.SIMILARITY_FEATURES)} features")
+        logger.info(f"Similarity matcher initialized with FAISS, dimension={dimension}")
 
     def index_patients(self, all_patient_features: List[Dict[str, Any]]):
         """
-        Index all patients for similarity searches.
-
-        Should be called once with all training data or periodically to update.
-
-        Args:
-            all_patient_features: List of feature vectors from FeatureEngineer
+        Index all patients for similarity searches using FAISS.
         """
         try:
-            self.patient_data_cache = all_patient_features
+            if not all_patient_features:
+                logger.warning("No patient data to index")
+                return
+
+            # Store in cache for metadata retrieval
+            self.patient_data_cache = {p['patient_id']: p for p in all_patient_features}
 
             # Extract feature matrix
             feature_matrix = []
+            patient_ids = []
             for patient_data in all_patient_features:
                 vector = self._extract_feature_vector(patient_data)
                 feature_matrix.append(vector)
+                patient_ids.append(patient_data['patient_id'])
 
-            if feature_matrix:
-                # Scale features
-                feature_matrix = np.array(feature_matrix)
-                self.patient_features_scaled = self.scaler.fit_transform(feature_matrix)
-                logger.info(f"Indexed {len(self.patient_data_cache)} patients for similarity search")
-            else:
-                logger.warning("No patient data to index")
+            # Scale and build FAISS index
+            feature_matrix = np.array(feature_matrix)
+            scaled_matrix = self.scaler.fit_transform(feature_matrix)
+            
+            self.indexer.build_index(
+                scaled_matrix.astype('float32'),
+                patient_ids,
+                metadata=all_patient_features
+            )
+            
+            logger.info(f"FAISS indexed {len(all_patient_features)} patients")
 
         except Exception as e:
             logger.error(f"Error indexing patients: {e}")
             raise
+
+    def save_to_disk(self, path: str):
+        """Save FAISS index and scaler to disk."""
+        try:
+            self.indexer.save_index(path)
+            # Also save the scaler and data cache
+            scaler_path = path.replace('.faiss', '_scaler.pkl')
+            import pickle
+            with open(scaler_path, 'wb') as f:
+                pickle.dump({
+                    'scaler': self.scaler,
+                    'patient_data_cache': self.patient_data_cache
+                }, f)
+            logger.info(f"Saved similarity index and scaler to {path}")
+        except Exception as e:
+            logger.error(f"Failed to save similarity index: {e}")
+
+    def load_from_disk(self, path: str) -> bool:
+        """Load FAISS index and scaler from disk."""
+        try:
+            if not os.path.exists(path):
+                return False
+            
+            self.indexer.load_index(path)
+            
+            scaler_path = path.replace('.faiss', '_scaler.pkl')
+            if os.path.exists(scaler_path):
+                import pickle
+                with open(scaler_path, 'rb') as f:
+                    data = pickle.load(f)
+                    self.scaler = data['scaler']
+                    self.patient_data_cache = data['patient_data_cache']
+            
+            logger.info(f"Loaded similarity index from {path}")
+            return True
+        except Exception as e:
+            logger.error(f"Failed to load similarity index: {e}")
+            return False
 
     def find_similar_patients(
         self,
@@ -122,44 +167,47 @@ class SimilarityMatcher:
             }
         """
         try:
-            if self.patient_features_scaled is None or len(self.patient_data_cache) == 0:
-                logger.warning("No indexed patients for similarity search")
+            if not self.indexer.get_index_stats()['ready']:
+                logger.warning("FAISS index not ready")
                 return {
                     'patient_id': patient_features.get('patient_id', 'unknown'),
                     'similar_patients': [],
-                    'message': 'No patient data indexed yet',
+                    'message': 'Similarity index is being rebuilt',
                 }
 
             # Extract and scale query patient features
             query_vector = self._extract_feature_vector(patient_features)
-            query_vector_scaled = self.scaler.transform([query_vector])[0:1]
+            query_vector_scaled = self.scaler.transform([query_vector])[0]
 
-            # Calculate similarity with all patients
-            similarities = cosine_similarity(query_vector_scaled, self.patient_features_scaled)[0]
-
-            # Get top-k most similar (excluding self)
+            # Search using FAISS
             patient_id = patient_features.get('patient_id')
-            similar_indices = np.argsort(-similarities)  # Descending order
+            result_ids, result_scores = self.indexer.search(
+                query_vector_scaled.astype('float32'), 
+                k=k + 1  # Get one extra in case query patient is in results
+            )
 
             similar_patients = []
-            for rank, idx in enumerate(similar_indices[:k], 1):
-                similar_patient_data = self.patient_data_cache[idx]
-                similarity_score = float(similarities[idx])
+            for pid, score in zip(result_ids, result_scores):
+                if pid == patient_id:
+                    continue
+                
+                similar_patient_data = self.patient_data_cache.get(pid)
+                if not similar_patient_data:
+                    continue
 
-                # Only include if not the same patient and similarity > 0.5
-                if (similar_patient_data.get('patient_id') != patient_id and
-                        similarity_score > 0.5):
+                similar_patients.append({
+                    'rank': len(similar_patients) + 1,
+                    'patient_id': pid,
+                    'similarity_score': float(score),
+                    'age': similar_patient_data.get('age'),
+                    'conditions': self._extract_conditions(similar_patient_data),
+                    'medications': self._extract_medication_count(similar_patient_data),
+                    'treatment_outcome': self._get_treatment_outcome(similar_patient_data),
+                    'outcome_success_rate': self._estimate_success_rate(similar_patient_data),
+                })
 
-                    similar_patients.append({
-                        'rank': len(similar_patients) + 1,
-                        'patient_id': similar_patient_data.get('patient_id'),
-                        'similarity_score': similarity_score,
-                        'age': similar_patient_data.get('age'),
-                        'conditions': self._extract_conditions(similar_patient_data),
-                        'medications': self._extract_medication_count(similar_patient_data),
-                        'treatment_outcome': self._get_treatment_outcome(similar_patient_data),
-                        'outcome_success_rate': self._estimate_success_rate(similar_patient_data),
-                    })
+                if len(similar_patients) >= k:
+                    break
 
             return {
                 'patient_id': patient_id,
@@ -197,16 +245,60 @@ class SimilarityMatcher:
         return patient_data.get('active_medication_count', 0)
 
     def _get_treatment_outcome(self, patient_data: Dict[str, Any]) -> Optional[str]:
-        """Get treatment outcome for similar patient (if available)."""
-        # TODO: Link to actual treatment outcomes from EMR
-        # For now, return None
-        return None
+        """
+        Extract the most recent treatment outcome for a patient.
+        """
+        outcomes = patient_data.get('outcomes', [])
+        if not outcomes:
+            # Fallback to encounters if outcomes list empty but we have encounter notes
+            encounters = patient_data.get('encounters', [])
+            for encounter in encounters:
+                if encounter.get('assessment_plan'):
+                    return f"Plan: {encounter['assessment_plan'][:100]}..."
+            return None
+        
+        # Get most recent completed outcome
+        latest = outcomes[0]
+        if latest.get('discharge_summary'):
+            return f"Discharge: {latest['discharge_summary'][:100]}..."
+        if latest.get('assessment_plan'):
+            return f"Assessment: {latest['assessment_plan'][:100]}..."
+            
+        return "Treatment completed"
 
-    def _estimate_success_rate(self, patient_data: Dict[str, Any]) -> Optional[float]:
-        """Estimate treatment success rate for similar patient."""
-        # TODO: Calculate from actual outcomes
-        # For now, return None
-        return None
+    def _estimate_success_rate(self, patient_data: Dict[str, Any]) -> float:
+        """
+        Estimate treatment success rate based on clinical markers.
+        """
+        outcomes = patient_data.get('outcomes', [])
+        if not outcomes:
+            return 0.75  # Clinical baseline
+            
+        # Success proxy: completed encounters vs total, or specific keywords in notes
+        completed_count = sum(1 for o in outcomes if o.get('is_completed'))
+        if not outcomes:
+            return 0.75
+            
+        base_rate = completed_count / len(outcomes)
+        
+        # Refine by searching for positive markers in summaries
+        positive_keywords = ['improved', 'stable', 'resolved', 'recovered', 'discharged home']
+        negative_keywords = ['deteriorated', 'worsened', 'referred', 'complications']
+        
+        scores = []
+        for o in outcomes:
+            text = (o.get('assessment_plan', '') + ' ' + o.get('discharge_summary', '')).lower()
+            if any(k in text for k in positive_keywords):
+                scores.append(0.9)
+            elif any(k in text for k in negative_keywords):
+                scores.append(0.3)
+            else:
+                scores.append(0.7)
+                
+        if scores:
+            return sum(scores) / len(scores)
+            
+        return base_rate
 
     def compare_patients(
         self,

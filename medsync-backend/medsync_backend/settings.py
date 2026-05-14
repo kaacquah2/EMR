@@ -30,34 +30,12 @@ def _resolve_secret_key():
 
 _SECRET_KEY = _resolve_secret_key()
 if _SECRET_KEY is None:
-    if DEBUG:
-        # Local development: generate a temporary key (not for production)
-        import secrets
-        _SECRET_KEY = f"dev-{secrets.token_hex(32)}"
-        import warnings
-        warnings.warn(
-            "⚠️  Using generated development SECRET_KEY. "
-            "For production, set SECRET_KEY environment variable to a strong value.",
-            RuntimeWarning,
-            stacklevel=2,
-        )
-    elif _VERCEL:
-        import warnings
-
-        _SECRET_KEY = "vercel-bootstrap-insecure-set-secret-key-in-dashboard"
-        warnings.warn(
-            "SECRET_KEY unset on Vercel; using bootstrap placeholder. "
-            "Set SECRET_KEY or DJANGO_SECRET_KEY in the Vercel project environment.",
-            RuntimeWarning,
-            stacklevel=2,
-        )
-    else:
-        from django.core.exceptions import ImproperlyConfigured
-        raise ImproperlyConfigured(
-            "SECRET_KEY is required when DEBUG=False. "
-            "On Railway: Service → Variables → add SECRET_KEY (or DJANGO_SECRET_KEY) "
-            "with a long random value (e.g. openssl rand -hex 32). Redeploy after saving."
-        )
+    from django.core.exceptions import ImproperlyConfigured
+    raise ImproperlyConfigured(
+        "SECRET_KEY is required for the application to start. "
+        "Set SECRET_KEY or DJANGO_SECRET_KEY in your environment variables or .env file. "
+        "For production, use a long random value (e.g. openssl rand -hex 32)."
+    )
 SECRET_KEY = _SECRET_KEY
 
 _db_url_configured = bool(config("DATABASE_URL", default=""))
@@ -73,7 +51,7 @@ if config("ENV", default="").lower() == "production" and DEBUG:
     from django.core.exceptions import ImproperlyConfigured
     raise ImproperlyConfigured("Production must not run with DEBUG=True. Set DEBUG=False.")
 
-ALLOWED_HOSTS = [h.strip() for h in config("ALLOWED_HOSTS", default="localhost,127.0.0.1").split(",") if h.strip()]
+ALLOWED_HOSTS = [h.strip() for h in config("ALLOWED_HOSTS", default="localhost,127.0.0.1,testserver").split(",") if h.strip()]
 if _VERCEL:
     # Vercel deployment hostnames (*.vercel.app); override via ALLOWED_HOSTS if using a custom domain.
     ALLOWED_HOSTS = list({*ALLOWED_HOSTS, ".vercel.app"})
@@ -170,8 +148,14 @@ if _HAS_CHANNELS:
                 "CONFIG": {"hosts": [_redis_url]},
             }
         }
-    else:
+    elif DEBUG:
         CHANNEL_LAYERS = {"default": {"BACKEND": "channels.layers.InMemoryChannelLayer"}}
+    else:
+        from django.core.exceptions import ImproperlyConfigured
+        raise ImproperlyConfigured(
+            "REDIS_URL is required for Channels in production. "
+            "InMemoryChannelLayer does not work across multiple workers."
+        )
 
 # Database: Postgres (Neon) required for production (pgcrypto, RLS, concurrent writes).
 # SQLite used only when DEBUG=True and DATABASE_URL is unset (local dev only).
@@ -349,10 +333,12 @@ REST_FRAMEWORK = {
         else {
             "anon": THROTTLE_ANON,
             "user": THROTTLE_USER,
+            "ai": "20/day",
         }
     ),
     "DEFAULT_PAGINATION_CLASS": "rest_framework.pagination.CursorPagination",
     "PAGE_SIZE": 20,
+    "DEFAULT_VERSIONING_CLASS": "rest_framework.versioning.URLPathVersioning",
 }
 
 from datetime import timedelta
@@ -593,12 +579,12 @@ NO_SHOW_OVERRIDE_DAYS = config("NO_SHOW_OVERRIDE_DAYS", default=7, cast=int)
 # Frontend URL for password reset page (must be HTTPS in production)
 PASSWORD_RESET_FRONTEND_URL = config(
     "PASSWORD_RESET_FRONTEND_URL",
-    default="https://medsync.example.com/auth/reset-password",
+    default="https://emr-inky.vercel.app/auth/reset-password",
 )
 # Frontend base URL for activation and other frontend links
 FRONTEND_URL = config(
     "FRONTEND_URL",
-    default="https://medsync.example.com",
+    default="https://emr-inky.vercel.app",
 )
 # Support email for invitation and other notification emails
 SUPPORT_EMAIL = config(
@@ -664,10 +650,10 @@ else:
 # ⚠️  SECURITY: Changed to use header-based CSRF tokens instead of cookies
 # JavaScript gets CSRF token from response body or meta tag, not from cookie.
 # This prevents XSS attacks from reading the CSRF cookie.
-SESSION_COOKIE_SECURE = _SECURE_HTTPS
+SESSION_COOKIE_SECURE = _SECURE_HTTPS if DEBUG else True
 SESSION_COOKIE_HTTPONLY = True
 SESSION_COOKIE_SAMESITE = "Strict"
-CSRF_COOKIE_SECURE = _SECURE_HTTPS
+CSRF_COOKIE_SECURE = _SECURE_HTTPS if DEBUG else True
 CSRF_COOKIE_HTTPONLY = True  # FIXED: Now HttpOnly to prevent XSS cookie theft
 CSRF_COOKIE_SAMESITE = "Strict"  # FIXED: Changed from Lax to Strict
 CSRF_HEADER_NAME = "HTTP_X_CSRFTOKEN"  # Frontend sends CSRF token via X-CSRFToken header
@@ -709,6 +695,11 @@ CELERY_BEAT_SCHEDULE = {
         'task': 'api.tasks.appointment_tasks.mark_no_shows_task',
         'schedule': crontab(minute='*/15'),  # Every 15 minutes
         'options': {'expires': 600}  # Expires in 10 minutes if not run
+    },
+    'rebuild-faiss-index-nightly': {
+        'task': 'ai.rebuild_faiss_index',
+        'schedule': crontab(hour=2, minute=0),  # Daily at 2 AM
+        'options': {'expires': 3600}  # Expires in 1 hour if not run
     }
 }
 

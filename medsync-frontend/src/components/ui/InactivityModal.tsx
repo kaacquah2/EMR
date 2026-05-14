@@ -51,7 +51,7 @@ export function InactivityModal({ open, onStayLoggedIn, onLogout }: InactivityMo
           <DialogHeader>
             <DialogTitle className="text-[#B45309]">Session Expiring Soon</DialogTitle>
           </DialogHeader>
-          <p className="text-sm text-[#64748B] mb-4">
+          <p className="text-sm text-slate-500 dark:text-slate-500 mb-4">
             Your session will expire in <strong>{formatMmSs(secondsLeft)}</strong> due to inactivity.
           </p>
           <div className="flex gap-2 justify-end">

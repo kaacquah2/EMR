@@ -1,512 +1,383 @@
 "use client";
 
-import React, { useState, Suspense } from "react";
-import { useSearchParams } from "next/navigation";
+import React, { useState, useEffect, Suspense, useCallback } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
+import Image from "next/image";
+import { QRCodeSVG } from "qrcode.react";
+import { 
+  ShieldCheck, 
+  Smartphone, 
+  QrCode, 
+  Key, 
+  ChevronRight, 
+  ChevronLeft, 
+  AlertCircle,
+  Clock,
+  ExternalLink,
+  Copy
+} from "lucide-react";
+import { useTotp, TotpSetupResponse } from "@/hooks/use-totp";
+import { useToast } from "@/lib/toast-context";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { useAuth } from "@/lib/auth-context";
 import { AuthLayout } from "@/components/auth/AuthLayout";
-import { validatePassword, PASSWORD_REQUIREMENTS } from "@/lib/password-policy";
-import { API_BASE } from "@/lib/api-base";
-import { QRCodeSVG } from "qrcode.react";
-import { Copy, AlertCircle, CheckCircle2, Fingerprint } from "lucide-react";
-import { isPlatformAuthenticatorAvailable, registerPasskey } from "@/lib/passkey";
-import { createApiClient } from "@/lib/api-client";
+import { TotpCountdownRing } from "@/components/ui/TotpCountdownRing";
 
-function ActivateForm() {
+const ActivationContent = () => {
+  const router = useRouter();
   const searchParams = useSearchParams();
-  const token = searchParams.get("token") || "";
-  const { login } = useAuth();
+  const token = searchParams.get("token");
   
-  // Form states
+  const { loading, getActivateSetup, activateAccount } = useTotp();
+  const toast = useToast();
+  
+  const [step, setStep] = useState(1);
+  const [setupData, setSetupData] = useState<TotpSetupResponse | null>(null);
   const [password, setPassword] = useState("");
-  const [confirmPassword, setConfirmPassword] = useState("");
   const [mfaCode, setMfaCode] = useState("");
-  const [error, setError] = useState("");
-  const [loading, setLoading] = useState(false);
+  const [isGracePeriodModalOpen, setIsGracePeriodModalOpen] = useState(false);
+
+  const loadSetup = useCallback(async (t: string) => {
+    const data = await getActivateSetup(t);
+    if (data) {
+      setSetupData(data);
+    } else {
+      router.push("/login");
+    }
+  }, [getActivateSetup, router]);
   
-  // Two-step flow states
-  const [step, setStep] = useState<"setup" | "complete" | "backup" | "passkey">("setup");
-  const [totpSecret, setTotpSecret] = useState("");
-  const [provisioningUrl, setProvisioningUrl] = useState("");
-  const [showBackupCodes, setShowBackupCodes] = useState<string[] | null>(null);
-  const [copyFeedback, setCopyFeedback] = useState<string | null>(null);
-  const [passkeySupported, setPasskeySupported] = useState(false);
-
-  // Check for passkey support on mount
-  React.useEffect(() => {
-    isPlatformAuthenticatorAvailable().then((supported) => {
-      console.debug('[Activate] Passkey support check result:', supported);
-      setPasskeySupported(supported);
-    });
-  }, []);
-
-  // Step 1: Get TOTP setup data
-  const handleSetupMFA = async () => {
-    setError("");
-    setLoading(true);
-    try {
-      const res = await fetch(`${API_BASE}/auth/activate-setup`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ token }),
-      });
-      const data = await res.json();
-      if (!res.ok) {
-        const errorMsg = data.message || "Failed to get MFA setup data";
-        throw new Error(errorMsg);
-      }
-      setTotpSecret(data.totp_secret);
-      setProvisioningUrl(data.provisioning_url);
-      setStep("complete");
-    } catch (err) {
-      const msg = err instanceof Error ? err.message : "Setup failed";
-      if (msg.includes("Invitation expired")) {
-        setError("Your invitation has expired. Please request a new one from your administrator.");
-      } else if (msg.includes("already activated")) {
-        setError("This account has already been activated.");
-      } else {
-        setError(msg);
-      }
-    } finally {
-      setLoading(false);
+  useEffect(() => {
+    if (token) {
+      void (async () => {
+        await loadSetup(token);
+      })();
+    } else {
+      router.push("/login");
     }
-  };
+  }, [token, loadSetup, router]);
 
-  // Step 2: Complete activation with password and TOTP
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setError("");
-    
-    if (password !== confirmPassword) {
-      setError("Passwords do not match");
+  const handleNext = () => setStep(prev => prev + 1);
+  const handleBack = () => setStep(prev => prev - 1);
+
+  const handleActivate = async (skipTotp = false) => {
+    if (!password) {
+      toast.error("Please set a password first");
+      setStep(1); // Go back to start if password missing (though it should be collected in a real form)
       return;
     }
-    
-    const pwCheck = validatePassword(password);
-    if (!pwCheck.valid) {
-      setError(pwCheck.message || "Invalid password");
+
+    if (!skipTotp && mfaCode.length !== 6) {
+      toast.error("Please enter the 6-digit verification code");
       return;
     }
+
+    const result = await activateAccount(token!, password, skipTotp ? undefined : mfaCode);
     
-    if (mfaCode.length !== 6) {
-      setError("Please enter a valid 6-digit code from your authenticator");
-      return;
-    }
-    
-    setLoading(true);
-    try {
-      const res = await fetch(`${API_BASE}/auth/activate`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          token,
-          password,
-          totp_confirmation: mfaCode,
-        }),
-      });
-      const data = await res.json();
-      if (!res.ok) {
-        const msg = data.message || "Activation failed";
-        if (msg.includes("Invalid TOTP")) {
-          throw new Error("Invalid authenticator code. Check your device's time settings and try again.");
-        } else if (msg.includes("reuse")) {
-          throw new Error("This password was previously used. Please choose a new one.");
-        } else {
-          throw new Error(msg);
-        }
-      }
-      
-      if (data.backup_codes?.length) {
-        setShowBackupCodes(data.backup_codes);
-        setStep("backup");
-        login(data);
-      } else {
-        login(data);
-        window.location.href = "/dashboard";
-      }
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Activation failed");
-    } finally {
-      setLoading(false);
+    if (result) {
+      toast.success(skipTotp ? "Account activated with 24-hour grace period" : "Account activated successfully!");
+      router.push("/dashboard");
     }
   };
 
-  // Copy to clipboard helper
-  const copyToClipboard = async (text: string, label: string) => {
-    try {
-      await navigator.clipboard.writeText(text);
-      setCopyFeedback(label);
-      setTimeout(() => setCopyFeedback(null), 2000);
-    } catch {
-      setError("Failed to copy. Please try manual copy.");
-    }
+  const copyToClipboard = (text: string) => {
+    navigator.clipboard.writeText(text);
+    toast.success("Secret copied to clipboard");
   };
 
-  // Download backup codes
-  const downloadBackupCodes = () => {
-    if (!showBackupCodes) return;
-    const text = `MedSync EMR Backup Codes\nGenerated: ${new Date().toISOString()}\n\nSave these codes in a safe place. Each can be used once if you lose your authenticator app.\n\n${showBackupCodes.join("\n")}`;
-    const blob = new Blob([text], { type: "text/plain" });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = `medsync_backup_codes_${Date.now()}.txt`;
-    a.click();
-    URL.revokeObjectURL(url);
-  };
-
-  // Handle passkey registration during activation
-  const handlePasskeyRegistration = async () => {
-    setError("");
-    setLoading(true);
-    try {
-      const apiClient = createApiClient(
-        () => "",
-        async () => false,
-        () => {}
-      );
-      await registerPasskey(apiClient, "My Device");
-      setStep("passkey");
-      setTimeout(() => {
-        window.location.href = "/dashboard";
-      }, 2000);
-    } catch (err: unknown) {
-      const msg = err instanceof Error ? err.message : "Passkey registration failed";
-      if (msg.includes("cancelled")) {
-        // User cancelled, just move to dashboard
-        setStep("passkey");
-        setTimeout(() => {
-          window.location.href = "/dashboard";
-        }, 1000);
-      } else {
-        setError(msg);
-        // Offer to continue without passkey
-        setTimeout(() => {
-          setError("");
-          window.location.href = "/dashboard";
-        }, 3000);
-      }
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const handleSkipPasskey = () => {
-    window.location.href = "/dashboard";
-  };
-
-  if (!token) {
+  if (!setupData) {
     return (
-      <div className="rounded-xl border border-[#D97706]/30 bg-[#FEF3C7]/60 p-4 text-[#92400E]">
-        <h2 className="font-sora text-lg font-semibold text-[#0F172A]">Invalid or missing invitation link</h2>
-        <p className="mt-1 text-sm">Please use the link from your invitation email.</p>
+      <div className="flex flex-col items-center justify-center min-h-[400px]">
+        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-teal-600"></div>
+        <p className="mt-4 text-gray-500 font-medium">Preparing your secure workspace...</p>
       </div>
     );
   }
 
-  // Step 3: Show backup codes
-  if (step === "backup" && showBackupCodes) {
-    return (
-      <>
-        <div className="rounded-xl border border-[#10b981]/30 bg-[#d1fae5]/60 p-4 text-[#065f46]">
-          <div className="flex items-start gap-3">
-            <CheckCircle2 className="mt-0.5 h-5 w-5 flex-shrink-0" />
-            <div>
-              <h2 className="font-sora font-bold">Account activated successfully!</h2>
-              <p className="mt-1 text-sm">Your two-factor authentication is now enabled.</p>
+  const isStaff = !["super_admin", "hospital_admin"].includes(setupData.role);
+
+  return (
+    <div className="w-full max-w-md mx-auto space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
+      {/* Progress Indicator */}
+      <div className="flex items-center justify-center gap-3 mb-8">
+        {[1, 2, 3].map((s) => (
+          <div 
+            key={s}
+            className={`h-2 rounded-full transition-all duration-300 ${
+              step === s ? "w-8 bg-teal-600" : s < step ? "w-4 bg-teal-200" : "w-2 bg-gray-200"
+            }`}
+          />
+        ))}
+      </div>
+
+      {/* Step 1: Install App */}
+      {step === 1 && (
+        <div className="space-y-6">
+          <div className="text-center space-y-2">
+            <div className="inline-flex items-center justify-center w-16 h-16 bg-teal-50 text-teal-600 rounded-2xl mb-2">
+              <Smartphone className="w-8 h-8" />
+            </div>
+            <h1 className="text-2xl font-bold text-navy-900">Set up two-factor authentication</h1>
+            <p className="text-gray-500 text-sm">
+              MedSync requires an authenticator app to protect patient records and your identity.
+            </p>
+          </div>
+
+          <div className="space-y-4">
+            <div className="text-xs font-semibold text-gray-400 uppercase tracking-wider">Recommended Apps</div>
+            
+            <a 
+              href="https://play.google.com/store/apps/details?id=com.google.android.apps.authenticator2"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="flex items-center gap-4 p-4 border border-gray-100 rounded-xl hover:border-teal-200 hover:bg-teal-50/30 transition-all group"
+            >
+              <div className="w-10 h-10 bg-white rounded-lg border border-gray-100 flex items-center justify-center p-2 shadow-sm">
+                <Image src="https://www.gstatic.com/images/branding/product/2x/authenticator_32dp.png" alt="Google" width={32} height={32} />
+              </div>
+              <div className="flex-1">
+                <div className="text-sm font-bold text-gray-900">Google Authenticator</div>
+                <div className="text-xs text-gray-400">Trusted and simple setup</div>
+              </div>
+              <ExternalLink className="w-4 h-4 text-gray-300 group-hover:text-teal-500" />
+            </a>
+
+            <a 
+              href="https://www.microsoft.com/en-us/security/mobile-authenticator-app"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="flex items-center gap-4 p-4 border border-gray-100 rounded-xl hover:border-teal-200 hover:bg-teal-50/30 transition-all group"
+            >
+              <div className="w-10 h-10 bg-white rounded-lg border border-gray-100 flex items-center justify-center p-2 shadow-sm">
+                <Image src="https://upload.wikimedia.org/wikipedia/commons/f/f7/Microsoft_Authenticator_logo.svg" alt="Microsoft" width={32} height={32} />
+              </div>
+              <div className="flex-1">
+                <div className="text-sm font-bold text-gray-900">Microsoft Authenticator</div>
+                <div className="text-xs text-gray-400">Great for enterprise accounts</div>
+              </div>
+              <ExternalLink className="w-4 h-4 text-gray-300 group-hover:text-teal-500" />
+            </a>
+          </div>
+
+          <div className="space-y-4 pt-4">
+            <div className="space-y-3">
+              <label className="block text-sm font-medium text-gray-700">Set your login password</label>
+              <Input 
+                type="password" 
+                placeholder="Minimum 12 characters" 
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                className="bg-white text-gray-900 border-gray-200 focus:border-teal-500 focus:ring-teal-500"
+              />
+            </div>
+
+            <div className="flex flex-col gap-3">
+              <Button 
+                onClick={handleNext}
+                className="w-full bg-teal-600 hover:bg-teal-700 text-white py-6 text-base font-bold shadow-lg shadow-teal-600/20"
+              >
+                Next <ChevronRight className="ml-2 w-5 h-5" />
+              </Button>
+              <button 
+                onClick={handleNext}
+                className="text-sm text-gray-500 hover:text-teal-600 font-medium transition-colors"
+              >
+                I already have an authenticator app →
+              </button>
             </div>
           </div>
+
+          {isStaff && (
+            <div className="text-center pt-4 border-t border-gray-50">
+              <button 
+                onClick={() => setIsGracePeriodModalOpen(true)}
+                className="text-xs text-gray-400 hover:text-teal-600 transition-colors underline underline-offset-4 decoration-gray-200"
+              >
+                Set up later (you have 24 hours)
+              </button>
+            </div>
+          )}
         </div>
+      )}
 
-        <div className="mt-6">
-          <h3 className="font-sora text-lg font-bold text-[#0C1F3D]">Save your backup codes</h3>
-          <p className="mt-2 text-sm text-[#64748B]">
-            Store these codes securely. Each can be used <strong>once</strong> to access your account if you lose your authenticator app.
-          </p>
-
-          <div className="mt-4 rounded-xl border border-[#fca5a5]/40 bg-[#fee2e2]/50 p-4">
-            <div className="flex items-start gap-2">
-              <AlertCircle className="mt-0.5 h-5 w-5 flex-shrink-0 text-[#dc2626]" />
-              <p className="text-sm text-[#7f1d1d]">
-                <strong>Important:</strong> These codes won&apos;t be shown again. Save them now in a password manager, write them down, or print them.
-              </p>
+      {/* Step 2: Scan QR */}
+      {step === 2 && (
+        <div className="space-y-6 animate-in fade-in slide-in-from-right-4 duration-300">
+          <div className="text-center space-y-2">
+            <div className="inline-flex items-center justify-center w-16 h-16 bg-teal-50 text-teal-600 rounded-2xl mb-2">
+              <QrCode className="w-8 h-8" />
             </div>
+            <h1 className="text-2xl font-bold text-navy-900">Scan this code</h1>
+            <p className="text-gray-500 text-sm">
+              Open your authenticator app and scan the code below.
+            </p>
           </div>
 
-          <div className="mt-6 space-y-3 rounded-xl border border-[#0B8A96]/20 bg-[#F0FDFA]/70 p-6">
-            <div className="font-mono text-sm text-[#0F172A]">
-              {showBackupCodes.map((code, i) => (
-                <div key={i} className="flex items-center justify-between py-1">
-                  <span>{code}</span>
-                  <button
-                    type="button"
-                    onClick={() => copyToClipboard(code, `Code ${i + 1} copied`)}
-                    className="ml-2 text-[#0B8A96] hover:text-[#0a7377]"
+          <div className="flex flex-col items-center gap-6">
+            <div className="p-6 bg-white rounded-3xl shadow-xl shadow-gray-200 border border-gray-50 relative group">
+              <QRCodeSVG 
+                value={setupData.provisioning_url} 
+                size={200} 
+                includeMargin={false}
+                className="transition-opacity group-hover:opacity-10"
+              />
+              <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
+                <span className="text-teal-600 font-bold bg-white px-3 py-1 rounded-full shadow-sm text-xs border border-teal-100">
+                  Ready to scan
+                </span>
+              </div>
+            </div>
+
+            <div className="text-center">
+              <div className="text-sm font-bold text-navy-900">MedSync Account</div>
+              <div className="text-xs text-gray-400">{setupData.totp_secret.substring(0, 4)}... (Secret ID)</div>
+            </div>
+
+            <details className="w-full group">
+              <summary className="text-sm font-medium text-teal-600 hover:text-teal-700 cursor-pointer text-center list-none flex items-center justify-center gap-1 select-none">
+                <Key className="w-4 h-4" />
+                Can&apos;t scan? Enter manually
+              </summary>
+              <div className="mt-4 p-4 bg-gray-50 rounded-xl border border-dashed border-gray-200 space-y-3">
+                <p className="text-xs text-gray-500 leading-relaxed">
+                  In your app: tap <strong>+</strong> → <strong>Enter a setup key</strong> → paste the code below
+                </p>
+                <div className="flex items-center gap-2 bg-white p-3 rounded-lg border border-gray-100 font-mono text-sm tracking-widest text-navy-900 break-all">
+                  {setupData.totp_secret}
+                  <button 
+                    onClick={() => copyToClipboard(setupData.totp_secret)}
+                    className="ml-auto p-1 hover:bg-gray-50 rounded transition-colors"
                   >
-                    <Copy className="h-4 w-4" />
+                    <Copy className="w-4 h-4 text-gray-400" />
                   </button>
                 </div>
-              ))}
-            </div>
+              </div>
+            </details>
           </div>
 
-          <div className="mt-6 flex gap-3">
-            <Button
-              type="button"
-              onClick={() => copyToClipboard(showBackupCodes.join("\n"), "All codes copied")}
+          <div className="flex gap-4 pt-4">
+            <Button 
               variant="outline"
-              fullWidth
+              onClick={handleBack}
+              className="flex-1 py-6 border-gray-200 text-gray-600 hover:bg-gray-50"
             >
-              Copy all codes
+              <ChevronLeft className="mr-2 w-5 h-5" /> Back
             </Button>
-            <Button
-              type="button"
-              onClick={downloadBackupCodes}
-              variant="outline"
-              fullWidth
+            <Button 
+              onClick={handleNext}
+              className="flex-[2] bg-teal-600 hover:bg-teal-700 text-white py-6 text-base font-bold shadow-lg shadow-teal-600/20"
             >
-              Download file
+              I&apos;ve scanned it → Next
             </Button>
           </div>
-
-          {copyFeedback && (
-            <div className="mt-4 rounded-lg bg-[#d1fae5] p-3 text-sm text-[#065f46]">
-              ✓ {copyFeedback}
-            </div>
-          )}
-
-          {passkeySupported && (
-            <div className="mt-6 rounded-xl border border-[#0B8A96]/20 bg-[#F0FDFA]/70 p-4">
-              <div className="flex items-start gap-3">
-                <Fingerprint className="mt-0.5 h-5 w-5 flex-shrink-0 text-[#0B8A96]" />
-                <div className="flex-1">
-                  <h3 className="font-sora font-semibold text-[#0C1F3D]">Set up faster sign-in?</h3>
-                  <p className="mt-1 text-sm text-[#64748B]">
-                    Use your fingerprint or face ID for quick, secure login instead of entering codes every time.
-                  </p>
-                </div>
-              </div>
-              <div className="mt-3 flex gap-2">
-                <Button
-                  type="button"
-                  onClick={handlePasskeyRegistration}
-                  fullWidth
-                  disabled={loading}
-                  data-testid="activate-passkey-setup"
-                >
-                  {loading ? "Setting up..." : "Set up passkey"}
-                </Button>
-                <Button
-                  type="button"
-                  onClick={handleSkipPasskey}
-                  variant="outline"
-                  fullWidth
-                  disabled={loading}
-                >
-                  Skip
-                </Button>
-              </div>
-            </div>
-          )}
-
-          {!passkeySupported && (
-            <div className="mt-6 rounded-xl border border-[#FCD34D]/40 bg-[#FEF3C7]/50 p-4">
-              <div className="flex items-start gap-3">
-                <AlertCircle className="mt-0.5 h-5 w-5 flex-shrink-0 text-[#D97706]" />
-                <div className="flex-1">
-                  <h3 className="font-sora font-semibold text-[#92400E]">Passkey not available</h3>
-                  <p className="mt-1 text-sm text-[#78350F]">
-                    Windows Hello or biometric authentication isn&apos;t currently available on this device.
-                    Check browser console (F12) for details. You can still use authenticator codes to sign in.
-                  </p>
-                </div>
-              </div>
-            </div>
-          )}
-
-          {!passkeySupported && (
-            <Button
-              className="mt-6 w-full"
-              onClick={() => {
-                window.location.href = "/dashboard";
-              }}
-            >
-              Continue to dashboard
-            </Button>
-          )}
-
-          {passkeySupported && (
-            <Button
-              className="mt-4 w-full"
-              variant="outline"
-              onClick={() => {
-                window.location.href = "/dashboard";
-              }}
-            >
-              Continue to dashboard
-            </Button>
-          )}
         </div>
-      </>
-    );
-  }
+      )}
 
-  // Step: Passkey registration success
-  if (step === "passkey") {
-    return (
-      <>
-        <div className="rounded-xl border border-[#10b981]/30 bg-[#d1fae5]/60 p-4 text-[#065f46]">
-          <div className="flex items-start gap-3">
-            <CheckCircle2 className="mt-0.5 h-5 w-5 flex-shrink-0" />
-            <div>
-              <h2 className="font-sora font-bold">Passkey registered successfully!</h2>
-              <p className="mt-1 text-sm">You can now use fingerprint or face ID to sign in.</p>
+      {/* Step 3: Verify */}
+      {step === 3 && (
+        <div className="space-y-8 animate-in fade-in slide-in-from-right-4 duration-300">
+          <div className="text-center space-y-2">
+            <div className="inline-flex items-center justify-center w-16 h-16 bg-teal-50 text-teal-600 rounded-2xl mb-2">
+              <ShieldCheck className="w-8 h-8" />
+            </div>
+            <h1 className="text-2xl font-bold text-navy-900">Verify it works</h1>
+            <p className="text-gray-500 text-sm">
+              Enter the 6-digit code from your app to confirm setup.
+            </p>
+          </div>
+
+          <div className="flex flex-col items-center gap-8">
+            <div className="w-full">
+              <Input 
+                type="text"
+                inputMode="numeric"
+                maxLength={6}
+                autoFocus
+                placeholder="000 000"
+                value={mfaCode}
+                onChange={(e) => {
+                  const val = e.target.value.replace(/\D/g, "");
+                  setMfaCode(val);
+                  if (val.length === 6) {
+                    // Logic to auto-submit could be here, but let's wait a split second for UX
+                  }
+                }}
+                className="bg-white text-gray-900 text-3xl font-bold tracking-[0.5em] text-center py-8 h-20 border-gray-200 focus:border-teal-500 focus:ring-teal-500 placeholder:text-gray-100"
+              />
+              <p className="mt-3 text-center text-xs text-gray-400">
+                Type the 6 numbers currently shown in your app
+              </p>
+            </div>
+
+            <TotpCountdownRing />
+
+            <div className="w-full space-y-4">
+              <Button 
+                onClick={() => handleActivate()}
+                disabled={loading || mfaCode.length !== 6}
+                className="w-full bg-teal-600 hover:bg-teal-700 text-white py-6 text-lg font-bold shadow-lg shadow-teal-600/20 disabled:bg-gray-100 disabled:text-gray-400"
+              >
+                {loading ? "Verifying..." : "Verify & Activate"}
+              </Button>
+              <Button 
+                variant="ghost"
+                onClick={handleBack}
+                className="w-full text-gray-400 hover:text-teal-600"
+              >
+                <ChevronLeft className="mr-1 w-4 h-4" /> Change setup
+              </Button>
             </div>
           </div>
         </div>
+      )}
 
-        <div className="mt-6 text-center">
-          <p className="text-sm text-[#64748B]">Redirecting to dashboard...</p>
-        </div>
-      </>
-    );
-  }
-
-  // Step 2: Enter password and TOTP code
-  if (step === "complete") {
-    return (
-      <>
-        <div className="mb-4 rounded-lg border border-[#0B8A96]/20 bg-[#F0FDFA]/50 p-4">
-          <h3 className="font-sora font-bold text-[#0C1F3D]">Step 2: Complete Your Setup</h3>
-          <p className="mt-2 text-sm text-[#64748B]">
-            Create your password and confirm your authenticator app is working by entering the code below.
-          </p>
-        </div>
-
-        <div className="mb-6 rounded-lg border border-[#0B8A96]/25 bg-[#F0FDFA]/70 p-4">
-          <div className="space-y-3">
-            <div>
-              <h4 className="font-mono text-xs font-semibold uppercase text-[#64748B]">Your TOTP Secret (if QR code didn&apos;t work):</h4>
-              <div className="mt-2 flex items-center gap-2">
-                <code className="flex-1 rounded bg-[#0F172A] p-2 font-mono text-xs text-white">{totpSecret}</code>
-                <button
-                  type="button"
-                  onClick={() => copyToClipboard(totpSecret, "Secret copied")}
-                  className="text-[#0B8A96] hover:text-[#0a7377]"
-                >
-                  <Copy className="h-4 w-4" />
-                </button>
+      {/* Grace Period Modal */}
+      {isGracePeriodModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-navy-900/40 backdrop-blur-sm animate-in fade-in duration-200">
+          <div className="bg-white rounded-3xl p-8 max-w-sm w-full shadow-2xl space-y-6 animate-in zoom-in-95 duration-200">
+            <div className="flex flex-col items-center text-center space-y-4">
+              <div className="w-16 h-16 bg-amber-50 text-amber-500 rounded-2xl flex items-center justify-center">
+                <Clock className="w-10 h-10" />
+              </div>
+              <div className="space-y-2">
+                <h3 className="text-xl font-bold text-gray-900">Activate now, set up later?</h3>
+                <p className="text-sm text-gray-500 leading-relaxed">
+                  You can start using MedSync immediately, but you <strong>must</strong> complete the authenticator setup within <strong>24 hours</strong>.
+                </p>
+              </div>
+              <div className="bg-amber-50 p-4 rounded-xl border border-amber-100 text-xs text-amber-800 text-left flex gap-3">
+                <AlertCircle className="w-5 h-5 shrink-0" />
+                <p>After 24 hours, your account will be locked until the setup is completed.</p>
               </div>
             </div>
-            {copyFeedback && (
-              <div className="text-sm text-[#10b981]">✓ {copyFeedback}</div>
-            )}
+            
+            <div className="flex flex-col gap-3">
+              <Button 
+                onClick={() => handleActivate(true)}
+                disabled={loading || !password}
+                className="w-full bg-amber-500 hover:bg-amber-600 text-white font-bold py-4"
+              >
+                {loading ? "Activating..." : "Yes, Activate for 24h"}
+              </Button>
+              <Button 
+                variant="ghost"
+                onClick={() => setIsGracePeriodModalOpen(false)}
+                className="w-full text-gray-400 font-medium"
+              >
+                Go back to setup
+              </Button>
+            </div>
           </div>
         </div>
-
-        <form onSubmit={handleSubmit} className="space-y-4">
-          <Input
-            label="Password"
-            type="password"
-            value={password}
-            onChange={(e) => setPassword(e.target.value)}
-            placeholder="Min 12 characters"
-            required
-            minLength={12}
-          />
-          <Input
-            label="Confirm password"
-            type="password"
-            value={confirmPassword}
-            onChange={(e) => setConfirmPassword(e.target.value)}
-            placeholder="Repeat password"
-            required
-          />
-          <Input
-            label="Authenticator code"
-            type="text"
-            value={mfaCode}
-            onChange={(e) => setMfaCode(e.target.value.replace(/\D/g, "").slice(0, 6))}
-            placeholder="6-digit code"
-            required
-            maxLength={6}
-          />
-
-          <div className="rounded-lg border border-[#0B8A96]/20 bg-[#F0FDFA]/50 p-3">
-            <ul className="list-inside list-disc text-xs text-[#0F172A]">
-              {PASSWORD_REQUIREMENTS.map((r, i) => (
-                <li key={i}>{r}</li>
-              ))}
-            </ul>
-          </div>
-
-          {error && (
-            <div className="rounded-lg border border-[#fca5a5]/40 bg-[#fee2e2]/50 p-3 text-sm text-[#7f1d1d]">
-              {error}
-            </div>
-          )}
-
-          <Button type="submit" fullWidth disabled={loading}>
-            {loading ? "Activating..." : "Complete activation"}
-          </Button>
-        </form>
-      </>
-    );
-  }
-
-  // Step 1: Scan QR code
-  return (
-    <>
-      <div className="mb-4 rounded-lg border border-[#0B8A96]/20 bg-[#F0FDFA]/50 p-4">
-        <h3 className="font-sora font-bold text-[#0C1F3D]">Step 1: Set up two-factor authentication</h3>
-        <p className="mt-2 text-sm text-[#64748B]">
-          Scan this QR code with an authenticator app like Google Authenticator, Authy, or Microsoft Authenticator.
-        </p>
-      </div>
-
-      <div className="flex flex-col items-center space-y-4">
-        <div className="rounded-lg border-2 border-[#0B8A96]/30 bg-white p-4">
-          {provisioningUrl ? (
-            <QRCodeSVG
-              value={provisioningUrl}
-              size={256}
-              level="H"
-              includeMargin={true}
-              className="h-auto w-64"
-            />
-          ) : (
-            <div className="h-64 w-64 flex items-center justify-center rounded bg-[#F0FDFA]">
-              <p className="text-sm text-[#64748B]">Loading QR code...</p>
-            </div>
-          )}
-        </div>
-
-        <p className="text-xs text-[#64748B]">Can&apos;t scan? You&apos;ll see your secret in the next step.</p>
-
-        {error && (
-          <div className="w-full rounded-lg border border-[#fca5a5]/40 bg-[#fee2e2]/50 p-3 text-sm text-[#7f1d1d]">
-            {error}
-          </div>
-        )}
-
-        <Button
-          onClick={handleSetupMFA}
-          fullWidth
-          disabled={loading}
-        >
-          {loading ? "Loading..." : "Continue"}
-        </Button>
-      </div>
-    </>
+      )}
+    </div>
   );
-}
+};
 
 export default function ActivatePage() {
   return (
-    <AuthLayout title="Set up your account" subtitle="Complete your account activation and enable two-factor authentication.">
-      <Suspense fallback={<p className="text-[#64748B]">Loading...</p>}>
-        <ActivateForm />
+    <AuthLayout>
+      <Suspense fallback={<div>Loading...</div>}>
+        <ActivationContent />
       </Suspense>
     </AuthLayout>
   );

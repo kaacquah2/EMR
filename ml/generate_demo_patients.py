@@ -257,8 +257,8 @@ def main():
     parser.add_argument(
         "--output",
         type=str,
-        default="demo_patients.json",
-        help="Output file path (default: demo_patients.json)"
+        default="medsync-backend/data/seeds/demo_patients.json",
+        help="Output file path (default: medsync-backend/data/seeds/demo_patients.json)"
     )
     parser.add_argument(
         "--hospital-id",

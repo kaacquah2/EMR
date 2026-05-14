@@ -403,6 +403,48 @@ class DataProcessor:
             logger.error(f"Error extracting encounters for patient {patient.id}: {e}")
             return []
 
+    def extract_patient_outcomes(self, patient: Patient, days_back: int = 365) -> List[Dict[str, Any]]:
+        """
+        Extract treatment outcomes from encounters and discharge summaries.
+
+        Returns:
+            [
+                {
+                    'encounter_id': str,
+                    'encounter_date': str,
+                    'assessment_plan': str,
+                    'discharge_summary': str,
+                    'is_completed': bool,
+                },
+                ...
+            ]
+        """
+        try:
+            outcomes = []
+            cutoff_date = timezone.now() - timedelta(days=days_back)
+
+            encounter_records = Encounter.objects.filter(
+                patient=patient,
+                hospital=self.effective_hospital,
+                encounter_date__gte=cutoff_date,
+                status='completed'
+            ).order_by('-encounter_date')
+
+            for encounter in encounter_records:
+                if encounter.assessment_plan or encounter.discharge_summary:
+                    outcomes.append({
+                        'encounter_id': str(encounter.id),
+                        'encounter_date': encounter.encounter_date.isoformat(),
+                        'assessment_plan': encounter.assessment_plan or '',
+                        'discharge_summary': encounter.discharge_summary or '',
+                        'is_completed': encounter.status == 'completed',
+                    })
+
+            return outcomes
+        except Exception as e:
+            logger.error(f"Error extracting outcomes for patient {patient.id}: {e}")
+            return []
+
     def extract_complete_patient_data(self, patient: Patient) -> Dict[str, Any]:
         """
         Extract complete patient profile for ML analysis.
@@ -431,6 +473,7 @@ class DataProcessor:
             'labs': self.extract_patient_labs(patient),
             'admissions': self.extract_patient_admissions(patient),
             'encounters': self.extract_patient_encounters(patient),
+            'outcomes': self.extract_patient_outcomes(patient),
             'extracted_at': timezone.now().isoformat(),
         }
 

@@ -87,7 +87,7 @@ export default function NewVitalsPage() {
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
-        <h1 className="font-sora text-2xl font-bold text-[#0F172A]">Record Vitals</h1>
+        <h1 className="font-sora text-2xl font-bold text-slate-900 dark:text-slate-100">Record Vitals</h1>
         <Button variant="secondary" onClick={() => setBatchMode((v) => !v)}>
           {batchMode ? "Single patient mode" : "Record vitals for multiple patients"}
         </Button>
@@ -101,7 +101,7 @@ export default function NewVitalsPage() {
               <input
                 key={key}
                 ref={(el) => { inputRefs.current[idx] = el; }}
-                className="min-h-[44px] rounded border border-[#CBD5E1] px-3 text-sm"
+                className="min-h-[44px] rounded border border-slate-300 dark:border-slate-700 px-3 text-sm"
                 placeholder={key}
                 value={form[key]}
                 onChange={(e) => update(key, e.target.value)}
@@ -109,7 +109,7 @@ export default function NewVitalsPage() {
                 onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); nextFocus(idx); } }}
               />
             ))}
-            <div className="text-sm text-[#64748B]">BMI: {bmi || "—"}</div>
+            <div className="text-sm text-slate-500 dark:text-slate-500">BMI: {bmi || "—"}</div>
             <div className="md:col-span-2">
               <Button onClick={() => void saveSingle()} data-testid="vitals-submit">Save Vitals</Button>
             </div>
@@ -123,13 +123,13 @@ export default function NewVitalsPage() {
               const pid = bed.patient_id as string;
               const row = batchRows[pid] || initialForm;
               return (
-                <div key={pid} className="rounded border border-[#E2E8F0] p-2">
+                <div key={pid} className="rounded border border-slate-200 dark:border-slate-800 p-2">
                   <p className="mb-2 text-sm font-medium">{bed.patient_name} · {bed.bed_code}</p>
                   <div className="grid grid-cols-2 gap-2 md:grid-cols-4">
                     {orderedKeys.map((k) => (
                       <input
                         key={k}
-                        className="min-h-[44px] rounded border border-[#CBD5E1] px-2 text-xs"
+                        className="min-h-[44px] rounded border border-slate-300 dark:border-slate-700 px-2 text-xs"
                         placeholder={k}
                         value={row[k]}
                         data-testid={`vitals-batch-${pid}-${k}`}

@@ -21,11 +21,11 @@ fi
 
 # Step 1: Generate synthetic data
 echo -e "\n${YELLOW}Step 1: Generating synthetic patient data...${NC}"
-if [ ! -f "demo_patients.json" ]; then
+if [ ! -f "medsync-backend/data/seeds/demo_patients.json" ]; then
     python ml/generate_demo_patients.py --count=150
 else
-    echo "   ℹ️  demo_patients.json already exists, skipping generation"
-    echo "   (Delete it to regenerate: rm demo_patients.json)"
+    echo "   ℹ️  demo_patients.json already exists in seeds, skipping generation"
+    echo "   (Delete it to regenerate: rm medsync-backend/data/seeds/demo_patients.json)"
 fi
 
 # Step 2: Start backend (if not running)
@@ -42,7 +42,7 @@ python manage.py migrate --no-input 2>/dev/null || true
 
 # Step 3: Load data
 echo -e "\n${YELLOW}Step 3: Loading patients into database...${NC}"
-python manage.py load_demo_patients --file=../demo_patients.json
+python manage.py load_demo_patients --file=data/seeds/demo_patients.json
 
 cd ..
 

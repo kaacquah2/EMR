@@ -1,0 +1,179 @@
+{
+  "interactions": [
+    {
+      "drug1": "warfarin",
+      "drug2": "aspirin",
+      "severity": "critical",
+      "description": "Increased bleeding risk when combined",
+      "action": "Avoid or monitor closely; consider alternative antiplatelet agent"
+    },
+    {
+      "drug1": "warfarin",
+      "drug2": "ibuprofen",
+      "severity": "critical",
+      "description": "NSAIDs increase warfarin effect and bleeding risk",
+      "action": "Avoid NSAIDs; use acetaminophen instead"
+    },
+    {
+      "drug1": "warfarin",
+      "drug2": "fluconazole",
+      "severity": "warning",
+      "description": "Fluconazole increases warfarin levels",
+      "action": "Monitor INR closely; may need warfarin dose adjustment"
+    },
+    {
+      "drug1": "amoxicillin",
+      "drug2": "methotrexate",
+      "severity": "warning",
+      "description": "Amoxicillin may increase methotrexate toxicity",
+      "action": "Monitor renal function and MTX levels"
+    },
+    {
+      "drug1": "metformin",
+      "drug2": "contrast dye",
+      "severity": "critical",
+      "description": "Risk of lactic acidosis with iodinated contrast media",
+      "action": "Hold metformin 48 hours before and after contrast procedure"
+    },
+    {
+      "drug1": "lisinopril",
+      "drug2": "potassium supplement",
+      "severity": "warning",
+      "description": "ACE inhibitors increase potassium levels; additional K+ may cause hyperkalemia",
+      "action": "Monitor serum K+; avoid potassium supplements unless needed"
+    },
+    {
+      "drug1": "atorvastatin",
+      "drug2": "gemfibrozil",
+      "severity": "warning",
+      "description": "Increased risk of myopathy and rhabdomyolysis",
+      "action": "Monitor CK levels; consider using fenofibrate instead"
+    },
+    {
+      "drug1": "metoprolol",
+      "drug2": "verapamil",
+      "severity": "critical",
+      "description": "Both are AV-node blockers; risk of complete heart block",
+      "action": "Avoid combination or use with extreme caution; monitor ECG"
+    },
+    {
+      "drug1": "simvastatin",
+      "drug2": "clarithromycin",
+      "severity": "critical",
+      "description": "CYP3A4 inhibitor increases simvastatin levels; rhabdomyolysis risk",
+      "action": "Use azithromycin or doxycycline instead; or suspend simvastatin"
+    },
+    {
+      "drug1": "clopidogrel",
+      "drug2": "omeprazole",
+      "severity": "warning",
+      "description": "Omeprazole reduces clopidogrel effectiveness",
+      "action": "Use famotidine or ranitidine instead of omeprazole"
+    },
+    {
+      "drug1": "digoxin",
+      "drug2": "verapamil",
+      "severity": "critical",
+      "description": "Verapamil increases digoxin levels; toxicity risk",
+      "action": "Monitor digoxin levels; may need dose reduction"
+    },
+    {
+      "drug1": "lisinopril",
+      "drug2": "spironolactone",
+      "severity": "warning",
+      "description": "Combined K+ retention; risk of hyperkalemia",
+      "action": "Monitor K+ levels closely if both required"
+    },
+    {
+      "drug1": "methotrexate",
+      "drug2": "NSAIDs",
+      "severity": "warning",
+      "description": "NSAIDs increase methotrexate renal toxicity",
+      "action": "Avoid NSAIDs; use acetaminophen for pain"
+    },
+    {
+      "drug1": "warfarin",
+      "drug2": "cranberry juice",
+      "severity": "warning",
+      "description": "May increase warfarin effect",
+      "action": "Maintain consistent intake; monitor INR"
+    },
+    {
+      "drug1": "theophylline",
+      "drug2": "ciprofloxacin",
+      "severity": "warning",
+      "description": "Ciprofloxacin increases theophylline levels",
+      "action": "Monitor theophylline levels; may need dose reduction"
+    },
+    {
+      "drug1": "warfarin",
+      "drug2": "tramadol",
+      "severity": "info",
+      "description": "Tramadol may increase bleeding risk slightly",
+      "action": "Monitor for bleeding; alternative analgesics preferred"
+    },
+    {
+      "drug1": "metformin",
+      "drug2": "alcohol",
+      "severity": "warning",
+      "description": "Increased risk of lactic acidosis",
+      "action": "Limit alcohol intake; avoid binge drinking"
+    },
+    {
+      "drug1": "captopril",
+      "drug2": "potassium chloride",
+      "severity": "warning",
+      "description": "ACE inhibitor + K+ supplement = hyperkalemia risk",
+      "action": "Monitor K+ levels; use only if necessary"
+    },
+    {
+      "drug1": "fluoxetine",
+      "drug2": "tramadol",
+      "severity": "critical",
+      "description": "Risk of serotonin syndrome",
+      "action": "Avoid combination; consider alternative antidepressant or analgesic"
+    },
+    {
+      "drug1": "phenytoin",
+      "drug2": "warfarin",
+      "severity": "warning",
+      "description": "Complex bidirectional interaction affecting both drugs",
+      "action": "Monitor INR and phenytoin levels closely"
+    },
+    {
+      "drug1": "erythromycin",
+      "drug2": "simvastatin",
+      "severity": "critical",
+      "description": "CYP3A4 inhibitor increases statin levels; rhabdomyolysis risk",
+      "action": "Use alternative antibiotic; or suspend simvastatin"
+    },
+    {
+      "drug1": "atorvastatin",
+      "drug2": "clarithromycin",
+      "severity": "warning",
+      "description": "Macrolide increases statin levels; myopathy risk",
+      "action": "Use azithromycin or doxycycline instead"
+    },
+    {
+      "drug1": "lisinopril",
+      "drug2": "NSAIDs",
+      "severity": "warning",
+      "description": "NSAIDs reduce ACE inhibitor effectiveness; renal risk",
+      "action": "Monitor renal function; use acetaminophen for pain"
+    },
+    {
+      "drug1": "metformin",
+      "drug2": "iodinated contrast",
+      "severity": "critical",
+      "description": "Risk of contrast-induced nephropathy and lactic acidosis",
+      "action": "Hold metformin 48 hours before and after contrast"
+    },
+    {
+      "drug1": "quinidine",
+      "drug2": "digoxin",
+      "severity": "critical",
+      "description": "Quinidine increases digoxin levels; toxicity",
+      "action": "Monitor digoxin levels closely; may need 50% dose reduction"
+    }
+  ]
+}

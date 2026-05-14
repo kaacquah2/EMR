@@ -9,6 +9,14 @@ import { usePollWhenVisible } from "@/hooks/use-poll-when-visible";
 import { useApi } from "@/hooks/use-api";
 import { Button } from "@/components/ui/button";
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
+import {
+  Table,
+  TableHeader,
+  TableRow,
+  TableHead,
+  TableBody,
+  TableCell,
+} from "@/components/ui/Table";
 import { useNurseWorklist } from "@/hooks/use-nurse";
 
 const WORKLIST_ROLES = ["doctor", "nurse", "hospital_admin", "super_admin"];
@@ -33,7 +41,7 @@ function TriageBadge({ triage }: { triage?: string }) {
 }
 
 function AllergyIndicator({ hasAllergy }: { hasAllergy?: boolean }) {
-  if (!hasAllergy) return <span className="text-xs text-[#64748B]">None</span>;
+  if (!hasAllergy) return <span className="text-xs text-slate-500 dark:text-slate-500">None</span>;
   return (
     <span className="inline-flex items-center rounded-full border border-rose-200 bg-rose-100 px-2 py-0.5 text-xs font-semibold text-rose-800">
       Allergy risk
@@ -63,7 +71,7 @@ export default function WorklistPage() {
   useEffect(() => {
     if (user && !canAccess) router.replace("/unauthorized");
   }, [user, canAccess, router]);
-  if (user && !canAccess) return <div className="flex min-h-[200px] items-center justify-center text-[#64748B]">Redirecting...</div>;
+  if (user && !canAccess) return <div className="flex min-h-[200px] items-center justify-center text-slate-500 dark:text-slate-500">Redirecting...</div>;
   const startConsultation = async (patientId: string, complaint: string) => {
     const encounter = await api.post<{ id: string }>(`/patients/${patientId}/encounters`, {
       encounter_type: "outpatient",
@@ -81,10 +89,10 @@ export default function WorklistPage() {
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="font-sora text-2xl font-bold text-[#0F172A]">
+        <h1 className="font-sora text-2xl font-bold text-slate-900 dark:text-slate-100">
           {user?.role === "doctor" ? "My patients waiting" : "Waiting for consultation"}
         </h1>
-        <p className="mt-1 text-sm text-[#64748B]">
+        <p className="mt-1 text-sm text-slate-500 dark:text-slate-500">
           Patients routed to your department or assigned to you. Open the patient to consult or update the encounter.
         </p>
       </div>
@@ -95,19 +103,19 @@ export default function WorklistPage() {
         </CardHeader>
         <CardContent>
           <div className="mb-4 grid grid-cols-1 gap-3 md:grid-cols-3">
-            <div className="rounded border border-[#E2E8F0] p-3 text-sm">
+            <div className="rounded border border-slate-200 dark:border-slate-800 p-3 text-sm">
               Queue: <strong>{summary.queue_count}</strong>
             </div>
-            <div className="rounded border border-[#E2E8F0] p-3 text-sm">
+            <div className="rounded border border-slate-200 dark:border-slate-800 p-3 text-sm">
               Alerts: <strong>{summary.alerts}</strong>
             </div>
-            <div className="rounded border border-[#E2E8F0] p-3 text-sm">
+            <div className="rounded border border-slate-200 dark:border-slate-800 p-3 text-sm">
               Pending labs/Rx: <strong>{summary.pending_labs}</strong> / <strong>{summary.pending_prescriptions}</strong>
             </div>
           </div>
           <div className="mb-4 grid grid-cols-1 gap-3 md:grid-cols-2">
             <select
-              className="h-10 rounded-lg border border-[#CBD5E1] px-3 text-sm"
+              className="h-10 rounded-lg border border-slate-300 dark:border-slate-700 px-3 text-sm"
               value={departmentFilter}
               onChange={(e) => setDepartmentFilter(e.target.value)}
             >
@@ -116,7 +124,7 @@ export default function WorklistPage() {
                 .map(([id, name]) => <option key={id} value={id}>{name}</option>)}
             </select>
             <select
-              className="h-10 rounded-lg border border-[#CBD5E1] px-3 text-sm"
+              className="h-10 rounded-lg border border-slate-300 dark:border-slate-700 px-3 text-sm"
               value={encounterTypeFilter}
               onChange={(e) => setEncounterTypeFilter(e.target.value)}
             >
@@ -125,47 +133,47 @@ export default function WorklistPage() {
             </select>
           </div>
           {loading ? (
-            <p className="py-8 text-center text-[#64748B]">Loading…</p>
+            <p className="py-8 text-center text-slate-500 dark:text-slate-500">Loading…</p>
           ) : encounters.length === 0 ? (
-            <p className="py-8 text-center text-[#64748B]">No patients waiting.</p>
+            <p className="py-8 text-center text-slate-500 dark:text-slate-500">No patients waiting.</p>
           ) : (
             <div className="overflow-x-auto">
-              <table className="w-full">
-                <thead>
-                  <tr className="border-b border-[#E2E8F0]">
-                    <th className="px-4 py-2 text-left text-xs font-semibold text-[#64748B]">Patient</th>
-                    <th className="px-4 py-2 text-left text-xs font-semibold text-[#64748B]">Ghana Health ID</th>
-                    <th className="px-4 py-2 text-left text-xs font-semibold text-[#64748B]">Department</th>
-                    <th className="px-4 py-2 text-left text-xs font-semibold text-[#64748B]">Status</th>
-                    <th className="px-4 py-2 text-left text-xs font-semibold text-[#64748B]">Triage</th>
-                    <th className="px-4 py-2 text-left text-xs font-semibold text-[#64748B]">Allergy</th>
-                    <th className="px-4 py-2 text-left text-xs font-semibold text-[#64748B]">Date</th>
-                    <th className="px-4 py-2 text-left text-xs font-semibold text-[#64748B]">Action</th>
-                  </tr>
-                </thead>
-                <tbody>
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Patient</TableHead>
+                    <TableHead>Ghana Health ID</TableHead>
+                    <TableHead>Department</TableHead>
+                    <TableHead>Status</TableHead>
+                    <TableHead>Triage</TableHead>
+                    <TableHead>Allergy</TableHead>
+                    <TableHead>Date</TableHead>
+                    <TableHead>Action</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
                   {encounters.map((e) => (
-                    <tr key={e.id} className="border-b border-[#F1F5F9]">
-                      <td className="px-4 py-2 font-medium text-[#0F172A]">{e.patient_name}</td>
-                      <td className="px-4 py-2 text-sm text-[#475569]">{e.ghana_health_id}</td>
-                      <td className="px-4 py-2 text-sm text-[#475569]">{e.assigned_department_name ?? "—"}</td>
-                      <td className="px-4 py-2">
+                    <TableRow key={e.id}>
+                      <TableCell className="font-medium text-slate-900 dark:text-white">{e.patient_name}</TableCell>
+                      <TableCell className="text-sm text-slate-500 dark:text-slate-400">{e.ghana_health_id}</TableCell>
+                      <TableCell className="text-sm text-slate-500 dark:text-slate-400">{e.assigned_department_name ?? "—"}</TableCell>
+                      <TableCell>
                         <span
                           className={
                             e.status === "in_consultation"
-                              ? "rounded-full bg-[#FEF3C7] px-2 py-0.5 text-xs text-[#92400E]"
-                              : "rounded-full bg-[#DBEAFE] px-2 py-0.5 text-xs text-[#1E40AF]"
+                              ? "rounded-full bg-amber-100 px-2 py-0.5 text-xs text-amber-800"
+                              : "rounded-full bg-blue-100 px-2 py-0.5 text-xs text-blue-800"
                           }
                         >
                           {e.status === "in_consultation" ? "In consultation" : "Waiting"}
                         </span>
-                      </td>
-                      <td className="px-4 py-2 text-xs"><TriageBadge triage={e.triage_badge} /></td>
-                      <td className="px-4 py-2 text-xs"><AllergyIndicator hasAllergy={e.has_active_allergy} /></td>
-                      <td className="px-4 py-2 text-sm text-[#64748B]">
+                      </TableCell>
+                      <TableCell><TriageBadge triage={e.triage_badge} /></TableCell>
+                      <TableCell><AllergyIndicator hasAllergy={e.has_active_allergy} /></TableCell>
+                      <TableCell className="text-sm text-slate-500 dark:text-slate-400">
                         {new Date(e.encounter_date).toLocaleString()}
-                      </td>
-                      <td className="px-4 py-2">
+                      </TableCell>
+                      <TableCell>
                         <div className="flex gap-2">
                           <Link href={`/patients/${e.patient_id}`}>
                             {/* UX-14: 'View chart' is clearer than 'Open' */}
@@ -185,11 +193,11 @@ export default function WorklistPage() {
                             Begin consult →
                           </Button>
                         </div>
-                      </td>
-                    </tr>
+                      </TableCell>
+                    </TableRow>
                   ))}
-                </tbody>
-              </table>
+                </TableBody>
+              </Table>
             </div>
           )}
         </CardContent>
@@ -207,7 +215,7 @@ function NurseWardWorklist() {
   const [incomingNurseId, setIncomingNurseId] = React.useState<string>("");
   const api = useApi();
 
-  if (loading || !data) return <div className="py-8 text-center text-[#64748B]">Loading...</div>;
+  if (loading || !data) return <div className="py-8 text-center text-slate-500 dark:text-slate-500">Loading...</div>;
 
   const saveNote = async () => {
     if (!selectedPatientId || !noteContent.trim()) return;
@@ -224,7 +232,7 @@ function NurseWardWorklist() {
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
-        <h1 className="font-sora text-2xl font-bold text-[#0F172A]">{data.ward_name} Worklist</h1>
+        <h1 className="font-sora text-2xl font-bold text-slate-900 dark:text-slate-100">{data.ward_name} Worklist</h1>
         <Button size="sm" variant="secondary" onClick={() => void fetch()}>Refresh</Button>
       </div>
       <div className="flex gap-2">
@@ -242,8 +250,8 @@ function NurseWardWorklist() {
                 {bed.patient_id ? (
                   <>
                     <p className="text-sm">{bed.patient_name}</p>
-                    <p className="text-xs text-[#64748B]">Admitted for: {bed.admitted_for}</p>
-                    <p className="text-xs text-[#64748B]">Last vitals: {bed.last_vitals_at ? new Date(bed.last_vitals_at).toLocaleString() : "Never"}</p>
+                    <p className="text-xs text-slate-500 dark:text-slate-500">Admitted for: {bed.admitted_for}</p>
+                    <p className="text-xs text-slate-500 dark:text-slate-500">Last vitals: {bed.last_vitals_at ? new Date(bed.last_vitals_at).toLocaleString() : "Never"}</p>
                     <p className="mt-1 text-xs uppercase">{bed.status}</p>
                     <div className="mt-3 flex flex-wrap gap-2">
                       <Link href={`/patients/${bed.patient_id}/vitals/new`}><Button size="sm">Vitals</Button></Link>
@@ -254,7 +262,7 @@ function NurseWardWorklist() {
                     </div>
                   </>
                 ) : (
-                  <p className="text-sm text-[#64748B] mt-2">Available</p>
+                  <p className="text-sm text-slate-500 dark:text-slate-500 mt-2">Available</p>
                 )}
               </CardContent>
             </Card>
@@ -266,10 +274,10 @@ function NurseWardWorklist() {
         <Card>
           <CardHeader><CardTitle>Pending prescriptions</CardTitle></CardHeader>
           <CardContent className="space-y-3">
-            {data.dispense_items.length === 0 ? <p className="text-sm text-[#64748B]">No pending items.</p> : data.dispense_items.map((row) => (
-              <div key={row.record_id} className="rounded border border-[#E2E8F0] p-3">
+            {data.dispense_items.length === 0 ? <p className="text-sm text-slate-500 dark:text-slate-500">No pending items.</p> : data.dispense_items.map((row) => (
+              <div key={row.record_id} className="rounded border border-slate-200 dark:border-slate-800 p-3">
                 <p className="text-sm font-medium">{row.patient_name} · {row.bed_code ?? "Bed —"} · {row.drug_name}</p>
-                <p className="text-xs text-[#64748B]">{row.dosage} · {row.frequency} · {row.route} · by {row.written_by}</p>
+                <p className="text-xs text-slate-500 dark:text-slate-500">{row.dosage} · {row.frequency} · {row.route} · by {row.written_by}</p>
                 {row.allergy_conflict ? (
                   <p className="mt-1 text-xs font-semibold text-amber-700">⚠ ALLERGY CONFLICT — Override authorised: {row.allergy_override_reason || "reason not provided"}</p>
                 ) : null}
@@ -298,17 +306,17 @@ function NurseWardWorklist() {
           <Card>
             <CardHeader><CardTitle>SBAR / Nursing Note</CardTitle></CardHeader>
             <CardContent className="space-y-3">
-              <select className="h-10 w-full rounded border border-[#CBD5E1] px-3 text-sm" value={selectedPatientId} onChange={(e) => setSelectedPatientId(e.target.value)}>
+              <select className="h-10 w-full rounded border border-slate-300 dark:border-slate-700 px-3 text-sm" value={selectedPatientId} onChange={(e) => setSelectedPatientId(e.target.value)}>
                 <option value="">Select patient</option>
                 {data.beds.filter((b) => !!b.patient_id).map((b) => <option key={b.patient_id} value={b.patient_id}>{b.patient_name}</option>)}
               </select>
-              <select className="h-10 w-full rounded border border-[#CBD5E1] px-3 text-sm" value={noteType} onChange={(e) => setNoteType(e.target.value as "observation" | "handover" | "incident")}>
+              <select className="h-10 w-full rounded border border-slate-300 dark:border-slate-700 px-3 text-sm" value={noteType} onChange={(e) => setNoteType(e.target.value as "observation" | "handover" | "incident")}>
                 <option value="observation">Observation</option>
                 <option value="handover">Handover</option>
                 <option value="incident">Incident</option>
               </select>
               {noteType === "handover" ? (
-                <select className="h-10 w-full rounded border border-[#CBD5E1] px-3 text-sm" value={incomingNurseId} onChange={(e) => setIncomingNurseId(e.target.value)}>
+                <select className="h-10 w-full rounded border border-slate-300 dark:border-slate-700 px-3 text-sm" value={incomingNurseId} onChange={(e) => setIncomingNurseId(e.target.value)}>
                   <option value="">Incoming nurse</option>
                   {data.incoming_nurse_candidates.map((n) => <option key={n.user_id} value={n.user_id}>{n.full_name}</option>)}
                 </select>
@@ -329,10 +337,10 @@ function NurseWardWorklist() {
           <Card>
             <CardHeader><CardTitle>Pending acknowledgments</CardTitle></CardHeader>
             <CardContent className="space-y-2">
-              {data.handover_pending_ack.length === 0 ? <p className="text-sm text-[#64748B]">No pending handovers.</p> : data.handover_pending_ack.map((h) => (
-                <div key={h.note_id} className="rounded border border-[#E2E8F0] p-3">
+              {data.handover_pending_ack.length === 0 ? <p className="text-sm text-slate-500 dark:text-slate-500">No pending handovers.</p> : data.handover_pending_ack.map((h) => (
+                <div key={h.note_id} className="rounded border border-slate-200 dark:border-slate-800 p-3">
                   <p className="text-sm font-medium">{h.patient_name}</p>
-                  <p className="text-xs text-[#64748B]">From: {h.outgoing_nurse_name} · {h.signed_at ? new Date(h.signed_at).toLocaleString() : ""}</p>
+                  <p className="text-xs text-slate-500 dark:text-slate-500">From: {h.outgoing_nurse_name} · {h.signed_at ? new Date(h.signed_at).toLocaleString() : ""}</p>
                   <p className="mt-2 text-sm whitespace-pre-wrap">{h.content}</p>
                   {/* UX-27: Confirm before accepting clinical responsibility */}
                   <Button className="mt-2" size="sm" onClick={() => {

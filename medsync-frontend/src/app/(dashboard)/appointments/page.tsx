@@ -8,8 +8,11 @@ import { usePatientSearch } from "@/hooks/use-patients";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
+import { DatePicker } from "@/components/ui/DatePicker";
+import SearchableSelect from "@/components/ui/SearchableSelect";
 import { useApi } from "@/hooks/use-api";
 import { useToast } from "@/lib/toast-context";
+import { Breadcrumbs } from "@/components/ui/breadcrumbs";
 import AppointmentBulkImportForm from "@/components/features/AppointmentBulkImportForm";
 import AppointmentBulkActions from "@/components/features/AppointmentBulkActions";
 import AppointmentReminderUI from "@/components/features/AppointmentReminderUI";
@@ -187,13 +190,14 @@ export default function AppointmentsPage() {
   };
 
   if (user && !canAccess) {
-    return <div className="flex min-h-[200px] items-center justify-center text-[#64748B]">Redirecting...</div>;
+    return <div className="flex min-h-[200px] items-center justify-center text-slate-500 dark:text-slate-500">Redirecting...</div>;
   }
 
   return (
     <div className="space-y-6">
+      <Breadcrumbs items={[{ label: "Appointments" }]} />
       <div className="flex flex-wrap items-center justify-between gap-4">
-        <h1 className="font-sora text-2xl font-bold text-[#0F172A]">Appointments</h1>
+        <h1 className="font-sora text-2xl font-bold text-slate-900 dark:text-slate-100">Appointments</h1>
         {canManage && pageTab === "appointments" && (
           <Button onClick={() => setCreateOpen((s) => !s)}>
             {createOpen ? "Hide booking form" : "Book appointment"}
@@ -202,7 +206,7 @@ export default function AppointmentsPage() {
       </div>
 
       {/* Page Level Tabs */}
-      <div className="border-b border-[#E2E8F0]">
+      <div className="border-b border-slate-200 dark:border-slate-800">
         <div className="flex gap-8">
           {(["appointments", "bulk-actions", "reminders"] as const).map((tab) => (
             <button
@@ -211,7 +215,7 @@ export default function AppointmentsPage() {
               className={`px-4 py-3 font-medium text-sm border-b-2 ${
                 pageTab === tab
                   ? "border-[#0EAFBE] text-[#0EAFBE]"
-                  : "border-transparent text-[#64748B] hover:text-[#0F172A]"
+                  : "border-transparent text-slate-500 dark:text-slate-500 hover:text-slate-900 dark:text-slate-100"
               }`}
             >
               {tab === "appointments" && "Appointments"}
@@ -226,7 +230,7 @@ export default function AppointmentsPage() {
       {pageTab === "appointments" && (
         <>
       <div className="flex flex-wrap gap-2">
-        <div className="inline-flex rounded-lg border border-[#E2E8F0] bg-white p-1">
+        <div className="inline-flex rounded-lg border border-slate-200 dark:border-slate-800 bg-white p-1">
           {(["list", "day", "week"] as const).map((mode) => (
             <button
               key={mode}
@@ -240,16 +244,26 @@ export default function AppointmentsPage() {
             </button>
           ))}
         </div>
-        <Input
-          type="date"
-          value={dateFilter}
-          onChange={(e) => setDateFilter(e.target.value)}
-          className="w-40"
-        />
+        <div className="w-40">
+          <DatePicker
+            value={dateFilter ? new Date(dateFilter + "T12:00:00") : null}
+            onChange={(date) => {
+              if (date) {
+                const y = date.getFullYear();
+                const m = String(date.getMonth() + 1).padStart(2, '0');
+                const d = String(date.getDate()).padStart(2, '0');
+                setDateFilter(`${y}-${m}-${d}`);
+              } else {
+                setDateFilter("");
+              }
+            }}
+            format="YYYY-MM-DD"
+          />
+        </div>
         <select
           value={statusFilter}
           onChange={(e) => setStatusFilter(e.target.value)}
-          className="rounded-lg border border-[#E2E8F0] bg-white px-3 py-2 text-sm"
+          className="rounded-lg border border-slate-200 dark:border-slate-800 bg-white px-3 py-2 text-sm"
         >
           <option value="">All statuses</option>
           <option value="scheduled">Scheduled</option>
@@ -258,30 +272,28 @@ export default function AppointmentsPage() {
           <option value="cancelled">Cancelled</option>
           <option value="no_show">No Show</option>
         </select>
-        <select
-          value={departmentFilter}
-          onChange={(e) => setDepartmentFilter(e.target.value)}
-          className="rounded-lg border border-[#E2E8F0] bg-white px-3 py-2 text-sm"
-        >
-          <option value="">All departments</option>
-          {DEPARTMENTS.map((dep) => (
-            <option key={dep} value={dep}>
-              {dep}
-            </option>
-          ))}
-        </select>
+        <div className="w-48 z-10">
+          <SearchableSelect
+            options={["", ...DEPARTMENTS]}
+            value={departmentFilter}
+            onChange={(val) => setDepartmentFilter(val as string)}
+            getLabel={(val) => val ? val : "All departments"}
+            getValue={(val) => val}
+            placeholder="All departments"
+          />
+        </div>
       </div>
 
       {createOpen && (
         <Card className="p-6">
-          <div className="mb-4 flex gap-2 border-b border-[#E2E8F0]">
+          <div className="mb-4 flex gap-2 border-b border-slate-200 dark:border-slate-800">
             <button
               type="button"
               onClick={() => setBookingMode("single")}
               className={`px-4 py-2 text-sm font-medium ${
                 bookingMode === "single"
                   ? "border-b-2 border-[#0EAFBE] text-[#0EAFBE]"
-                  : "text-[#64748B]"
+                  : "text-slate-500 dark:text-slate-500"
               }`}
             >
               Single Booking
@@ -292,7 +304,7 @@ export default function AppointmentsPage() {
               className={`px-4 py-2 text-sm font-medium ${
                 bookingMode === "bulk"
                   ? "border-b-2 border-[#0EAFBE] text-[#0EAFBE]"
-                  : "text-[#64748B]"
+                  : "text-slate-500 dark:text-slate-500"
               }`}
             >
               Bulk Import
@@ -300,10 +312,10 @@ export default function AppointmentsPage() {
           </div>
           {bookingMode === "single" && (
             <>
-              <h2 className="font-sora text-lg font-bold text-[#0F172A]">Book new appointment</h2>
+              <h2 className="font-sora text-lg font-bold text-slate-900 dark:text-slate-100">Book new appointment</h2>
               <form onSubmit={handleCreate} className="mt-4 space-y-3">
                 <div>
-                  <label className="block text-sm font-medium text-[#0F172A]">Search patient</label>
+                  <label className="block text-sm font-medium text-slate-900 dark:text-slate-100">Search patient</label>
                   <Input
                     placeholder="Search by name or Ghana Health ID"
                     onChange={(e) => {
@@ -312,11 +324,11 @@ export default function AppointmentsPage() {
                     }}
                   />
                   {searchResults.length > 0 && (
-                <ul className="mt-1 max-h-32 overflow-y-auto rounded border border-[#E2E8F0] bg-white">
+                <ul className="mt-1 max-h-32 overflow-y-auto rounded border border-slate-200 dark:border-slate-800 bg-white">
                   {searchResults.slice(0, 6).map((p) => (
                     <li
                       key={p.patient_id}
-                      className="cursor-pointer px-3 py-2 text-sm hover:bg-[#F1F5F9]"
+                      className="cursor-pointer px-3 py-2 text-sm hover:bg-slate-100 dark:bg-slate-900"
                       onClick={() => setCreatePatientId(p.patient_id)}
                     >
                       {p.full_name} ({p.ghana_health_id})
@@ -325,28 +337,25 @@ export default function AppointmentsPage() {
                 </ul>
               )}
               {createPatientId && (
-                <p className="mt-1 text-xs text-[#64748B]">Selected patient ID: {createPatientId}</p>
+                <p className="mt-1 text-xs text-slate-500 dark:text-slate-500">Selected patient ID: {createPatientId}</p>
               )}
             </div>
             <div className="grid gap-3 md:grid-cols-2">
               <div>
-                <label className="block text-sm font-medium text-[#0F172A]">Department *</label>
-                <select
-                  value={createDepartment}
-                  onChange={(e) => setCreateDepartment(e.target.value)}
-                  className="w-full rounded-lg border border-[#E2E8F0] bg-white px-3 py-2 text-sm"
-                  required
-                >
-                  <option value="">Select department</option>
-                  {DEPARTMENTS.map((dep) => (
-                    <option key={dep} value={dep}>
-                      {dep}
-                    </option>
-                  ))}
-                </select>
+                <label className="block text-sm font-medium text-slate-900 dark:text-slate-100">Department *</label>
+                <div className="z-10 relative">
+                  <SearchableSelect
+                    options={DEPARTMENTS}
+                    value={createDepartment}
+                    onChange={(val) => setCreateDepartment(val as string)}
+                    getLabel={(val) => val}
+                    getValue={(val) => val}
+                    placeholder="Select department"
+                  />
+                </div>
               </div>
               <div>
-                <label className="block text-sm font-medium text-[#0F172A]">Doctor ID (optional)</label>
+                <label className="block text-sm font-medium text-slate-900 dark:text-slate-100">Doctor ID (optional)</label>
                 <Input
                   value={createDoctorId}
                   onChange={(e) => setCreateDoctorId(e.target.value)}
@@ -355,15 +364,26 @@ export default function AppointmentsPage() {
               </div>
             </div>
             <div>
-              <label className="block text-sm font-medium text-[#0F172A]">Date and time *</label>
-              <Input
-                type="datetime-local"
-                value={createScheduledAt}
-                onChange={(e) => setCreateScheduledAt(e.target.value)}
-                required
-              />
+              <label className="block text-sm font-medium text-slate-900 dark:text-slate-100 mb-1">Date and time *</label>
+              <div className="z-10 relative">
+                <DatePicker
+                  value={createScheduledAt ? new Date(createScheduledAt) : null}
+                  onChange={(date) => {
+                    if (date) {
+                      const local = new Date(date.getTime() - date.getTimezoneOffset() * 60000)
+                        .toISOString()
+                        .slice(0, 16);
+                      setCreateScheduledAt(local);
+                    } else {
+                      setCreateScheduledAt("");
+                    }
+                  }}
+                  showTime
+                  format="YYYY-MM-DD"
+                />
+              </div>
             </div>
-            {checkingAvailability && <p className="text-xs text-[#64748B]">Checking availability...</p>}
+            {checkingAvailability && <p className="text-xs text-slate-500 dark:text-slate-500">Checking availability...</p>}
             {!!availabilityMessage && (
               <div className="rounded border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-800">
                 <p>{availabilityMessage}</p>
@@ -393,7 +413,7 @@ export default function AppointmentsPage() {
               </div>
             )}
             <div>
-              <label className="block text-sm font-medium text-[#0F172A]">Notes (optional)</label>
+              <label className="block text-sm font-medium text-slate-900 dark:text-slate-100">Notes (optional)</label>
               <Input
                 value={createNotes}
                 onChange={(e) => setCreateNotes(e.target.value)}
@@ -411,7 +431,7 @@ export default function AppointmentsPage() {
           )}
           {bookingMode === "bulk" && (
             <>
-              <h2 className="font-sora text-lg font-bold text-[#0F172A]">Bulk Import Appointments</h2>
+              <h2 className="font-sora text-lg font-bold text-slate-900 dark:text-slate-100">Bulk Import Appointments</h2>
               <AppointmentBulkImportForm onSuccess={() => {
                 fetch();
                 setBookingMode("single");
@@ -423,16 +443,16 @@ export default function AppointmentsPage() {
 
       <Card className="p-6">
         {loading ? (
-          <p className="text-[#64748B]">Loading...</p>
+          <p className="text-slate-500 dark:text-slate-500">Loading...</p>
         ) : appointments.length === 0 ? (
-          <p className="text-[#64748B]">No appointments for this date/status.</p>
+          <p className="text-slate-500 dark:text-slate-500">No appointments for this date/status.</p>
         ) : viewMode !== "list" ? (
           <div className="space-y-3">
-            <p className="text-sm text-[#64748B]">
+            <p className="text-sm text-slate-500 dark:text-slate-500">
               {viewMode === "day" ? "Day grid" : "Week grid"} (color coding is consistent with list view)
             </p>
             {Object.entries(groupedByHour).map(([hour, rows]) => (
-              <div key={hour} className="rounded-lg border border-[#E2E8F0] p-3">
+              <div key={hour} className="rounded-lg border border-slate-200 dark:border-slate-800 p-3">
                 <p className="mb-2 text-sm font-semibold text-[#334155]">{hour}</p>
                 <div className="flex flex-wrap gap-2">
                   {rows.map((a) => (
@@ -448,30 +468,30 @@ export default function AppointmentsPage() {
           <div className="overflow-x-auto">
             <table className="w-full">
               <thead>
-                <tr className="border-b border-[#E2E8F0]">
-                  <th className="px-4 py-2 text-left text-xs font-semibold text-[#64748B]">Time</th>
-                  <th className="px-4 py-2 text-left text-xs font-semibold text-[#64748B]">Patient</th>
-                  <th className="px-4 py-2 text-left text-xs font-semibold text-[#64748B]">Appointment</th>
-                  <th className="px-4 py-2 text-left text-xs font-semibold text-[#64748B]">Status</th>
-                  <th className="px-4 py-2 text-left text-xs font-semibold text-[#64748B]">Provider</th>
-                  <th className="px-4 py-2 text-left text-xs font-semibold text-[#64748B]">Actions</th>
+                <tr className="border-b border-slate-200 dark:border-slate-800">
+                  <th className="px-4 py-2 text-left text-xs font-semibold text-slate-500 dark:text-slate-500">Time</th>
+                  <th className="px-4 py-2 text-left text-xs font-semibold text-slate-500 dark:text-slate-500">Patient</th>
+                  <th className="px-4 py-2 text-left text-xs font-semibold text-slate-500 dark:text-slate-500">Appointment</th>
+                  <th className="px-4 py-2 text-left text-xs font-semibold text-slate-500 dark:text-slate-500">Status</th>
+                  <th className="px-4 py-2 text-left text-xs font-semibold text-slate-500 dark:text-slate-500">Provider</th>
+                  <th className="px-4 py-2 text-left text-xs font-semibold text-slate-500 dark:text-slate-500">Actions</th>
                 </tr>
               </thead>
               <tbody>
                 {appointments.map((a) => (
-                  <tr key={a.id} className="border-b border-[#F1F5F9]">
+                  <tr key={a.id} className="border-b border-slate-100 dark:border-slate-900">
                     <td className="px-4 py-2 font-mono text-sm">
                       {formatTime24(a.scheduled_at)}
                     </td>
-                    <td className="px-4 py-2 text-[#0F172A]">
+                    <td className="px-4 py-2 text-slate-900 dark:text-slate-100">
                       {a.patient_name}
-                      <span className="ml-1 text-xs text-[#64748B]">{a.ghana_health_id}</span>
+                      <span className="ml-1 text-xs text-slate-500 dark:text-slate-500">{a.ghana_health_id}</span>
                     </td>
                     <td className="px-4 py-2 capitalize">Appointment with {a.appointment_type?.replace("_", " ")}</td>
                     <td className="px-4 py-2">
                       <span className={`rounded-full px-2 py-0.5 text-xs ${statusClass(a.status)}`}>{a.status}</span>
                     </td>
-                    <td className="px-4 py-2 text-[#64748B]">{a.provider_name || "—"}</td>
+                    <td className="px-4 py-2 text-slate-500 dark:text-slate-500">{a.provider_name || "—"}</td>
                     <td className="px-4 py-2">
                       <div className="flex flex-wrap gap-2">
                         {a.status === "scheduled" && (
@@ -583,10 +603,10 @@ export default function AppointmentsPage() {
 
       {createOpen && (
         <Card className="p-6">
-          <h2 className="font-sora text-lg font-bold text-[#0F172A]">Schedule appointment</h2>
+          <h2 className="font-sora text-lg font-bold text-slate-900 dark:text-slate-100">Schedule appointment</h2>
           <form onSubmit={handleCreate} className="mt-4 space-y-3">
             <div>
-              <label className="block text-sm font-medium text-[#0F172A]">Patient (search then pick ID)</label>
+              <label className="block text-sm font-medium text-slate-900 dark:text-slate-100">Patient (search then pick ID)</label>
               <Input
                 placeholder="Search by name or Ghana Health ID"
                 onChange={(e) => {
@@ -595,11 +615,11 @@ export default function AppointmentsPage() {
                 }}
               />
               {searchResults.length > 0 && (
-                <ul className="mt-1 max-h-32 overflow-y-auto rounded border border-[#E2E8F0] bg-white">
+                <ul className="mt-1 max-h-32 overflow-y-auto rounded border border-slate-200 dark:border-slate-800 bg-white">
                   {searchResults.slice(0, 5).map((p) => (
                     <li
                       key={p.patient_id}
-                      className="cursor-pointer px-3 py-2 text-sm hover:bg-[#F1F5F9]"
+                      className="cursor-pointer px-3 py-2 text-sm hover:bg-slate-100 dark:bg-slate-900"
                       onClick={() => setCreatePatientId(p.patient_id)}
                     >
                       {p.full_name} ({p.ghana_health_id})
@@ -608,20 +628,31 @@ export default function AppointmentsPage() {
                 </ul>
               )}
               {createPatientId && (
-                <p className="mt-1 text-xs text-[#64748B]">Selected patient ID: {createPatientId}</p>
+                <p className="mt-1 text-xs text-slate-500 dark:text-slate-500">Selected patient ID: {createPatientId}</p>
               )}
             </div>
             <div>
-              <label className="block text-sm font-medium text-[#0F172A]">Date & time *</label>
-              <Input
-                type="datetime-local"
-                value={createScheduledAt}
-                onChange={(e) => setCreateScheduledAt(e.target.value)}
-                required
-              />
+              <label className="block text-sm font-medium text-slate-900 dark:text-slate-100 mb-1">Date & time *</label>
+              <div className="z-10 relative">
+                <DatePicker
+                  value={createScheduledAt ? new Date(createScheduledAt) : null}
+                  onChange={(date) => {
+                    if (date) {
+                      const local = new Date(date.getTime() - date.getTimezoneOffset() * 60000)
+                        .toISOString()
+                        .slice(0, 16);
+                      setCreateScheduledAt(local);
+                    } else {
+                      setCreateScheduledAt("");
+                    }
+                  }}
+                  showTime
+                  format="YYYY-MM-DD"
+                />
+              </div>
             </div>
             <div>
-              <label className="block text-sm font-medium text-[#0F172A]">Notes</label>
+              <label className="block text-sm font-medium text-slate-900 dark:text-slate-100">Notes</label>
               <Input
                 value={createNotes}
                 onChange={(e) => setCreateNotes(e.target.value)}

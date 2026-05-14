@@ -21,26 +21,26 @@ export default function AdmissionsListPage() {
 
   return (
     <div className="space-y-6">
-      <h1 className="font-sora text-2xl font-bold text-[#0F172A]">
+      <h1 className="font-sora text-2xl font-bold text-slate-900 dark:text-slate-100">
         {user?.role === "nurse" ? "Ward Patients" : "Active Admissions"}
       </h1>
 
       <Card className="p-6">
         {loading ? (
-          <p className="text-[#64748B]">Loading...</p>
+          <p className="text-slate-500 dark:text-slate-500">Loading...</p>
         ) : admissions.length === 0 ? (
-          <p className="text-[#64748B]">No active admissions.</p>
+          <p className="text-slate-500 dark:text-slate-500">No active admissions.</p>
         ) : (
           <div className="space-y-2">
             {admissions.map((a) => (
               <Link
                 key={a.admission_id}
                 href={`/patients/${a.patient_id}`}
-                className="flex items-center justify-between rounded-lg border border-[#E2E8F0] p-4 hover:bg-[#F8FAFC]"
+                className="flex items-center justify-between rounded-lg border border-slate-200 dark:border-slate-800 p-4 hover:bg-slate-50 dark:bg-slate-900"
               >
                 <div>
                   <p className="font-medium">{a.patient_name}</p>
-                  <p className="text-sm text-[#64748B]">
+                  <p className="text-sm text-slate-500 dark:text-slate-500">
                     {a.ghana_health_id} • {a.ward_name}{a.bed_code ? ` • Bed ${a.bed_code}` : ""} • Admitted {a.admitted_at?.slice(0, 10)} by {a.admitted_by}
                   </p>
                 </div>

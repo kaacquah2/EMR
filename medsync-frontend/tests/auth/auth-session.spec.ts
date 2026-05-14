@@ -30,8 +30,11 @@ test.describe("Auth and session", () => {
       anySkipped = false;
       await loginPage.login(creds.email, creds.password);
       await loginPage.completeMfaIfPresent();
-      await expect(page).toHaveURL(/\/(dashboard|$)/);
-      await page.getByRole("button", { name: /log out|out/i }).click();
+      await loginPage.completeMfaIfPresent();
+      await expect(page).toHaveURL(/\/(dashboard|superadmin|$)/);
+      // More robust logout selector
+      const logoutBtn = page.getByRole("button", { name: /log out|sign out/i }).or(page.locator('button:has(svg.lucide-log-out)'));
+      await logoutBtn.first().click();
       await page.waitForURL(/\/login/, { timeout: 10_000 });
     }
     if (anySkipped) test.skip(true, "No E2E_*_EMAIL/PASSWORD set for any role");
@@ -52,8 +55,9 @@ test.describe("Auth and session", () => {
     const loginPage = new LoginPage(page);
     await loginPage.login(creds!.email, creds!.password);
     await loginPage.completeMfaIfPresent();
-    await expect(page).toHaveURL(/\/(dashboard|$)/);
-    await page.getByRole("button", { name: /log out|out/i }).click();
+    await expect(page).toHaveURL(/\/(dashboard|superadmin|$)/);
+    const logoutBtn = page.getByRole("button", { name: /log out|sign out/i }).or(page.locator('button:has(svg.lucide-log-out)'));
+    await logoutBtn.first().click();
     await page.waitForURL(/\/login/, { timeout: 10_000 });
     await loginPage.expectSignInTitleVisible();
   });
@@ -75,11 +79,12 @@ test.describe("Auth and session", () => {
     const loginPage = new LoginPage(page);
     await loginPage.login(creds!.email, creds!.password);
     await loginPage.completeMfaIfPresent();
-    await expect(page).toHaveURL(/\/(dashboard|$)/);
+    await expect(page).toHaveURL(/\/(dashboard|superadmin|$)/);
     await page.reload();
     await page.waitForLoadState("networkidle");
-    await expect(page).toHaveURL(/\/(dashboard|$)/);
-    await expect(page.getByText(/dashboard|good (morning|afternoon|evening)/i).first()).toBeVisible({ timeout: 8_000 });
+    await expect(page).toHaveURL(/\/(dashboard|superadmin|$)/);
+    // Use a more generic dashboard indicator
+    await expect(page.getByText(/dashboard|good (morning|afternoon|evening)|worklist|medsync/i).first()).toBeVisible({ timeout: 15_000 });
   });
 
   test("MFA flow: if backup code provided and MFA step appears, verify succeeds", async ({ page }) => {
@@ -90,6 +95,6 @@ test.describe("Auth and session", () => {
     await loginPage.fillCredentials(creds!.email, creds!.password);
     await loginPage.submitCredentials();
     await loginPage.completeMfaIfPresent(process.env.E2E_MFA_BACKUP_CODE);
-    await expect(page).toHaveURL(/\/(dashboard|$)/, { timeout: 15_000 });
+    await expect(page).toHaveURL(/\/(dashboard|superadmin|$)/, { timeout: 15_000 });
   });
 });

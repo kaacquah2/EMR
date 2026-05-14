@@ -17,6 +17,7 @@ import { SlideOver } from "@/components/features/SlideOver";
 const RecordTimelineCard = dynamic(() => import("@/components/features/RecordTimelineCard").then(mod => mod.RecordTimelineCard), { ssr: false });
 const AddRecordForm = dynamic(() => import("@/components/features/AddRecordForm").then(mod => mod.AddRecordForm), { ssr: false });
 const AmendmentForm = dynamic(() => import("@/components/features/AmendmentForm").then(mod => mod.AmendmentForm), { ssr: false });
+const PatientTimeline = dynamic(() => import("@/components/features/PatientTimeline").then(mod => mod.PatientTimeline), { ssr: false });
 import type { MedicalRecord } from "@/lib/types";
 import { ROLES, Role, RECORD_CREATE_ROLES, RECORD_AMEND_ROLES, ENCOUNTER_CREATE_ROLES, hasRole } from "@/lib/permissions";
 import {
@@ -32,14 +33,14 @@ import { useAppointments } from "@/hooks/use-appointments";
 import { usePollWhenVisible } from "@/hooks/use-poll-when-visible";
 import type { Patient, Consent } from "@/lib/types";
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
-import { Breadcrumbs } from "@/components/ui/breadcrumbs";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { useAsyncAIAnalysis } from "@/hooks/use-async-ai-analysis";
 import { AIAnalysisProgress } from "@/components/features/ai/ai-analysis-progress";
+import { AIDisclaimer } from "@/components/ui/AIDisclaimer";
 
 const PATIENT_LABS_POLL_MS = 45_000;
 
-type Tab = "overview" | "encounters" | "diagnoses" | "prescriptions" | "labs" | "vitals" | "amendments" | "ai_history" | "ai_analysis";
+type Tab = "overview" | "encounters" | "diagnoses" | "prescriptions" | "labs" | "vitals" | "amendments" | "ai_history" | "ai_analysis" | "timeline";
 
 /** Roles that see only demographics + appointments (no clinical records). */
 const RESTRICTED_PATIENT_VIEW_ROLES: Role[] = [
@@ -58,19 +59,13 @@ function ReceptionistPatientView({ patient, patientId }: { patient: Patient; pat
   );
   return (
     <div className="space-y-8">
-      <Breadcrumbs
-        items={[
-          { label: "Patients", href: "/patients/search" },
-          { label: patient.full_name ?? "Patient" },
-        ]}
-      />
-      <div className="rounded-lg border border-[#E2E8F0] bg-white p-6">
-        <h2 className="font-sora text-lg font-semibold text-[#0F172A]">Demographics</h2>
-        <p className="mt-2 text-[#64748B]">
+      <div className="rounded-lg border border-slate-200 dark:border-slate-800 bg-white p-6">
+        <h2 className="font-sora text-lg font-semibold text-slate-900 dark:text-slate-100">Demographics</h2>
+        <p className="mt-2 text-slate-500 dark:text-slate-500">
           {patient.full_name} · {patient.ghana_health_id}
         </p>
-        <p className="text-sm text-[#64748B]">DOB: {patient.date_of_birth}</p>
-        {patient.phone && <p className="text-sm text-[#64748B]">Phone: {patient.phone}</p>}
+        <p className="text-sm text-slate-500 dark:text-slate-500">DOB: {patient.date_of_birth}</p>
+        {patient.phone && <p className="text-sm text-slate-500 dark:text-slate-500">Phone: {patient.phone}</p>}
       </div>
       <Card>
         <CardHeader>
@@ -78,17 +73,17 @@ function ReceptionistPatientView({ patient, patientId }: { patient: Patient; pat
         </CardHeader>
         <CardContent>
           {loading ? (
-            <p className="text-[#64748B]">Loading...</p>
+            <p className="text-slate-500 dark:text-slate-500">Loading...</p>
           ) : upcoming.length === 0 ? (
-            <p className="text-[#64748B]">No upcoming appointments</p>
+            <p className="text-slate-500 dark:text-slate-500">No upcoming appointments</p>
           ) : (
             <ul className="space-y-2">
               {upcoming.slice(0, 20).map((a) => (
-                <li key={a.id} className="flex flex-wrap items-center gap-2 rounded border border-[#E2E8F0] p-2 text-sm">
+                <li key={a.id} className="flex flex-wrap items-center gap-2 rounded border border-slate-200 dark:border-slate-800 p-2 text-sm">
                   <span>{new Date(a.scheduled_at).toLocaleString()}</span>
-                  <span className="text-[#64748B]">{a.appointment_type}</span>
-                  <span className="text-[#64748B]">{a.status}</span>
-                  {a.provider_name && <span className="text-[#64748B]">— {a.provider_name}</span>}
+                  <span className="text-slate-500 dark:text-slate-500">{a.appointment_type}</span>
+                  <span className="text-slate-500 dark:text-slate-500">{a.status}</span>
+                  {a.provider_name && <span className="text-slate-500 dark:text-slate-500">— {a.provider_name}</span>}
                 </li>
               ))}
             </ul>
@@ -106,24 +101,18 @@ function HospitalAdminPatientView({ patient, patientId }: { patient: Patient; pa
   );
   return (
     <div className="space-y-8">
-      <Breadcrumbs
-        items={[
-          { label: "Patients", href: "/patients/search" },
-          { label: patient.full_name ?? "Patient" },
-        ]}
-      />
-      <div className="rounded-lg border border-[#E2E8F0] bg-[#F0F9FF] p-4">
-        <p className="text-sm font-medium text-[#0F172A]">
+      <div className="rounded-lg border border-slate-200 dark:border-slate-800 bg-[#F0F9FF] p-4">
+        <p className="text-sm font-medium text-slate-900 dark:text-slate-100">
           Clinical records are not available to your role. You can manage staff and view audit logs from the Admin section.
         </p>
       </div>
-      <div className="rounded-lg border border-[#E2E8F0] bg-white p-6">
-        <h2 className="font-sora text-lg font-semibold text-[#0F172A]">Demographics</h2>
-        <p className="mt-2 text-[#64748B]">
+      <div className="rounded-lg border border-slate-200 dark:border-slate-800 bg-white p-6">
+        <h2 className="font-sora text-lg font-semibold text-slate-900 dark:text-slate-100">Demographics</h2>
+        <p className="mt-2 text-slate-500 dark:text-slate-500">
           {patient.full_name} · {patient.ghana_health_id}
         </p>
-        <p className="text-sm text-[#64748B]">DOB: {patient.date_of_birth}</p>
-        {patient.phone && <p className="text-sm text-[#64748B]">Phone: {patient.phone}</p>}
+        <p className="text-sm text-slate-500 dark:text-slate-500">DOB: {patient.date_of_birth}</p>
+        {patient.phone && <p className="text-sm text-slate-500 dark:text-slate-500">Phone: {patient.phone}</p>}
       </div>
       <Card>
         <CardHeader>
@@ -131,17 +120,17 @@ function HospitalAdminPatientView({ patient, patientId }: { patient: Patient; pa
         </CardHeader>
         <CardContent>
           {loading ? (
-            <p className="text-[#64748B]">Loading...</p>
+            <p className="text-slate-500 dark:text-slate-500">Loading...</p>
           ) : upcoming.length === 0 ? (
-            <p className="text-[#64748B]">No upcoming appointments</p>
+            <p className="text-slate-500 dark:text-slate-500">No upcoming appointments</p>
           ) : (
             <ul className="space-y-2">
               {upcoming.slice(0, 20).map((a) => (
-                <li key={a.id} className="flex flex-wrap items-center gap-2 rounded border border-[#E2E8F0] p-2 text-sm">
+                <li key={a.id} className="flex flex-wrap items-center gap-2 rounded border border-slate-200 dark:border-slate-800 p-2 text-sm">
                   <span>{new Date(a.scheduled_at).toLocaleString()}</span>
-                  <span className="text-[#64748B]">{a.appointment_type}</span>
-                  <span className="text-[#64748B]">{a.status}</span>
-                  {a.provider_name && <span className="text-[#64748B]">— {a.provider_name}</span>}
+                  <span className="text-slate-500 dark:text-slate-500">{a.appointment_type}</span>
+                  <span className="text-slate-500 dark:text-slate-500">{a.status}</span>
+                  {a.provider_name && <span className="text-slate-500 dark:text-slate-500">— {a.provider_name}</span>}
                 </li>
               ))}
             </ul>
@@ -287,7 +276,7 @@ export default function PatientPage() {
   if (loading) {
     return (
       <div className="flex items-center justify-center py-12">
-        <p className="text-[#64748B]">Loading patient...</p>
+        <p className="text-slate-500 dark:text-slate-500">Loading patient...</p>
       </div>
     );
   }
@@ -306,6 +295,7 @@ export default function PatientPage() {
     { id: "prescriptions", label: "Prescriptions" },
     { id: "labs", label: "Labs" },
     { id: "vitals", label: "Vitals" },
+    { id: "timeline", label: "Timeline" },
     { id: "amendments", label: "Amendments" },
     { id: "ai_analysis", label: "AI Analysis" },
     { id: "ai_history", label: "AI History" },
@@ -332,12 +322,6 @@ export default function PatientPage() {
 
   return (
     <div className="space-y-8">
-      <Breadcrumbs
-        items={[
-          { label: "Patients", href: "/patients/search" },
-          { label: patient.full_name ?? "Patient" },
-        ]}
-      />
       <div className="sticky top-0 z-10 -mx-8 -mt-8 bg-[#F5F3EE] px-8 pb-4 pt-8">
         <div className="flex flex-wrap items-start justify-between gap-4">
           <div className="flex items-center gap-4">
@@ -345,13 +329,13 @@ export default function PatientPage() {
               {patient.full_name?.charAt(0) || "?"}
             </div>
             <div>
-              <h1 className="font-sora text-2xl font-bold text-[#0F172A]">
+              <h1 className="font-sora text-2xl font-bold text-slate-900 dark:text-slate-100">
                 {patient.full_name}
               </h1>
-              <p className="font-mono text-sm text-[#64748B]">
+              <p className="font-mono text-sm text-slate-500 dark:text-slate-500">
                 {patient.ghana_health_id}
               </p>
-              <p className="mt-1 text-sm text-[#64748B]">
+              <p className="mt-1 text-sm text-slate-500 dark:text-slate-500">
                 DOB: {patient.date_of_birth} | {patient.gender} | Blood: {patient.blood_group}
               </p>
             </div>
@@ -392,7 +376,7 @@ export default function PatientPage() {
         <AllergyBanner allergies={patient.allergies || []} />
       </div>
 
-      <div className="flex gap-2 border-b border-[#CBD5E1]">
+      <div className="flex gap-2 border-b border-slate-300 dark:border-slate-700">
         {tabs.map((t) => (
           <button
             key={t.id}
@@ -401,7 +385,7 @@ export default function PatientPage() {
             className={`border-b-2 px-4 py-2 text-sm font-medium ${
               tab === t.id
                 ? "border-[#0B8A96] text-[#0B8A96]"
-                : "border-transparent text-[#64748B] hover:text-[#0F172A]"
+                : "border-transparent text-slate-500 dark:text-slate-500 hover:text-slate-900 dark:text-slate-100"
             }`}
           >
             {t.label}
@@ -432,21 +416,21 @@ export default function PatientPage() {
               )}
             </div>
             {encountersLoading ? (
-              <p className="text-[#64748B]">Loading encounters...</p>
+              <p className="text-slate-500 dark:text-slate-500">Loading encounters...</p>
             ) : encounters.length === 0 ? (
-              <p className="text-[#64748B]">No encounters yet.</p>
+              <p className="text-slate-500 dark:text-slate-500">No encounters yet.</p>
             ) : (
               <ul className="space-y-2">
                 {encounters.map((e) => (
-                  <li key={e.id} className="rounded-lg border border-[#E2E8F0] p-3">
+                  <li key={e.id} className="rounded-lg border border-slate-200 dark:border-slate-800 p-3">
                     <span className="font-medium capitalize">{e.encounter_type?.replace("_", " ")}</span>
-                    <span className="ml-2 text-sm text-[#64748B]">
+                    <span className="ml-2 text-sm text-slate-500 dark:text-slate-500">
                       {e.encounter_date ? new Date(e.encounter_date).toLocaleString() : ""}
                     </span>
                     {e.created_by && <span className="ml-2 text-xs text-[#94A3B8]">by {e.created_by}</span>}
-                    {e.notes && <p className="mt-1 text-sm text-[#64748B]">{e.notes}</p>}
+                    {e.notes && <p className="mt-1 text-sm text-slate-500 dark:text-slate-500">{e.notes}</p>}
                     {e.discharge_summary && (
-                      <p className="mt-2 text-sm text-[#475569] border-t border-[#E2E8F0] pt-2 whitespace-pre-wrap">
+                      <p className="mt-2 text-sm text-[#475569] border-t border-slate-200 dark:border-slate-800 pt-2 whitespace-pre-wrap">
                         {e.discharge_summary}
                       </p>
                     )}
@@ -479,18 +463,18 @@ export default function PatientPage() {
                 />
               ))
             ) : (
-              <p className="text-[#64748B]">No records yet.</p>
+              <p className="text-slate-500 dark:text-slate-500">No records yet.</p>
             )}
           </div>
         )}
         {tab === "diagnoses" && (
           <div className="space-y-2">
             {isNurse ? (
-              <p className="rounded-lg border border-[#E2E8F0] bg-[#F8FAFC] p-4 text-[#64748B]">Clinical records are restricted to the care team.</p>
+              <p className="rounded-lg border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-900 p-4 text-slate-500 dark:text-slate-500">Clinical records are restricted to the care team.</p>
             ) : diagnoses.length ? (
               <table className="w-full text-sm">
                 <thead>
-                  <tr className="border-b border-[#E2E8F0]">
+                  <tr className="border-b border-slate-200 dark:border-slate-800">
                     <th className="py-2 text-left font-medium">ICD-10</th>
                     <th className="py-2 text-left font-medium">Description</th>
                     <th className="py-2 text-left font-medium">Severity</th>
@@ -499,17 +483,17 @@ export default function PatientPage() {
                 </thead>
                 <tbody>
                   {diagnoses.map((d) => (
-                    <tr key={d.diagnosis_id} className="border-b border-[#F1F5F9]">
+                    <tr key={d.diagnosis_id} className="border-b border-slate-100 dark:border-slate-900">
                       <td className="py-2 font-mono">{d.icd10_code}</td>
                       <td className="py-2">{d.icd10_description}</td>
                       <td className="py-2">{d.severity}</td>
-                      <td className="py-2 text-[#64748B]">{d.created_at?.slice(0, 10)}</td>
+                      <td className="py-2 text-slate-500 dark:text-slate-500">{d.created_at?.slice(0, 10)}</td>
                     </tr>
                   ))}
                 </tbody>
               </table>
             ) : (
-              <p className="text-[#64748B]">No diagnoses.</p>
+              <p className="text-slate-500 dark:text-slate-500">No diagnoses.</p>
             )}
           </div>
         )}
@@ -518,7 +502,7 @@ export default function PatientPage() {
             {prescriptions.length ? (
               <table className="w-full text-sm">
                 <thead>
-                  <tr className="border-b border-[#E2E8F0]">
+                  <tr className="border-b border-slate-200 dark:border-slate-800">
                     <th className="py-2 text-left font-medium">Drug</th>
                     <th className="py-2 text-left font-medium">Dosage</th>
                     <th className="py-2 text-left font-medium">Frequency</th>
@@ -527,7 +511,7 @@ export default function PatientPage() {
                 </thead>
                 <tbody>
                   {prescriptions.map((p) => (
-                    <tr key={p.prescription_id} className="border-b border-[#F1F5F9]">
+                    <tr key={p.prescription_id} className="border-b border-slate-100 dark:border-slate-900">
                       <td className="py-2">{p.drug_name}</td>
                       <td className="py-2">{p.dosage}</td>
                       <td className="py-2">{p.frequency}</td>
@@ -549,7 +533,7 @@ export default function PatientPage() {
                 </tbody>
               </table>
             ) : (
-              <p className="text-[#64748B]">No prescriptions.</p>
+              <p className="text-slate-500 dark:text-slate-500">No prescriptions.</p>
             )}
           </div>
         )}
@@ -558,7 +542,7 @@ export default function PatientPage() {
             {labs.length ? (
               <table className="w-full text-sm">
                 <thead>
-                  <tr className="border-b border-[#E2E8F0]">
+                  <tr className="border-b border-slate-200 dark:border-slate-800">
                     <th className="py-2 text-left font-medium">Test</th>
                     <th className="py-2 text-left font-medium">Result</th>
                     <th className="py-2 text-left font-medium">Range</th>
@@ -567,17 +551,17 @@ export default function PatientPage() {
                 </thead>
                 <tbody>
                   {labs.map((l) => (
-                    <tr key={l.lab_result_id} className="border-b border-[#F1F5F9]">
+                    <tr key={l.lab_result_id} className="border-b border-slate-100 dark:border-slate-900">
                       <td className="py-2">{l.test_name}</td>
                       <td className="py-2">{l.result_value || "—"}</td>
-                      <td className="py-2 text-[#64748B]">{l.reference_range || "—"}</td>
+                      <td className="py-2 text-slate-500 dark:text-slate-500">{l.reference_range || "—"}</td>
                       <td className="py-2">{l.status}</td>
                     </tr>
                   ))}
                 </tbody>
               </table>
             ) : (
-              <p className="text-[#64748B]">No lab results.</p>
+              <p className="text-slate-500 dark:text-slate-500">No lab results.</p>
             )}
           </div>
         )}
@@ -586,7 +570,7 @@ export default function PatientPage() {
             {vitals.length ? (
               <table className="w-full text-sm">
                 <thead>
-                  <tr className="border-b border-[#E2E8F0]">
+                  <tr className="border-b border-slate-200 dark:border-slate-800">
                     <th className="py-2 text-left font-medium">Date</th>
                     <th className="py-2 text-left font-medium">Temp</th>
                     <th className="py-2 text-left font-medium">Pulse</th>
@@ -596,8 +580,8 @@ export default function PatientPage() {
                 </thead>
                 <tbody>
                   {vitals.map((v) => (
-                    <tr key={v.vital_id} className="border-b border-[#F1F5F9]">
-                      <td className="py-2 text-[#64748B]">{v.created_at?.slice(0, 16)}</td>
+                    <tr key={v.vital_id} className="border-b border-slate-100 dark:border-slate-900">
+                      <td className="py-2 text-slate-500 dark:text-slate-500">{v.created_at?.slice(0, 16)}</td>
                       <td className="py-2">{v.temperature_c ?? "—"}</td>
                       <td className="py-2">{v.pulse_bpm ?? "—"}</td>
                       <td className="py-2">
@@ -611,9 +595,12 @@ export default function PatientPage() {
                 </tbody>
               </table>
             ) : (
-              <p className="text-[#64748B]">No vitals recorded.</p>
+              <p className="text-slate-500 dark:text-slate-500">No vitals recorded.</p>
             )}
           </div>
+        )}
+        {tab === "timeline" && (
+          <PatientTimeline patientId={id} />
         )}
         {tab === "amendments" && (
           <div className="space-y-2">
@@ -621,35 +608,37 @@ export default function PatientPage() {
               records
                 .filter((r) => r.is_amended || r.amendment_reason)
                 .map((r) => (
-                  <div key={r.record_id} className="rounded-lg border border-[#E2E8F0] bg-white p-4">
+                  <div key={r.record_id} className="rounded-lg border border-slate-200 dark:border-slate-800 bg-white p-4">
                     <p className="font-medium">{r.record_type.replace("_", " ")}</p>
-                    <p className="text-sm text-[#64748B]">{r.amendment_reason || "Amended record"}</p>
+                    <p className="text-sm text-slate-500 dark:text-slate-500">{r.amendment_reason || "Amended record"}</p>
                   </div>
                 ))
             ) : (
-              <p className="text-[#64748B]">No amendments.</p>
+              <p className="text-slate-500 dark:text-slate-500">No amendments.</p>
             )}
           </div>
         )}
         {tab === "ai_history" && (
-          <div className="space-y-2">
+          <div className="space-y-4">
+            <AIDisclaimer />
             {aiHistory.length ? (
               aiHistory.map((h, idx) => (
-                <div key={`${h.timestamp || "t"}-${idx}`} className="rounded-lg border border-[#E2E8F0] bg-white p-4 text-sm">
+                <div key={`${h.timestamp || "t"}-${idx}`} className="rounded-lg border border-slate-200 dark:border-slate-800 bg-white p-4 text-sm">
                   <p className="font-medium">{h.analysis_type || "Analysis"}</p>
-                  <p className="text-[#64748B]">
+                  <p className="text-slate-500 dark:text-slate-500">
                     {h.timestamp ? new Date(h.timestamp).toLocaleString() : "Unknown time"}
                     {typeof h.confidence_score === "number" ? ` · Confidence ${Math.round(h.confidence_score * 100)}%` : ""}
                   </p>
                 </div>
               ))
             ) : (
-              <p className="text-[#64748B]">No AI history.</p>
+              <p className="text-slate-500 dark:text-slate-500">No AI history.</p>
             )}
           </div>
         )}
         {tab === "ai_analysis" && (
           <div className="space-y-4">
+            <AIDisclaimer />
             <AIAnalysisProgress
               jobId={aiAnalysis.jobId}
               status={aiAnalysis.status}
@@ -677,13 +666,13 @@ export default function PatientPage() {
         {tab === "ai_history" && canInterop && globalPatientId && false && (
           <div className="space-y-6">
             <section>
-              <h3 className="text-sm font-semibold text-[#0F172A] mb-2">Active consents</h3>
+              <h3 className="text-sm font-semibold text-slate-900 dark:text-slate-100 mb-2">Active consents</h3>
               {consents.filter((c) => c.is_active && (!c.expires_at || new Date(c.expires_at) > new Date())).length ? (
                 <ul className="space-y-2">
                   {consents
                     .filter((c) => c.is_active && (!c.expires_at || new Date(c.expires_at) > new Date()))
                     .map((c) => (
-                      <li key={c.consent_id} className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-[#E2E8F0] bg-white p-3 text-sm">
+                      <li key={c.consent_id} className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-slate-200 dark:border-slate-800 bg-white p-3 text-sm">
                         <span>
                           {c.granted_to_facility_name} — {c.scope}
                           {c.expires_at ? ` until ${c.expires_at.slice(0, 10)}` : " (no expiry)"}
@@ -700,27 +689,27 @@ export default function PatientPage() {
                     ))}
                 </ul>
               ) : (
-                <p className="text-[#64748B]">No active consents.</p>
+                <p className="text-slate-500 dark:text-slate-500">No active consents.</p>
               )}
             </section>
             <section>
-              <h3 className="text-sm font-semibold text-[#0F172A] mb-2">Expired / revoked consents</h3>
+              <h3 className="text-sm font-semibold text-slate-900 dark:text-slate-100 mb-2">Expired / revoked consents</h3>
               {consents.filter((c) => !c.is_active || (c.expires_at && new Date(c.expires_at) <= new Date())).length ? (
                 <ul className="space-y-2">
                   {consents
                     .filter((c) => !c.is_active || (c.expires_at && new Date(c.expires_at) <= new Date()))
                     .map((c) => (
-                      <li key={c.consent_id} className="rounded-lg border border-[#F1F5F9] bg-[#F8FAFC] p-3 text-sm text-[#64748B]">
+                      <li key={c.consent_id} className="rounded-lg border border-slate-100 dark:border-slate-900 bg-slate-50 dark:bg-slate-900 p-3 text-sm text-slate-500 dark:text-slate-500">
                         {c.granted_to_facility_name} — {c.scope} — {c.is_active ? "expired" : "revoked"}
                       </li>
                     ))}
                 </ul>
               ) : (
-                <p className="text-[#64748B]">None.</p>
+                <p className="text-slate-500 dark:text-slate-500">None.</p>
               )}
             </section>
             <section>
-              <h3 className="text-sm font-semibold text-[#0F172A] mb-2">Break-glass history</h3>
+              <h3 className="text-sm font-semibold text-slate-900 dark:text-slate-100 mb-2">Break-glass history</h3>
               {breakGlassList.length ? (
                 <ul className="space-y-2">
                   {breakGlassList.map((b) => (
@@ -730,7 +719,7 @@ export default function PatientPage() {
                   ))}
                 </ul>
               ) : (
-                <p className="text-[#64748B]">No break-glass access recorded.</p>
+                <p className="text-slate-500 dark:text-slate-500">No break-glass access recorded.</p>
               )}
             </section>
           </div>
@@ -747,9 +736,9 @@ export default function PatientPage() {
             </DialogHeader>
             {globalPatientId && (
               <div className="space-y-4">
-                <label className="block text-sm font-medium text-[#0F172A]">Facility</label>
+                <label className="block text-sm font-medium text-slate-900 dark:text-slate-100">Facility</label>
                 <select
-                  className="w-full rounded-lg border border-[#CBD5E1] px-3 py-2 text-sm"
+                  className="w-full rounded-lg border border-slate-300 dark:border-slate-700 px-3 py-2 text-sm"
                   value={consentFacilityId}
                   onChange={(e) => setConsentFacilityId(e.target.value)}
                 >
@@ -758,9 +747,9 @@ export default function PatientPage() {
                     <option key={f.facility_id} value={f.facility_id}>{f.name}</option>
                   ))}
                 </select>
-                <label className="block text-sm font-medium text-[#0F172A]">Scope</label>
+                <label className="block text-sm font-medium text-slate-900 dark:text-slate-100">Scope</label>
                 <select
-                  className="w-full rounded-lg border border-[#CBD5E1] px-3 py-2 text-sm"
+                  className="w-full rounded-lg border border-slate-300 dark:border-slate-700 px-3 py-2 text-sm"
                   value={consentScope}
                   onChange={(e) => setConsentScope(e.target.value as "SUMMARY" | "FULL_RECORD")}
                 >
@@ -866,9 +855,9 @@ export default function PatientPage() {
             </DialogHeader>
             {globalPatientId && (
               <div className="space-y-4">
-                <label className="block text-sm font-medium text-[#0F172A]">To facility</label>
+                <label className="block text-sm font-medium text-slate-900 dark:text-slate-100">To facility</label>
                 <select
-                  className="w-full rounded-lg border border-[#CBD5E1] px-3 py-2 text-sm"
+                  className="w-full rounded-lg border border-slate-300 dark:border-slate-700 px-3 py-2 text-sm"
                   value={referralFacilityId}
                   onChange={(e) => setReferralFacilityId(e.target.value)}
                 >

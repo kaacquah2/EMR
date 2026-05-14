@@ -39,10 +39,11 @@ export function useEncounterAutoSave(patientId: string | null, encounterId?: str
           ? `/patients/${patientId}/encounters/${encounterId}/draft`
           : `/patients/${patientId}/encounters/draft`;
 
-        const response = await api.get<EncounterDraft>(endpoint);
-        if (response) {
-          setDraft(response);
-          setLastSavedAt(new Date(response.last_saved_at));
+        const response = await api.get<{ data: EncounterDraft }>(endpoint);
+        if (response?.data) {
+          const draftData = response.data;
+          setDraft(draftData);
+          setLastSavedAt(new Date(draftData.last_saved_at));
         }
       } catch {
         // No draft exists yet, which is fine
@@ -70,12 +71,13 @@ export function useEncounterAutoSave(patientId: string | null, encounterId?: str
 
         const response =
           method === "PATCH"
-            ? await api.patch<EncounterDraft>(endpoint, data)
-            : await api.post<EncounterDraft>(endpoint, data);
+            ? await api.patch<{ data: EncounterDraft }>(endpoint, data)
+            : await api.post<{ data: EncounterDraft }>(endpoint, data);
 
-        if (response) {
-          setDraft(response);
-          setLastSavedAt(new Date(response.last_saved_at));
+        if (response?.data) {
+          const draftData = response.data;
+          setDraft(draftData);
+          setLastSavedAt(new Date(draftData.last_saved_at));
           pendingData.current = null;
         }
       } catch (err) {
@@ -151,8 +153,8 @@ export function useEncounterAutoSave(patientId: string | null, encounterId?: str
         ? `/patients/${patientId}/encounters/${encounterId}/draft`
         : `/patients/${patientId}/encounters/draft`;
 
-      const response = await api.get<EncounterDraft>(endpoint);
-      return response || null;
+      const response = await api.get<{ data: EncounterDraft }>(endpoint);
+      return response?.data || null;
     } catch {
       return null;
     }

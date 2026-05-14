@@ -105,7 +105,7 @@ export function AmendmentForm({ record, onSuccess, onClose }: AmendmentFormProps
   const t = record.record_type;
   return (
     <div className="space-y-4">
-      <p className="text-sm text-[#64748B]">
+      <p className="text-sm text-slate-500 dark:text-slate-500">
         Create an amendment for this {t.replace("_", " ")} record. The original will be marked as amended and a new record will be created.
       </p>
       <Textarea
@@ -119,8 +119,8 @@ export function AmendmentForm({ record, onSuccess, onClose }: AmendmentFormProps
       />
 
       {t === "diagnosis" && record.diagnosis && (
-        <div className="space-y-3 border-t border-[#E2E8F0] pt-4">
-          <p className="text-xs font-semibold text-[#64748B]">Corrected data (optional)</p>
+        <div className="space-y-3 border-t border-slate-200 dark:border-slate-800 pt-4">
+          <p className="text-xs font-semibold text-slate-500 dark:text-slate-500">Corrected data (optional)</p>
           <Input label="ICD-10 Code" value={form.icd10_code} onChange={(e) => setForm((f) => ({ ...f, icd10_code: e.target.value }))} />
           <Input label="Description" value={form.icd10_description} onChange={(e) => setForm((f) => ({ ...f, icd10_description: e.target.value }))} />
           <Select
@@ -143,8 +143,8 @@ export function AmendmentForm({ record, onSuccess, onClose }: AmendmentFormProps
       )}
 
       {t === "prescription" && record.prescription && (
-        <div className="space-y-3 border-t border-[#E2E8F0] pt-4">
-          <p className="text-xs font-semibold text-[#64748B]">Corrected data (optional)</p>
+        <div className="space-y-3 border-t border-slate-200 dark:border-slate-800 pt-4">
+          <p className="text-xs font-semibold text-slate-500 dark:text-slate-500">Corrected data (optional)</p>
           <Input label="Drug name" value={form.drug_name} onChange={(e) => setForm((f) => ({ ...f, drug_name: e.target.value }))} />
           <Input label="Dosage" value={form.dosage} onChange={(e) => setForm((f) => ({ ...f, dosage: e.target.value }))} />
           <Input label="Frequency" value={form.frequency} onChange={(e) => setForm((f) => ({ ...f, frequency: e.target.value }))} />
@@ -166,8 +166,8 @@ export function AmendmentForm({ record, onSuccess, onClose }: AmendmentFormProps
       )}
 
       {t === "vital_signs" && record.vital && (
-        <div className="space-y-3 border-t border-[#E2E8F0] pt-4">
-          <p className="text-xs font-semibold text-[#64748B]">Corrected data (optional)</p>
+        <div className="space-y-3 border-t border-slate-200 dark:border-slate-800 pt-4">
+          <p className="text-xs font-semibold text-slate-500 dark:text-slate-500">Corrected data (optional)</p>
           <Input label="Temperature (C)" type="number" step="0.1" value={form.temperature_c} onChange={(e) => setForm((f) => ({ ...f, temperature_c: e.target.value }))} />
           <Input label="Pulse (bpm)" type="number" value={form.pulse_bpm} onChange={(e) => setForm((f) => ({ ...f, pulse_bpm: e.target.value }))} />
           <Input label="Respiratory rate" type="number" value={form.resp_rate} onChange={(e) => setForm((f) => ({ ...f, resp_rate: e.target.value }))} />
@@ -180,7 +180,7 @@ export function AmendmentForm({ record, onSuccess, onClose }: AmendmentFormProps
       )}
 
       {t === "nursing_note" && (
-        <div className="space-y-3 border-t border-[#E2E8F0] pt-4">
+        <div className="space-y-3 border-t border-slate-200 dark:border-slate-800 pt-4">
           <Textarea
             label="Corrected content"
             value={form.content}
@@ -193,8 +193,8 @@ export function AmendmentForm({ record, onSuccess, onClose }: AmendmentFormProps
       )}
 
       {t === "lab_result" && record.lab_result && (
-        <div className="space-y-3 border-t border-[#E2E8F0] pt-4">
-          <p className="text-xs font-semibold text-[#64748B]">Corrected data (optional)</p>
+        <div className="space-y-3 border-t border-slate-200 dark:border-slate-800 pt-4">
+          <p className="text-xs font-semibold text-slate-500 dark:text-slate-500">Corrected data (optional)</p>
           <Input label="Test name" value={form.test_name} onChange={(e) => setForm((f) => ({ ...f, test_name: e.target.value }))} />
           <Input label="Result value" value={form.result_value} onChange={(e) => setForm((f) => ({ ...f, result_value: e.target.value }))} />
         </div>

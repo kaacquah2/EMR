@@ -112,7 +112,7 @@ export default function ShiftHandoverPage() {
   if (loading) {
     return (
       <div className="flex items-center justify-center min-h-screen">
-        <div className="text-[#64748B]">Loading shift information...</div>
+        <div className="text-slate-500 dark:text-slate-500">Loading shift information...</div>
       </div>
     );
   }
@@ -147,41 +147,41 @@ export default function ShiftHandoverPage() {
   return (
     <div className="space-y-6 max-w-2xl">
       <div>
-        <h1 className="font-sora text-3xl font-bold text-[#0F172A]">Shift Handover</h1>
-        <p className="text-[#64748B] mt-2">
+        <h1 className="font-sora text-3xl font-bold text-slate-900 dark:text-slate-100">Shift Handover</h1>
+        <p className="text-slate-500 dark:text-slate-500 mt-2">
           Complete your shift handover to the next nurse and ensure continuity of care.
         </p>
       </div>
 
       {/* Shift Summary */}
       <Card className="p-6 border-blue-200 bg-blue-50">
-        <h2 className="font-sora font-bold text-[#0F172A] mb-4">Shift Summary</h2>
+        <h2 className="font-sora font-bold text-slate-900 dark:text-slate-100 mb-4">Shift Summary</h2>
         <div className="grid grid-cols-2 gap-4 md:grid-cols-4">
           <div>
-            <p className="text-xs text-[#64748B] uppercase font-medium">Ward</p>
-            <p className="font-sora font-bold text-[#0F172A] mt-1">
+            <p className="text-xs text-slate-500 dark:text-slate-500 uppercase font-medium">Ward</p>
+            <p className="font-sora font-bold text-slate-900 dark:text-slate-100 mt-1">
               {shiftInfo.ward_name}
             </p>
           </div>
           <div>
-            <p className="text-xs text-[#64748B] uppercase font-medium flex items-center gap-1">
+            <p className="text-xs text-slate-500 dark:text-slate-500 uppercase font-medium flex items-center gap-1">
               <Clock className="h-4 w-4" /> Duration
             </p>
-            <p className="font-sora font-bold text-[#0F172A] mt-1">
+            <p className="font-sora font-bold text-slate-900 dark:text-slate-100 mt-1">
               {durationHours}h {durationMinutes}m
             </p>
           </div>
           <div>
-            <p className="text-xs text-[#64748B] uppercase font-medium">Break Time</p>
-            <p className="font-sora font-bold text-[#0F172A] mt-1">
+            <p className="text-xs text-slate-500 dark:text-slate-500 uppercase font-medium">Break Time</p>
+            <p className="font-sora font-bold text-slate-900 dark:text-slate-100 mt-1">
               {breakHours}h {breakMinutes}m
             </p>
           </div>
           <div>
-            <p className="text-xs text-[#64748B] uppercase font-medium flex items-center gap-1">
+            <p className="text-xs text-slate-500 dark:text-slate-500 uppercase font-medium flex items-center gap-1">
               <Users className="h-4 w-4" /> Patients Seen
             </p>
-            <p className="font-sora font-bold text-[#0F172A] mt-1">
+            <p className="font-sora font-bold text-slate-900 dark:text-slate-100 mt-1">
               {shiftInfo.patients_seen}
             </p>
           </div>
@@ -191,7 +191,7 @@ export default function ShiftHandoverPage() {
       {/* Handover Form */}
       <Card className="p-6 space-y-6">
         <div>
-          <label className="block text-sm font-medium text-[#0F172A] mb-2">
+          <label className="block text-sm font-medium text-slate-900 dark:text-slate-100 mb-2">
             Handover Notes *
           </label>
           <textarea
@@ -203,16 +203,16 @@ export default function ShiftHandoverPage() {
 - Equipment issues
 - Care coordination notes
 - Any escalations or concerns"
-            className="w-full rounded-lg border border-[#E2E8F0] bg-white px-3 py-3 text-sm h-32 focus:outline-none focus:ring-2 focus:ring-[#0EAFBE]"
+            className="w-full rounded-lg border border-slate-200 dark:border-slate-800 bg-white px-3 py-3 text-sm h-32 focus:outline-none focus:ring-2 focus:ring-[#0EAFBE]"
           />
-          <p className="text-xs text-[#64748B] mt-1">
+          <p className="text-xs text-slate-500 dark:text-slate-500 mt-1">
             {handoverNotes.length}/500 characters
           </p>
         </div>
 
         {/* Critical Alerts */}
         <div>
-          <label className="block text-sm font-medium text-[#0F172A] mb-3">
+          <label className="block text-sm font-medium text-slate-900 dark:text-slate-100 mb-3">
             Critical Alerts
           </label>
           <div className="space-y-3">
@@ -232,9 +232,9 @@ export default function ShiftHandoverPage() {
                       [key]: e.target.checked,
                     }))
                   }
-                  className="h-4 w-4 rounded border-[#CBD5E1]"
+                  className="h-4 w-4 rounded border-slate-300 dark:border-slate-700"
                 />
-                <span className="text-sm text-[#0F172A]">{label}</span>
+                <span className="text-sm text-slate-900 dark:text-slate-100">{label}</span>
               </label>
             ))}
           </div>
@@ -243,13 +243,13 @@ export default function ShiftHandoverPage() {
         {/* Next Shift Nurse */}
         {nextNurses.length > 0 && (
           <div>
-            <label className="block text-sm font-medium text-[#0F172A] mb-2">
+            <label className="block text-sm font-medium text-slate-900 dark:text-slate-100 mb-2">
               Next Shift Nurse (optional)
             </label>
             <select
               value={selectedNextNurse}
               onChange={(e) => setSelectedNextNurse(e.target.value)}
-              className="w-full rounded-lg border border-[#E2E8F0] bg-white px-3 py-2 text-sm"
+              className="w-full rounded-lg border border-slate-200 dark:border-slate-800 bg-white px-3 py-2 text-sm"
             >
               <option value="">-- Not specified --</option>
               {nextNurses.map((nurse) => (
@@ -258,14 +258,14 @@ export default function ShiftHandoverPage() {
                 </option>
               ))}
             </select>
-            <p className="text-xs text-[#64748B] mt-1">
+            <p className="text-xs text-slate-500 dark:text-slate-500 mt-1">
               Select the nurse taking the next shift for handover acknowledgment.
             </p>
           </div>
         )}
 
         {/* Action Buttons */}
-        <div className="flex gap-3 pt-4 border-t border-[#E2E8F0]">
+        <div className="flex gap-3 pt-4 border-t border-slate-200 dark:border-slate-800">
           <Button
             onClick={handleSubmitHandover}
             disabled={submitting || !handoverNotes.trim()}

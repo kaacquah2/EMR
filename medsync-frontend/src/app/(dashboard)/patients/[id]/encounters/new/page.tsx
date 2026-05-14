@@ -111,7 +111,7 @@ export default function NewEncounterPage() {
   if (patientLoading || !patient) {
     return (
       <div className="flex items-center justify-center py-12">
-        <p className="text-[#64748B]">{patientError || "Loading..."}</p>
+        <p className="text-slate-500 dark:text-slate-500">{patientError || "Loading..."}</p>
       </div>
     );
   }
@@ -152,8 +152,8 @@ export default function NewEncounterPage() {
         <Link href={`/patients/${id}`} className="text-sm text-[#0EAFBE] hover:underline">
           Back to patient
         </Link>
-        <h1 className="mt-2 font-sora text-2xl font-bold text-[#0F172A]">Add Encounter</h1>
-        <p className="text-[#64748B]">
+        <h1 className="mt-2 font-sora text-2xl font-bold text-slate-900 dark:text-slate-100">Add Encounter</h1>
+        <p className="text-slate-500 dark:text-slate-500">
           Patient: {patient.full_name} ({patient.ghana_health_id})
         </p>
         {lastSavedTime && (
@@ -168,9 +168,9 @@ export default function NewEncounterPage() {
         <CardContent>
           <form onSubmit={handleSubmit} className="space-y-4">
             <div>
-              <label className="block text-sm font-medium text-[#0F172A]">Encounter type</label>
+              <label className="block text-sm font-medium text-slate-900 dark:text-slate-100">Encounter type</label>
               <select
-                className="mt-1 w-full rounded-lg border border-[#E2E8F0] bg-white px-3 py-2 text-[#0F172A]"
+                className="mt-1 w-full rounded-lg border border-slate-200 dark:border-slate-800 bg-white px-3 py-2 text-slate-900 dark:text-slate-100"
                 value={encounterType}
                 onChange={(e) => {
                   setEncounterType(e.target.value);
@@ -185,9 +185,9 @@ export default function NewEncounterPage() {
               </select>
             </div>
             <div>
-              <label className="block text-sm font-medium text-[#0F172A]">Department (routing)</label>
+              <label className="block text-sm font-medium text-slate-900 dark:text-slate-100">Department (routing)</label>
               <select
-                className="mt-1 w-full rounded-lg border border-[#E2E8F0] bg-white px-3 py-2 text-[#0F172A]"
+                className="mt-1 w-full rounded-lg border border-slate-200 dark:border-slate-800 bg-white px-3 py-2 text-slate-900 dark:text-slate-100"
                 value={assignedDepartmentId}
                 onChange={(e) => {
                   setAssignedDepartmentId(e.target.value);
@@ -200,12 +200,12 @@ export default function NewEncounterPage() {
                   <option key={d.department_id} value={d.department_id}>{d.name}</option>
                 ))}
               </select>
-              <p className="mt-1 text-xs text-[#64748B]">Route patient to this department for consultation.</p>
+              <p className="mt-1 text-xs text-slate-500 dark:text-slate-500">Route patient to this department for consultation.</p>
             </div>
             <div>
-              <label className="block text-sm font-medium text-[#0F172A]">Assigned doctor (optional)</label>
+              <label className="block text-sm font-medium text-slate-900 dark:text-slate-100">Assigned doctor (optional)</label>
               <select
-                className="mt-1 w-full rounded-lg border border-[#E2E8F0] bg-white px-3 py-2 text-[#0F172A]"
+                className="mt-1 w-full rounded-lg border border-slate-200 dark:border-slate-800 bg-white px-3 py-2 text-slate-900 dark:text-slate-100"
                 value={assignedDoctorId}
                 onChange={(e) => {
                   setAssignedDoctorId(e.target.value);
@@ -219,9 +219,9 @@ export default function NewEncounterPage() {
               </select>
             </div>
             <div>
-              <label className="block text-sm font-medium text-[#0F172A]">Status</label>
+              <label className="block text-sm font-medium text-slate-900 dark:text-slate-100">Status</label>
               <select
-                className="mt-1 w-full rounded-lg border border-[#E2E8F0] bg-white px-3 py-2 text-[#0F172A]"
+                className="mt-1 w-full rounded-lg border border-slate-200 dark:border-slate-800 bg-white px-3 py-2 text-slate-900 dark:text-slate-100"
                 value={status}
                 onChange={(e) => {
                   setStatus(e.target.value as "waiting" | "in_consultation" | "completed");
@@ -234,9 +234,9 @@ export default function NewEncounterPage() {
               </select>
             </div>
             <div>
-              <label className="block text-sm font-medium text-[#0F172A]">Subjective: Chief complaint</label>
+              <label className="block text-sm font-medium text-slate-900 dark:text-slate-100">Subjective: Chief complaint</label>
               <textarea
-                className="mt-1 w-full rounded-lg border border-[#E2E8F0] bg-white px-3 py-2 text-[#0F172A]"
+                className="mt-1 w-full rounded-lg border border-slate-200 dark:border-slate-800 bg-white px-3 py-2 text-slate-900 dark:text-slate-100"
                 rows={2}
                 value={chiefComplaint}
                 onChange={(e) => {
@@ -248,9 +248,9 @@ export default function NewEncounterPage() {
               />
             </div>
             <div>
-              <label className="block text-sm font-medium text-[#0F172A]">Subjective: History of present illness (HPI)</label>
+              <label className="block text-sm font-medium text-slate-900 dark:text-slate-100">Subjective: History of present illness (HPI)</label>
               <textarea
-                className="mt-1 w-full rounded-lg border border-[#E2E8F0] bg-white px-3 py-2 text-[#0F172A]"
+                className="mt-1 w-full rounded-lg border border-slate-200 dark:border-slate-800 bg-white px-3 py-2 text-slate-900 dark:text-slate-100"
                 rows={3}
                 value={hpi}
                 onChange={(e) => {
@@ -262,9 +262,9 @@ export default function NewEncounterPage() {
               />
             </div>
             <div>
-              <label className="block text-sm font-medium text-[#0F172A]">Objective: Examination findings</label>
+              <label className="block text-sm font-medium text-slate-900 dark:text-slate-100">Objective: Examination findings</label>
               <textarea
-                className="mt-1 w-full rounded-lg border border-[#E2E8F0] bg-white px-3 py-2 text-[#0F172A]"
+                className="mt-1 w-full rounded-lg border border-slate-200 dark:border-slate-800 bg-white px-3 py-2 text-slate-900 dark:text-slate-100"
                 rows={3}
                 value={examFindings}
                 onChange={(e) => {
@@ -276,9 +276,9 @@ export default function NewEncounterPage() {
               />
             </div>
             <div>
-              <label className="block text-sm font-medium text-[#0F172A]">Assessment and plan</label>
+              <label className="block text-sm font-medium text-slate-900 dark:text-slate-100">Assessment and plan</label>
               <textarea
-                className="mt-1 w-full rounded-lg border border-[#E2E8F0] bg-white px-3 py-2 text-[#0F172A]"
+                className="mt-1 w-full rounded-lg border border-slate-200 dark:border-slate-800 bg-white px-3 py-2 text-slate-900 dark:text-slate-100"
                 rows={3}
                 value={assessmentPlan}
                 onChange={(e) => {
@@ -290,9 +290,9 @@ export default function NewEncounterPage() {
               />
             </div>
             <div>
-              <label className="block text-sm font-medium text-[#0F172A]">Additional notes</label>
+              <label className="block text-sm font-medium text-slate-900 dark:text-slate-100">Additional notes</label>
               <textarea
-                className="mt-1 w-full rounded-lg border border-[#E2E8F0] bg-white px-3 py-2 text-[#0F172A]"
+                className="mt-1 w-full rounded-lg border border-slate-200 dark:border-slate-800 bg-white px-3 py-2 text-slate-900 dark:text-slate-100"
                 rows={4}
                 value={notes}
                 onChange={(e) => {

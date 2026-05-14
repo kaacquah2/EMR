@@ -34,7 +34,7 @@ export default function AddRecordPage() {
         <Button variant="ghost" onClick={() => router.back()}>
           Back
         </Button>
-        <h1 className="font-sora text-2xl font-bold text-[#0F172A]">
+        <h1 className="font-sora text-2xl font-bold text-slate-900 dark:text-slate-100">
           Add Clinical Record
         </h1>
       </div>
@@ -51,7 +51,7 @@ export default function AddRecordPage() {
                   key={t.id}
                   type="button"
                   onClick={() => setSelectedType(t.id)}
-                  className="rounded-xl border-2 border-[#CBD5E1] p-6 text-left font-medium transition-colors hover:border-[#0B8A96] hover:bg-[#F0FDFA]"
+                  className="rounded-xl border-2 border-slate-300 dark:border-slate-700 p-6 text-left font-medium transition-colors hover:border-[#0B8A96] hover:bg-[#F0FDFA]"
                 >
                   {t.label}
                 </button>
@@ -65,7 +65,7 @@ export default function AddRecordPage() {
             <CardTitle>Add {RECORD_TYPES.find((t) => t.id === selectedType)?.label}</CardTitle>
           </CardHeader>
           <CardContent>
-            <p className="text-[#64748B]">
+            <p className="text-slate-500 dark:text-slate-500">
               Form for {selectedType} will be implemented when backend is ready.
             </p>
             <Button

@@ -34,26 +34,26 @@ export default function SuperAdminComplianceAlertsPage() {
     <div className="space-y-6">
       <div className="flex items-center justify-between gap-3">
         <div>
-          <h1 className="font-sora text-2xl font-bold text-[#0F172A]">Compliance alerts</h1>
-          <p className="text-sm text-[#64748B]">Auto-generated network-wide signals</p>
+          <h1 className="font-sora text-2xl font-bold text-slate-900 dark:text-slate-100">Compliance alerts</h1>
+          <p className="text-sm text-slate-500 dark:text-slate-500">Auto-generated network-wide signals</p>
         </div>
         <Link className="text-sm font-medium text-[#2563EB]" href="/superadmin/cross-facility-activity-log">Cross-facility monitor →</Link>
       </div>
 
       <Card className="p-6">
         {alerts.length === 0 ? (
-          <div className="text-sm text-[#64748B]">No alerts.</div>
+          <div className="text-sm text-slate-500 dark:text-slate-500">No alerts.</div>
         ) : (
           <div className="space-y-2 text-sm">
             {alerts.map((a) => {
               const sev = a.severity === "critical" ? "danger" : a.severity === "warning" ? "warning" : "secondary";
               return (
-                <div key={a.id} className="rounded border border-[#E2E8F0] px-3 py-2">
+                <div key={a.id} className="rounded border border-slate-200 dark:border-slate-800 px-3 py-2">
                   <div className="flex items-center gap-2">
                     <Badge variant={sev as never}>{a.severity}</Badge>
-                    <span className="font-medium text-[#0F172A]">{a.title}</span>
+                    <span className="font-medium text-slate-900 dark:text-slate-100">{a.title}</span>
                   </div>
-                  <div className="mt-1 text-[#64748B]">{a.detail}</div>
+                  <div className="mt-1 text-slate-500 dark:text-slate-500">{a.detail}</div>
                 </div>
               );
             })}

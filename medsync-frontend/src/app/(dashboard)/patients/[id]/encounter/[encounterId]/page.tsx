@@ -30,7 +30,7 @@ function Sparkline({ data }: { data: Point[] }) {
   const width = 120;
   const height = 30;
   const valid = data.filter((d): d is number => typeof d === "number");
-  if (valid.length < 2) return <span className="text-xs text-[#64748B]">No trend</span>;
+  if (valid.length < 2) return <span className="text-xs text-slate-500 dark:text-slate-500">No trend</span>;
   const min = Math.min(...valid);
   const max = Math.max(...valid);
   const span = Math.max(max - min, 1);
@@ -166,7 +166,7 @@ export default function EncounterDetailPage() {
     };
   }, [vitals]);
 
-  if (!patient || !encounter) return <div className="py-8 text-center text-[#64748B]">Loading encounter...</div>;
+  if (!patient || !encounter) return <div className="py-8 text-center text-slate-500 dark:text-slate-500">Loading encounter...</div>;
 
   const setEncounterField = (field: keyof EncounterData, value: string) => {
     setEncounter((prev) => (prev ? { ...prev, [field]: value } : prev));
@@ -228,13 +228,13 @@ export default function EncounterDetailPage() {
 
   return (
     <div className="space-y-6">
-      <div className="sticky top-0 z-20 rounded-lg border border-[#E2E8F0] bg-white p-4">
+      <div className="sticky top-0 z-20 rounded-lg border border-slate-200 dark:border-slate-800 bg-white p-4">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div>
-            <p className="font-semibold text-[#0F172A]">
+            <p className="font-semibold text-slate-900 dark:text-slate-100">
               {patient.full_name} · {patient.gender} · {patient.blood_group} · NHIS: {patient.nhis_number || "N/A"}
             </p>
-            <p className="text-xs text-[#64748B]">
+            <p className="text-xs text-slate-500 dark:text-slate-500">
               {saving ? "Saving draft..." : savedAt ? `Saved draft at ${savedAt}` : "Autosave every 30s"}
             </p>
           </div>
@@ -257,8 +257,8 @@ export default function EncounterDetailPage() {
       <Card>
         <CardHeader><CardTitle>Subjective</CardTitle></CardHeader>
         <CardContent className="space-y-3">
-          <input className="w-full rounded border border-[#CBD5E1] px-3 py-2" placeholder="Chief complaint" value={encounter.chief_complaint || ""} onChange={(e) => setEncounterField("chief_complaint", e.target.value)} />
-          <textarea className="w-full rounded border border-[#CBD5E1] px-3 py-2" rows={4} placeholder="HPI (OLDCARTS)" value={encounter.hpi || ""} onChange={(e) => setEncounterField("hpi", e.target.value)} />
+          <input className="w-full rounded border border-slate-300 dark:border-slate-700 px-3 py-2" placeholder="Chief complaint" value={encounter.chief_complaint || ""} onChange={(e) => setEncounterField("chief_complaint", e.target.value)} />
+          <textarea className="w-full rounded border border-slate-300 dark:border-slate-700 px-3 py-2" rows={4} placeholder="HPI (OLDCARTS)" value={encounter.hpi || ""} onChange={(e) => setEncounterField("hpi", e.target.value)} />
         </CardContent>
       </Card>
 
@@ -270,43 +270,43 @@ export default function EncounterDetailPage() {
             <div><p>Pulse</p><Sparkline data={last5Vitals.pulse} /></div>
             <div><p>Temp</p><Sparkline data={last5Vitals.temp} /></div>
           </div>
-          <textarea className="w-full rounded border border-[#CBD5E1] px-3 py-2" rows={4} placeholder="Examination findings" value={encounter.examination_findings || ""} onChange={(e) => setEncounterField("examination_findings", e.target.value)} />
+          <textarea className="w-full rounded border border-slate-300 dark:border-slate-700 px-3 py-2" rows={4} placeholder="Examination findings" value={encounter.examination_findings || ""} onChange={(e) => setEncounterField("examination_findings", e.target.value)} />
         </CardContent>
       </Card>
 
       <Card>
         <CardHeader><CardTitle>Assessment</CardTitle></CardHeader>
         <CardContent className="space-y-3">
-          <input className="w-full rounded border border-[#CBD5E1] px-3 py-2" placeholder="Search ICD-10 (2+ chars)" value={icdQuery} onChange={(e) => setIcdQuery(e.target.value)} />
+          <input className="w-full rounded border border-slate-300 dark:border-slate-700 px-3 py-2" placeholder="Search ICD-10 (2+ chars)" value={icdQuery} onChange={(e) => setIcdQuery(e.target.value)} />
           {icdSuggestions.length > 0 && (
-            <div className="rounded border border-[#E2E8F0] p-2">
+            <div className="rounded border border-slate-200 dark:border-slate-800 p-2">
               {icdSuggestions.slice(0, 8).map((s) => (
-                <button key={`${s.code}-${s.description}`} type="button" className="block w-full rounded px-2 py-1 text-left hover:bg-[#F8FAFC]" onClick={() => { setDiagnosisCode(s.code); setDiagnosisDesc(s.description); }}>
+                <button key={`${s.code}-${s.description}`} type="button" className="block w-full rounded px-2 py-1 text-left hover:bg-slate-50 dark:bg-slate-900" onClick={() => { setDiagnosisCode(s.code); setDiagnosisDesc(s.description); }}>
                   <span className="font-mono">{s.code}</span> - {s.description}
                 </button>
               ))}
             </div>
           )}
           <div className="grid gap-2 md:grid-cols-3">
-            <input className="rounded border border-[#CBD5E1] px-3 py-2" placeholder="ICD-10 code" value={diagnosisCode} onChange={(e) => setDiagnosisCode(e.target.value)} />
-            <input className="rounded border border-[#CBD5E1] px-3 py-2" placeholder="Description" value={diagnosisDesc} onChange={(e) => setDiagnosisDesc(e.target.value)} />
-            <select className="rounded border border-[#CBD5E1] px-3 py-2" value={diagnosisSeverity} onChange={(e) => setDiagnosisSeverity(e.target.value)}>
+            <input className="rounded border border-slate-300 dark:border-slate-700 px-3 py-2" placeholder="ICD-10 code" value={diagnosisCode} onChange={(e) => setDiagnosisCode(e.target.value)} />
+            <input className="rounded border border-slate-300 dark:border-slate-700 px-3 py-2" placeholder="Description" value={diagnosisDesc} onChange={(e) => setDiagnosisDesc(e.target.value)} />
+            <select className="rounded border border-slate-300 dark:border-slate-700 px-3 py-2" value={diagnosisSeverity} onChange={(e) => setDiagnosisSeverity(e.target.value)}>
               <option value="mild">mild</option><option value="moderate">moderate</option><option value="severe">severe</option><option value="critical">critical</option>
             </select>
           </div>
           <Button onClick={addDiagnosis}>Add diagnosis</Button>
-          <textarea className="w-full rounded border border-[#CBD5E1] px-3 py-2" rows={3} placeholder="Assessment plan" value={encounter.assessment_plan || ""} onChange={(e) => setEncounterField("assessment_plan", e.target.value)} />
+          <textarea className="w-full rounded border border-slate-300 dark:border-slate-700 px-3 py-2" rows={3} placeholder="Assessment plan" value={encounter.assessment_plan || ""} onChange={(e) => setEncounterField("assessment_plan", e.target.value)} />
         </CardContent>
       </Card>
 
       <Card>
         <CardHeader><CardTitle>Plan — Prescription</CardTitle></CardHeader>
         <CardContent className="space-y-3">
-          <input className={`w-full rounded border px-3 py-2 ${drugSuggestions.some((d) => d.name === drugName && d.allergy_flag) ? "border-[#DC2626]" : "border-[#CBD5E1]"}`} placeholder="Drug name" value={drugName} onChange={(e) => setDrugName(e.target.value)} />
+          <input className={`w-full rounded border px-3 py-2 ${drugSuggestions.some((d) => d.name === drugName && d.allergy_flag) ? "border-[#DC2626]" : "border-slate-300 dark:border-slate-700"}`} placeholder="Drug name" value={drugName} onChange={(e) => setDrugName(e.target.value)} />
           {drugSuggestions.length > 0 && (
-            <div className="rounded border border-[#E2E8F0] p-2">
+            <div className="rounded border border-slate-200 dark:border-slate-800 p-2">
               {drugSuggestions.slice(0, 8).map((d) => (
-                <button key={d.name} type="button" className="flex w-full items-center justify-between rounded px-2 py-1 text-left hover:bg-[#F8FAFC]" onClick={() => setDrugName(d.name)}>
+                <button key={d.name} type="button" className="flex w-full items-center justify-between rounded px-2 py-1 text-left hover:bg-slate-50 dark:bg-slate-900" onClick={() => setDrugName(d.name)}>
                   <span>{d.name}</span>
                   {d.allergy_flag ? <span className="rounded bg-[#FEE2E2] px-2 py-0.5 text-xs text-[#B91C1C]">Allergy</span> : null}
                 </button>
@@ -314,10 +314,10 @@ export default function EncounterDetailPage() {
             </div>
           )}
           <div className="grid gap-2 md:grid-cols-4">
-            <input className="rounded border border-[#CBD5E1] px-3 py-2" placeholder="Dosage" value={dosage} onChange={(e) => setDosage(e.target.value)} />
-            <input className="rounded border border-[#CBD5E1] px-3 py-2" placeholder="Frequency" value={frequency} onChange={(e) => setFrequency(e.target.value)} />
-            <input className="rounded border border-[#CBD5E1] px-3 py-2" placeholder="Duration days" value={durationDays} onChange={(e) => setDurationDays(e.target.value)} />
-            <select className="rounded border border-[#CBD5E1] px-3 py-2" value={route} onChange={(e) => setRoute(e.target.value)}>
+            <input className="rounded border border-slate-300 dark:border-slate-700 px-3 py-2" placeholder="Dosage" value={dosage} onChange={(e) => setDosage(e.target.value)} />
+            <input className="rounded border border-slate-300 dark:border-slate-700 px-3 py-2" placeholder="Frequency" value={frequency} onChange={(e) => setFrequency(e.target.value)} />
+            <input className="rounded border border-slate-300 dark:border-slate-700 px-3 py-2" placeholder="Duration days" value={durationDays} onChange={(e) => setDurationDays(e.target.value)} />
+            <select className="rounded border border-slate-300 dark:border-slate-700 px-3 py-2" value={route} onChange={(e) => setRoute(e.target.value)}>
               <option value="oral">oral</option><option value="iv">iv</option><option value="im">im</option><option value="topical">topical</option><option value="inhalation">inhalation</option>
             </select>
           </div>
@@ -360,7 +360,7 @@ export default function EncounterDetailPage() {
       />
 
       {aiOpen && (
-        <div className="fixed inset-y-0 right-0 z-50 w-full max-w-md overflow-y-auto border-l border-[#E2E8F0] bg-white p-4 shadow-xl">
+        <div className="fixed inset-y-0 right-0 z-50 w-full max-w-md overflow-y-auto border-l border-slate-200 dark:border-slate-800 bg-white p-4 shadow-xl">
           <div className="mb-3 flex items-center justify-between">
             <h3 className="font-semibold">AI Analysis</h3>
             <Button variant="secondary" size="sm" onClick={() => setAiOpen(false)}>Close</Button>
@@ -368,9 +368,9 @@ export default function EncounterDetailPage() {
           <p className="mb-2 text-sm">Triage: <strong>{aiResult?.triage_assessment?.triage_level || "N/A"}</strong></p>
           <div className="space-y-2">
             {(aiResult?.diagnosis_suggestions?.suggestions || []).slice(0, 10).map((s, idx) => (
-              <div key={`${s.icd10_code || s.diagnosis}-${idx}`} className="rounded border border-[#E2E8F0] p-2 text-sm">
+              <div key={`${s.icd10_code || s.diagnosis}-${idx}`} className="rounded border border-slate-200 dark:border-slate-800 p-2 text-sm">
                 <p className="font-medium">{idx + 1}. {s.diagnosis}</p>
-                <p className="text-xs text-[#64748B]">{s.icd10_code || "No code"} · {Math.round((s.probability || 0) * 100)}%</p>
+                <p className="text-xs text-slate-500 dark:text-slate-500">{s.icd10_code || "No code"} · {Math.round((s.probability || 0) * 100)}%</p>
                 <Button
                   size="sm"
                   variant="secondary"

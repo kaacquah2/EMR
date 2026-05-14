@@ -16,3 +16,9 @@ out/
 build/
 dist/
 *.egg-info/
+
+# Playwright
+test-results/
+playwright-report/
+blob-report/
+playwright/.cache/

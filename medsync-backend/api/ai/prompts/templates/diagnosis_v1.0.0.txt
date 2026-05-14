@@ -1,0 +1,32 @@
+DIFFERENTIAL DIAGNOSIS — Patient {patient_id}
+══════════════════════════════════════════════
+
+CHIEF COMPLAINT: {chief_complaint}
+
+KNOWN SYMPTOMS/CONDITIONS: {symptoms}
+
+DEMOGRAPHIC CONTEXT:
+  Age: {age} | Gender: {gender}
+
+DIFFERENTIAL DIAGNOSIS (ranked by probability):
+
+{diagnosis_list}
+
+REASONING:
+Given the chief complaint of "{chief_complaint}" in a {age}-year-old
+{gender} patient with history of {symptoms}, the above differential
+considers:
+  - Prevalence in the patient's demographic
+  - Symptom pattern matching
+  - Ghana-specific disease prevalence (malaria, sickle cell, etc.)
+
+RECOMMENDED DIAGNOSTIC WORKUP:
+{recommended_tests}
+
+CLINICAL NOTES:
+- Consider Ghana-endemic conditions in differential
+- Correlate with laboratory findings before confirming diagnosis
+- ICD-10 codes provided for documentation purposes
+
+⚠️ DISCLAIMER: AI-generated differential for demonstration only.
+Models trained on synthetic data. NOT for clinical decision-making.

@@ -55,6 +55,35 @@ class AIClinicalFeaturesDisabledError(AIGovernanceError):
     pass
 
 
+class AIModelDriftError(AIGovernanceError):
+    """Raised when model drift exceeds safe thresholds."""
+    pass
+
+
+def check_model_drift_health(model_name: str = 'risk_predictor') -> None:
+    """
+    Check if the specified model has acceptable drift levels.
+
+    Raises AIModelDriftError if PSI exceeds the critical threshold (0.25).
+    This prevents predictions from a model whose input or output
+    distribution has shifted significantly from training.
+    """
+    try:
+        from api.ai.model_monitor import is_model_healthy
+
+        if not is_model_healthy(model_name):
+            raise AIModelDriftError(
+                f"Model '{model_name}' has critical drift detected. "
+                f"Predictions are blocked until the model is retrained or "
+                f"drift is investigated. Contact your ML administrator."
+            )
+    except AIModelDriftError:
+        raise
+    except Exception as e:
+        # If monitoring itself fails, log but don't block
+        logger.warning(f"Could not check model health for {model_name}: {e}")
+
+
 def log_ai_call(
     user,
     hospital: Optional[Hospital],
@@ -301,6 +330,29 @@ def ai_governance_clinical(analysis_type: str, model_version: str = "1.0"):
                 # Standard governance checks
                 check_ai_enabled(hospital)
                 check_ai_rate_limit(user)
+
+                # Model health check (drift detection)
+                try:
+                    check_model_drift_health()
+                except AIModelDriftError as e:
+                    log_ai_call(
+                        user=user,
+                        hospital=hospital,
+                        analysis_type=analysis_type,
+                        input_summary=str(request.data)[:500],
+                        output_summary='',
+                        model_version=model_version,
+                        success=False,
+                        error_message=str(e),
+                    )
+                    return Response(
+                        {
+                            'error': 'Model drift detected',
+                            'message': str(e),
+                            'status': 'model_drift_critical',
+                        },
+                        status=status.HTTP_503_SERVICE_UNAVAILABLE
+                    )
                 
                 # Execute the AI view
                 response = view_func(request, *args, **kwargs)

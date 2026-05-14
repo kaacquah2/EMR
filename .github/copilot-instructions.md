@@ -25,7 +25,7 @@ python manage.py migrate
 python manage.py setup_dev  # Load seed data
 python manage.py runserver
 
-Created super admin: admin@medsync.gh/ Admin123!@#Admin123!@#
+Created super admin: admin@medsync.gh/ Admin123!@#
 Created doctor: doctor@medsync.gh / Doctor123!
 Created doctor2: doctor2@medsync.gh / Doctor234!
 Created hospital admin: hospital_admin@medsync.gh / HospitalAdmin123!
@@ -232,7 +232,7 @@ The system supports shared medical records across hospitals via:
 | Run frontend tests | `npm run test` |
 | Check backend health | `curl http://localhost:8000/api/v1/health` |
 | Login (dev) | Use any dev user from `setup_dev` (e.g. doctor@medsync.gh / Doctor123!@#); TOTP secret in backend README |
-| View migrations | `python manage.py showmigrations` |
+| View migrations | `python manage.py showmigrations
 | Create superuser | `python manage.py createsuperuser` |
 
 ---

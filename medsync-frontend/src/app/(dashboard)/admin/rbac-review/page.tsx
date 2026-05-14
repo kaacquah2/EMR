@@ -59,7 +59,7 @@ export default function RbacReviewPage() {
   if (!user || !hasRole(user.role, ALL_ADMIN_ROLES)) {
     return (
       <div className="p-8">
-        <p className="text-[#64748B]">Access denied.</p>
+        <p className="text-slate-500 dark:text-slate-500">Access denied.</p>
       </div>
     );
   }
@@ -79,24 +79,24 @@ export default function RbacReviewPage() {
         </CardHeader>
         <CardContent>
           {loading ? (
-            <p className="text-[#64748B]">Loading…</p>
+            <p className="text-slate-500 dark:text-slate-500">Loading…</p>
           ) : (
             <div className="overflow-x-auto">
               <table className="w-full text-sm">
                 <thead>
-                  <tr className="border-b border-[#E2E8F0]">
-                    <th className="py-2 text-left font-medium text-[#64748B]">Staff member</th>
-                    <th className="py-2 text-left font-medium text-[#64748B]">Role</th>
-                    <th className="py-2 text-left font-medium text-[#64748B]">Last reviewed</th>
-                    <th className="py-2 text-right font-medium text-[#64748B]">Action</th>
+                  <tr className="border-b border-slate-200 dark:border-slate-800">
+                    <th className="py-2 text-left font-medium text-slate-500 dark:text-slate-500">Staff member</th>
+                    <th className="py-2 text-left font-medium text-slate-500 dark:text-slate-500">Role</th>
+                    <th className="py-2 text-left font-medium text-slate-500 dark:text-slate-500">Last reviewed</th>
+                    <th className="py-2 text-right font-medium text-slate-500 dark:text-slate-500">Action</th>
                   </tr>
                 </thead>
                 <tbody>
                   {rows.map((r) => (
-                    <tr key={r.user_id} className="border-b border-[#F1F5F9]">
-                      <td className="py-2 font-medium text-[#0F172A]">{r.full_name}</td>
-                      <td className="py-2 text-[#64748B]">{r.role.replace(/_/g, " ")}</td>
-                      <td className="py-2 text-[#64748B]">
+                    <tr key={r.user_id} className="border-b border-slate-100 dark:border-slate-900">
+                      <td className="py-2 font-medium text-slate-900 dark:text-slate-100">{r.full_name}</td>
+                      <td className="py-2 text-slate-500 dark:text-slate-500">{r.role.replace(/_/g, " ")}</td>
+                      <td className="py-2 text-slate-500 dark:text-slate-500">
                         {r.last_role_reviewed_at
                           ? new Date(r.last_role_reviewed_at).toLocaleDateString("en-GB")
                           : "Never"}
@@ -115,7 +115,7 @@ export default function RbacReviewPage() {
                   ))}
                 </tbody>
               </table>
-              {rows.length === 0 ? <p className="mt-4 text-[#64748B]">No staff to list.</p> : null}
+              {rows.length === 0 ? <p className="mt-4 text-slate-500 dark:text-slate-500">No staff to list.</p> : null}
             </div>
           )}
         </CardContent>

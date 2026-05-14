@@ -82,8 +82,8 @@ export default function PasskeyManagementPage() {
   return (
     <div className="max-w-2xl mx-auto py-8 px-4">
       <div className="mb-8">
-        <h1 className="text-3xl font-bold text-[#0F172A] mb-2">Security Keys</h1>
-        <p className="text-[#64748B]">
+        <h1 className="text-3xl font-bold text-slate-900 dark:text-slate-100 mb-2">Security Keys</h1>
+        <p className="text-slate-500 dark:text-slate-500">
           Manage your passkeys for fast, secure login using biometrics (fingerprint, face ID, Windows Hello).
         </p>
       </div>
@@ -95,9 +95,9 @@ export default function PasskeyManagementPage() {
         </div>
       )}
 
-      <div className="bg-white rounded-lg border border-[#E2E8F0] p-6 shadow-sm">
+      <div className="bg-white rounded-lg border border-slate-200 dark:border-slate-800 p-6 shadow-sm">
         <div className="mb-6">
-          <h2 className="text-lg font-semibold text-[#0F172A] mb-4">Your Registered Devices</h2>
+          <h2 className="text-lg font-semibold text-slate-900 dark:text-slate-100 mb-4">Your Registered Devices</h2>
 
           <PasskeyList
             passkeys={passkeys}
@@ -110,7 +110,7 @@ export default function PasskeyManagementPage() {
 
         {passkeys.length === 0 && !isLoading && (
           <div className="p-4 rounded-lg bg-[#EFF6F5] border border-[#0B8A96]/20">
-            <p className="text-sm text-[#0F172A]">
+            <p className="text-sm text-slate-900 dark:text-slate-100">
               💡 <strong>Tip:</strong> Register at least one security key to enable fast biometric login.
               You can still use your password and backup codes as fallback.
             </p>
@@ -127,8 +127,8 @@ export default function PasskeyManagementPage() {
         )}
       </div>
 
-      <div className="mt-8 text-sm text-[#64748B]">
-        <h3 className="font-semibold text-[#0F172A] mb-3">About Security Keys</h3>
+      <div className="mt-8 text-sm text-slate-500 dark:text-slate-500">
+        <h3 className="font-semibold text-slate-900 dark:text-slate-100 mb-3">About Security Keys</h3>
         <ul className="space-y-2 list-disc list-inside">
           <li>Security keys use biometric or hardware authentication (fingerprint, face ID, Windows Hello)</li>
           <li>Your biometric data never leaves your device — MedSync never sees it</li>

@@ -23,6 +23,8 @@ class Patient(models.Model):
         ("unknown", "Unknown"),
     ]
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    # ROADMAP: Integrate with Ghana National Health Database (GNHDR) API for real-time verification.
+    # Currently validates as an internal field only.
     ghana_health_id = models.CharField(max_length=30, unique=True)
     full_name = models.CharField(max_length=200)
     date_of_birth = models.DateField()

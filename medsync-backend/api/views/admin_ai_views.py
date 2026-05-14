@@ -132,7 +132,7 @@ def enable_clinical_ai(request: Request) -> Response:
         logger.info(f"Clinical AI enabled for {hospital.name} by {request.user.email} (model: {model_version})")
 
         return Response(
-            {
+            {"data": {
                 'message': f'Clinical AI enabled for {hospital.name}',
                 'deployment': {
                     'id': str(deployment.id),
@@ -142,7 +142,7 @@ def enable_clinical_ai(request: Request) -> Response:
                     'enabled_at': deployment.enabled_at.isoformat(),
                     'enabled_by': request.user.email
                 }
-            },
+            }},
             status=status.HTTP_201_CREATED
         )
 
@@ -189,7 +189,7 @@ def get_ai_deployment_status(request: Request) -> Response:
             )
 
         return Response(
-            {
+            {"data": {
                 'enabled': deployment.enabled,
                 'hospital': hospital.name,
                 'model_version': deployment.model_version,
@@ -198,7 +198,7 @@ def get_ai_deployment_status(request: Request) -> Response:
                 'enabled_by': deployment.enabled_by.email,
                 'validation_metrics': deployment.validation_metrics,
                 'approval_notes': deployment.approval_notes,
-            },
+            }},
             status=status.HTTP_200_OK
         )
 
@@ -248,11 +248,11 @@ def get_ai_deployment_history(request: Request) -> Response:
         ]
 
         return Response(
-            {
+            {"data": {
                 'hospital': hospital.name,
                 'deployment_count': len(history),
                 'history': history
-            },
+            }},
             status=status.HTTP_200_OK
         )
 
@@ -316,10 +316,10 @@ def disable_clinical_ai(request: Request) -> Response:
         logger.warning(f"Clinical AI disabled for {hospital.name} by {request.user.email}. Reason: {reason}")
 
         return Response(
-            {
+            {"data": {
                 'message': f'Clinical AI disabled for {hospital.name}',
                 'disabled_at': deployment.disabled_at.isoformat()
-            },
+            }},
             status=status.HTTP_200_OK
         )
 

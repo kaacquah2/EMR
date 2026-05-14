@@ -10,7 +10,7 @@ export default function PatientsListPage() {
   }, [router]);
   return (
     <div className="flex min-h-[40vh] items-center justify-center">
-      <p className="text-[#64748B]">Redirecting to patient search...</p>
+      <p className="text-slate-500 dark:text-slate-500">Redirecting to patient search...</p>
     </div>
   );
 }

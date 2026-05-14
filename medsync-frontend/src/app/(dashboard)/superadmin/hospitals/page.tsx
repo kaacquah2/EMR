@@ -122,7 +122,7 @@ export default function SuperAdminHospitalsPage() {
 
   if (user && !canAccess) {
     return (
-      <div className="flex min-h-[200px] items-center justify-center text-[#64748B]">
+      <div className="flex min-h-[200px] items-center justify-center text-slate-500 dark:text-slate-500">
         Redirecting...
       </div>
     );
@@ -132,8 +132,8 @@ export default function SuperAdminHospitalsPage() {
     <div className="space-y-6">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
-          <h1 className="font-sora text-2xl font-bold text-[#0F172A]">Hospitals</h1>
-          <p className="text-sm text-[#64748B]">
+          <h1 className="font-sora text-2xl font-bold text-slate-900 dark:text-slate-100">Hospitals</h1>
+          <p className="text-sm text-slate-500 dark:text-slate-500">
             Total: <strong>{totals.total}</strong> · Active:{" "}
             <strong>{totals.active}</strong>
           </p>
@@ -157,21 +157,21 @@ export default function SuperAdminHospitalsPage() {
         </CardHeader>
         <CardContent>
           {loading ? (
-            <p className="text-sm text-[#64748B]">Loading…</p>
+            <p className="text-sm text-slate-500 dark:text-slate-500">Loading…</p>
           ) : hospitals.length === 0 ? (
-            <p className="text-sm text-[#64748B]">No hospitals.</p>
+            <p className="text-sm text-slate-500 dark:text-slate-500">No hospitals.</p>
           ) : (
             <div className="overflow-x-auto">
               <table className="w-full text-sm">
                 <thead>
-                  <tr className="border-b border-[#E2E8F0]">
-                    <th className="py-2 text-left font-medium text-[#64748B]">Name</th>
-                    <th className="py-2 text-left font-medium text-[#64748B]">Region</th>
-                    <th className="py-2 text-left font-medium text-[#64748B]">NHIS</th>
-                    <th className="py-2 text-right font-medium text-[#64748B]">Staff</th>
-                    <th className="py-2 text-right font-medium text-[#64748B]">Patients</th>
-                    <th className="py-2 text-left font-medium text-[#64748B]">Status</th>
-                    <th className="py-2 text-right font-medium text-[#64748B]">Manage</th>
+                  <tr className="border-b border-slate-200 dark:border-slate-800">
+                    <th className="py-2 text-left font-medium text-slate-500 dark:text-slate-500">Name</th>
+                    <th className="py-2 text-left font-medium text-slate-500 dark:text-slate-500">Region</th>
+                    <th className="py-2 text-left font-medium text-slate-500 dark:text-slate-500">NHIS</th>
+                    <th className="py-2 text-right font-medium text-slate-500 dark:text-slate-500">Staff</th>
+                    <th className="py-2 text-right font-medium text-slate-500 dark:text-slate-500">Patients</th>
+                    <th className="py-2 text-left font-medium text-slate-500 dark:text-slate-500">Status</th>
+                    <th className="py-2 text-right font-medium text-slate-500 dark:text-slate-500">Manage</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -179,7 +179,7 @@ export default function SuperAdminHospitalsPage() {
                     <tr
                       key={h.hospital_id}
                       id={`hospital-row-${h.hospital_id}`}
-                      className={`border-b border-[#F1F5F9] ${
+                      className={`border-b border-slate-100 dark:border-slate-900 ${
                         highlightId === h.hospital_id ? "bg-[#F0FDFF]" : ""
                       }`}
                     >
@@ -224,7 +224,7 @@ export default function SuperAdminHospitalsPage() {
             </DialogHeader>
             <div className="space-y-3 pt-2">
               <div>
-                <label className="text-xs font-medium text-[#64748B]">Name *</label>
+                <label className="text-xs font-medium text-slate-500 dark:text-slate-500">Name *</label>
                 <Input
                   className="mt-1"
                   value={onboardForm.name}
@@ -234,7 +234,7 @@ export default function SuperAdminHospitalsPage() {
                 />
               </div>
               <div>
-                <label className="text-xs font-medium text-[#64748B]">Region *</label>
+                <label className="text-xs font-medium text-slate-500 dark:text-slate-500">Region *</label>
                 <Input
                   className="mt-1"
                   value={onboardForm.region}
@@ -244,7 +244,7 @@ export default function SuperAdminHospitalsPage() {
                 />
               </div>
               <div>
-                <label className="text-xs font-medium text-[#64748B]">NHIS code *</label>
+                <label className="text-xs font-medium text-slate-500 dark:text-slate-500">NHIS code *</label>
                 <Input
                   className="mt-1 font-mono text-sm"
                   value={onboardForm.nhis_code}
@@ -254,7 +254,7 @@ export default function SuperAdminHospitalsPage() {
                 />
               </div>
               <div>
-                <label className="text-xs font-medium text-[#64748B]">Address</label>
+                <label className="text-xs font-medium text-slate-500 dark:text-slate-500">Address</label>
                 <Input
                   className="mt-1"
                   value={onboardForm.address}
@@ -264,7 +264,7 @@ export default function SuperAdminHospitalsPage() {
                 />
               </div>
               <div>
-                <label className="text-xs font-medium text-[#64748B]">Phone</label>
+                <label className="text-xs font-medium text-slate-500 dark:text-slate-500">Phone</label>
                 <Input
                   className="mt-1"
                   value={onboardForm.phone}
@@ -274,7 +274,7 @@ export default function SuperAdminHospitalsPage() {
                 />
               </div>
               <div>
-                <label className="text-xs font-medium text-[#64748B]">Email</label>
+                <label className="text-xs font-medium text-slate-500 dark:text-slate-500">Email</label>
                 <Input
                   className="mt-1"
                   type="email"
@@ -285,7 +285,7 @@ export default function SuperAdminHospitalsPage() {
                 />
               </div>
               <div>
-                <label className="text-xs font-medium text-[#64748B]">Head of facility</label>
+                <label className="text-xs font-medium text-slate-500 dark:text-slate-500">Head of facility</label>
                 <Input
                   className="mt-1"
                   value={onboardForm.head_of_facility}

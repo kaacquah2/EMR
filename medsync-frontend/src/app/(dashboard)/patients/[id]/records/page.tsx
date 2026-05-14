@@ -12,6 +12,6 @@ export default function PatientRecordsRoutePage() {
     router.replace(`/patients/${id}`);
   }, [id, router]);
 
-  return <div className="py-8 text-center text-[#64748B]">Redirecting to patient record...</div>;
+  return <div className="py-8 text-center text-slate-500 dark:text-slate-500">Redirecting to patient record...</div>;
 }
 

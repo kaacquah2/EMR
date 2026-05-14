@@ -1,0 +1,29 @@
+DATA QUALITY ASSESSMENT — Patient {patient_id}
+═══════════════════════════════════════════════
+
+COMPLETENESS SCORE: {completeness_score}%
+
+SECTION STATUS:
+  Demographics:    {demographics_status}
+  Vital Signs:     {vitals_status}
+  Lab Results:     {labs_status}
+  Diagnoses:       {diagnoses_status}
+  Medications:     {medications_status}
+  Encounter History: {encounters_status}
+
+MISSING DATA:
+{missing_fields}
+
+OUTLIER DETECTION:
+{outlier_flags}
+
+DATA QUALITY IMPACT ON AI:
+- Completeness below 70% significantly reduces prediction confidence
+- Missing vital signs may cause triage misclassification
+- Incomplete diagnosis history affects differential diagnosis accuracy
+
+RECOMMENDED ACTIONS:
+{data_actions}
+
+NOTE: Data quality directly affects AI prediction reliability.
+Incomplete records will receive lower confidence scores.

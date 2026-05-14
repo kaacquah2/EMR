@@ -18,11 +18,11 @@ export default function GlobalError({
   return (
     <html lang="en">
       <body className="min-h-screen bg-[#F5F3EE] flex items-center justify-center p-4 font-sans antialiased">
-        <div className="rounded-xl border border-[#E2E8F0] bg-white p-8 shadow-sm max-w-md w-full text-center">
-          <h1 className="text-xl font-bold text-[#0F172A] mb-2">
+        <div className="rounded-xl border border-slate-200 dark:border-slate-800 bg-white p-8 shadow-sm max-w-md w-full text-center">
+          <h1 className="text-xl font-bold text-slate-900 dark:text-slate-100 mb-2">
             Critical error
           </h1>
-          <p className="text-sm text-[#64748B] mb-6">
+          <p className="text-sm text-slate-500 dark:text-slate-500 mb-6">
             {error.message || "Something went wrong. Please try again."}
           </p>
           <button

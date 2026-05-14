@@ -31,9 +31,11 @@ from api.views import (
     push_views,
     emergency_views,
     pharmacy_views,
+    pharmacy_stock_views,
     billing_views,
     mar_views,
     vitals_monitoring_views,
+    cds_views,
 )
 
 urlpatterns = [
@@ -42,6 +44,7 @@ urlpatterns = [
     path("auth/mfa-verify", auth_views.mfa_verify),
     path("auth/activate", auth_views.activate),
     path("auth/activate-setup", auth_views.activate_setup),
+    path("auth/setup-totp", auth_views.setup_totp),
     path("auth/forgot-password", auth_views.forgot_password),
     path("auth/reset-password", auth_views.reset_password),
     path("auth/login-temp-password", auth_views.login_with_temp_password),
@@ -184,6 +187,7 @@ urlpatterns = [
     path("billing/invoices", report_views.invoice_list_create),
     path("billing/nhis-claim", report_views.nhis_claim_submit),
     path("fhir/Patient", fhir_views.fhir_patient_list),
+    path("fhir/Patient/<uuid:pk>/$everything", fhir_views.fhir_patient_everything),
     path("fhir/Patient/<uuid:pk>", fhir_views.fhir_patient_read),
     path("fhir/Encounter", fhir_views.fhir_encounter_list),
     path("fhir/Encounter/<uuid:pk>", fhir_views.fhir_encounter_read),
@@ -193,6 +197,7 @@ urlpatterns = [
     path("fhir/MedicationRequest/<uuid:pk>", fhir_views.fhir_medication_request_read),
     path("fhir/Observation", fhir_views.fhir_observation_list),
     path("fhir/Observation/<uuid:pk>", fhir_views.fhir_observation_read),
+    path("fhir/DiagnosticReport/<uuid:pk>", fhir_views.fhir_diagnostic_report_read),
     path("hl7/adt", fhir_views.hl7_adt_list),
     path("interop/fhir-push", fhir_views.fhir_push),
     path("superadmin/hospitals", superadmin_views.hospitals_list),
@@ -297,6 +302,13 @@ urlpatterns = [
          password_recovery_views.force_password_reset_initiate),
     path("superadmin/password-resets/suspicious", password_recovery_views.get_suspicious_resets),
 
+    # AI Model Versioning & Retraining Pipeline
+    path("superadmin/ai-models", ai_admin_views.AIModelManagementViewSet.as_view({'get': 'list'})),
+    path("superadmin/ai-models/retrain", ai_admin_views.AIModelManagementViewSet.as_view({'post': 'retrain'})),
+    path("superadmin/ai-models/<uuid:pk>", ai_admin_views.AIModelManagementViewSet.as_view({'get': 'retrieve'})),
+    path("superadmin/ai-models/<uuid:pk>/approve", ai_admin_views.AIModelManagementViewSet.as_view({'post': 'approve'})),
+    path("superadmin/ai-models/retrain/<str:task_id>/status", ai_admin_views.AIModelManagementViewSet.as_view({'get': 'retrain_status'})),
+
     # PHASE 8: AI Intelligence Module
     path("ai/status", ai_views.ai_status),
     path("ai/analyze-patient/<uuid:patient_id>", ai_views.analyze_patient_comprehensive),
@@ -339,10 +351,25 @@ urlpatterns = [
     path("emergency/queue", emergency_views.ed_queue_realtime),
     path("emergency/room/<uuid:appointment_id>", emergency_views.assign_ed_room),
     
+     # PHASE 10: Clinical Decision Support (CDS) Rules Engine
+    path("encounters/<uuid:encounter_id>/cds-alerts", cds_views.encounter_cds_alerts),
+    path("cds-alerts/<uuid:alert_id>", cds_views.cds_alert_detail),
+    path("cds-alerts/<uuid:alert_id>/acknowledge", cds_views.acknowledge_cds_alert),
+    
     # PHARMACY: Dispensing & Drug Interactions
     path("pharmacy/worklist", pharmacy_views.pharmacy_worklist),
     path("pharmacy/dispense/<uuid:prescription_id>", pharmacy_views.dispense_medication),
     path("pharmacy/statistics", pharmacy_views.pharmacy_statistics),
+    
+    # PHARMACY: Stock Management & Inventory
+    path("pharmacy/stock/", pharmacy_stock_views.stock_list_create),
+    path("pharmacy/stock/<uuid:stock_id>/", pharmacy_stock_views.stock_detail),
+    path("pharmacy/stock/<uuid:stock_id>/adjust/", pharmacy_stock_views.adjust_stock),
+    path("pharmacy/dispensations/", pharmacy_stock_views.dispensation_list),
+    path("pharmacy/reports/low-stock/", pharmacy_stock_views.low_stock_report),
+    path("pharmacy/reports/expiring/", pharmacy_stock_views.expiring_stock_report),
+    path("pharmacy/tasks/check-expiry/", pharmacy_stock_views.check_expiry_manual_trigger),
+    path("pharmacy/prescriptions/<uuid:prescription_id>/dispense-confirm/", pharmacy_stock_views.dispense_confirm),
     
     # MAR: Medication Administration Record
     path("mar/ward/<uuid:ward_id>/due", mar_views.ward_medications_due),

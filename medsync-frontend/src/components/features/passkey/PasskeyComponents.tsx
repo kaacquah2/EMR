@@ -43,8 +43,8 @@ export function PasskeyList({
 
   if (passkeys.length === 0) {
     return (
-      <div className="rounded-lg border border-dashed border-[#CBD5E1] bg-[#F8FAFC] p-8 text-center">
-        <p className="text-sm text-[#64748B]">
+      <div className="rounded-lg border border-dashed border-slate-300 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 p-8 text-center">
+        <p className="text-sm text-slate-500 dark:text-slate-500">
           No passkeys registered yet. Register your first passkey to enable quick biometric login.
         </p>
         <Button
@@ -72,7 +72,7 @@ export function PasskeyList({
           onClick={onRegisterNew}
           variant="outline"
           fullWidth
-          className="mt-4 border-[#CBD5E1]"
+          className="mt-4 border-slate-300 dark:border-slate-700"
         >
           + Register New Passkey
         </Button>
@@ -114,7 +114,7 @@ function PasskeyItem({
   const lastUsedText = passkey.last_used_at ? formatRelativeTime(passkey.last_used_at) : 'Never'
 
   return (
-    <div className="rounded-lg border border-[#E2E8F0] bg-white p-4 shadow-sm">
+    <div className="rounded-lg border border-slate-200 dark:border-slate-800 bg-white p-4 shadow-sm">
       <div className="flex items-start justify-between gap-4">
         <div className="flex-1">
           {showRenameInput ? (
@@ -124,7 +124,7 @@ function PasskeyItem({
                 value={newName}
                 onChange={(e) => setNewName(e.target.value)}
                 autoFocus
-                className="flex-1 rounded border border-[#CBD5E1] px-2 py-1 text-sm"
+                className="flex-1 rounded border border-slate-300 dark:border-slate-700 px-2 py-1 text-sm"
                 data-testid="passkey-rename-input"
                 disabled={isRenaming}
               />
@@ -140,7 +140,7 @@ function PasskeyItem({
                   setShowRenameInput(false)
                   setNewName(passkey.device_name)
                 }}
-                className="px-2 py-1 text-sm border border-[#CBD5E1] rounded hover:bg-[#F8FAFC]"
+                className="px-2 py-1 text-sm border border-slate-300 dark:border-slate-700 rounded hover:bg-slate-50 dark:bg-slate-900"
                 disabled={isRenaming}
               >
                 Cancel
@@ -151,8 +151,8 @@ function PasskeyItem({
               <div className="flex items-center gap-2 mb-2">
                 <span className="text-2xl">{platformEmoji}</span>
                 <div>
-                  <h3 className="font-semibold text-[#0F172A]">{passkey.device_name}</h3>
-                  <p className="text-sm text-[#64748B]">{platformName}</p>
+                  <h3 className="font-semibold text-slate-900 dark:text-slate-100">{passkey.device_name}</h3>
+                  <p className="text-sm text-slate-500 dark:text-slate-500">{platformName}</p>
                 </div>
               </div>
               <div className="text-xs text-[#94A3B8] space-y-1">
@@ -169,7 +169,7 @@ function PasskeyItem({
           <div className="flex gap-2">
             <button
               onClick={() => setShowRenameInput(true)}
-              className="p-2 text-[#64748B] hover:text-[#0F172A] hover:bg-[#F1F5F9] rounded"
+              className="p-2 text-slate-500 dark:text-slate-500 hover:text-slate-900 dark:text-slate-100 hover:bg-slate-100 dark:bg-slate-900 rounded"
               data-testid={`passkey-rename-${passkey.id}`}
               title="Rename device"
             >
@@ -253,7 +253,7 @@ export function RegisterPasskeyModal({
   return (
     <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
       <div className="bg-white rounded-lg p-6 max-w-md w-full mx-4">
-        <h2 className="text-lg font-semibold text-[#0F172A] mb-4">Register Passkey</h2>
+        <h2 className="text-lg font-semibold text-slate-900 dark:text-slate-100 mb-4">Register Passkey</h2>
 
         {error && (
           <div className="mb-4 p-3 rounded bg-[#FEE2E2] text-[#DC2626] text-sm">
@@ -263,7 +263,7 @@ export function RegisterPasskeyModal({
 
         <form onSubmit={handleSubmit} className="space-y-4">
           <div>
-            <label className="block text-sm font-medium text-[#0F172A] mb-2">
+            <label className="block text-sm font-medium text-slate-900 dark:text-slate-100 mb-2">
               Device Name
             </label>
             <input
@@ -274,18 +274,18 @@ export function RegisterPasskeyModal({
                 setUseAutoName(false)
               }}
               placeholder="e.g., Ward Tablet, Personal iPhone"
-              className="w-full rounded border border-[#CBD5E1] px-3 py-2"
+              className="w-full rounded border border-slate-300 dark:border-slate-700 px-3 py-2"
               data-testid="passkey-device-name"
               required
               disabled={isLoading}
             />
-            <p className="text-xs text-[#64748B] mt-1">
+            <p className="text-xs text-slate-500 dark:text-slate-500 mt-1">
               Choose a name that helps you remember this device (e.g., &quot;Ward Laptop&quot;, &quot;Personal Phone&quot;)
             </p>
           </div>
 
           <div className="p-3 rounded bg-[#EFF6F5] border border-[#0B8A96]/20">
-            <p className="text-sm text-[#0F172A]">
+            <p className="text-sm text-slate-900 dark:text-slate-100">
               <strong>Next:</strong> Your device will prompt for biometric confirmation (fingerprint, face ID, or Windows Hello).
             </p>
           </div>
@@ -294,7 +294,7 @@ export function RegisterPasskeyModal({
             <button
               type="button"
               onClick={onClose}
-              className="px-4 py-2 border border-[#CBD5E1] rounded hover:bg-[#F8FAFC]"
+              className="px-4 py-2 border border-slate-300 dark:border-slate-700 rounded hover:bg-slate-50 dark:bg-slate-900"
               disabled={isLoading}
             >
               Cancel

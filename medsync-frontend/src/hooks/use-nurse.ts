@@ -75,8 +75,8 @@ export function useNurseDashboard() {
     setLoading(true);
     setError(null);
     try {
-      const resp = await api.get<NurseDashboardData>("/nurse/dashboard");
-      setData(resp);
+      const resp = await api.get<{ data: NurseDashboardData }>("/nurse/dashboard");
+      setData(resp.data);
     } catch (err) {
       const message = err instanceof Error ? err.message : "Failed to load nurse dashboard";
       setError(message);
@@ -103,8 +103,8 @@ export function useNurseWorklist() {
     setLoading(true);
     setError(null);
     try {
-      const resp = await api.get<NurseWorklistData>("/nurse/worklist");
-      setData(resp);
+      const resp = await api.get<{ data: NurseWorklistData }>("/nurse/worklist");
+      setData(resp.data);
     } catch (err) {
       const message = err instanceof Error ? err.message : "Failed to load nurse worklist";
       setError(message);

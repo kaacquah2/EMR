@@ -8,6 +8,7 @@ django-cors-headers>=4.3
 django-otp>=1.4
 pyotp>=2.9
 python-decouple>=3.8
+boto3>=1.34.0
 # WebAuthn/Passkey support
 webauthn>=1.14
 # Postgres (Neon / production): driver + DATABASE_URL parsing
@@ -34,4 +35,3 @@ django-cryptography>=1.1
 django-debug-toolbar>=4.2
 pytest>=7.4
 pytest-django>=4.5
-crewai>=0.1.0

@@ -156,15 +156,15 @@ export default function LabOrderResultEntryPage() {
     }
   }
 
-  if (loading) return <div className="text-[#64748B]">Loading order...</div>;
+  if (loading) return <div className="text-slate-500 dark:text-slate-500">Loading order...</div>;
   if (!order) return <div className="text-[#DC2626]">Order not found.</div>;
 
   return (
     <div className="space-y-6">
-      <h1 className="font-sora text-2xl font-bold text-[#0F172A]">Result Entry</h1>
+      <h1 className="font-sora text-2xl font-bold text-slate-900 dark:text-slate-100">Result Entry</h1>
       <Card className="p-4">
         <p className="font-medium">{order.patient_name} ({order.gha_id})</p>
-        <p className="text-sm text-[#64748B]">{order.test_name} - {order.ordering_doctor_name}</p>
+        <p className="text-sm text-slate-500 dark:text-slate-500">{order.test_name} - {order.ordering_doctor_name}</p>
       </Card>
 
       <Card className="p-4">
@@ -223,7 +223,7 @@ export default function LabOrderResultEntryPage() {
         )}
 
         <div className="space-y-2">
-          <label className="block text-sm font-medium text-[#0F172A]">Upload lab report PDF (optional)</label>
+          <label className="block text-sm font-medium text-slate-900 dark:text-slate-100">Upload lab report PDF (optional)</label>
           <input
             type="file"
             accept=".pdf,application/pdf"
@@ -233,7 +233,7 @@ export default function LabOrderResultEntryPage() {
               if (file) void uploadFile(file);
             }}
           />
-          {attachmentUrl ? <p className="text-xs text-[#64748B] break-all">{attachmentUrl}</p> : null}
+          {attachmentUrl ? <p className="text-xs text-slate-500 dark:text-slate-500 break-all">{attachmentUrl}</p> : null}
         </div>
 
         <div className="flex gap-2">

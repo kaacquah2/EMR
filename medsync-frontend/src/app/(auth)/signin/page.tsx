@@ -11,7 +11,7 @@ export default function SignInPage() {
   }, [router]);
   return (
     <AuthLayout title="MedSync" subtitle="One Record. Every Hospital.">
-      <p className="text-center text-[#64748B]">Redirecting to sign in...</p>
+      <p className="text-center text-slate-500 dark:text-slate-500">Redirecting to sign in...</p>
     </AuthLayout>
   );
 }

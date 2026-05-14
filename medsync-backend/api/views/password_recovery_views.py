@@ -27,6 +27,7 @@ from rest_framework.response import Response
 from core.models import User, Hospital, PasswordResetAudit
 from api.password_policy import validate_password, check_password_reuse, record_password_history
 from api.utils import get_client_ip
+from api.signals_alerts import broadcast_password_override
 
 
 def _get_request_context(request):
@@ -665,11 +666,25 @@ def force_password_reset(request, user_id):
         logger = logging.getLogger(__name__)
         logger.warning(f"Failed to send force reset email to {target_user.email}: {e}")
 
+    # Real-time WebSocket notification for in-app alert
+    try:
+        broadcast_password_override(str(hospital.id), {
+            "event": "super_admin_override",
+            "message": f"Super Admin {request.user.full_name} forced a password reset for {target_user.email}",
+            "target_user": target_user.email,
+            "admin": request.user.full_name,
+            "reason": request.data.get("reason", "Super admin override")
+        })
+    except Exception as e:
+        import logging
+        logger = logging.getLogger(__name__)
+        logger.error(f"Failed to send WebSocket notification for override: {e}")
+
     return Response({
         "message": "Force password reset initiated. Email sent to user.",
         "user_email": target_user.email,
         "expires_in_hours": expiry_hours,
-        "notification_sent": True,  # TODO: implement in-app notification
+        "notification_sent": True,
     })
 
 

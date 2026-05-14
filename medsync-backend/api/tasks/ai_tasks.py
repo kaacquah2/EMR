@@ -1,253 +1,220 @@
-"""
-Celery tasks for AI analysis functionality.
-Async execution of long-running AI analysis operations.
-"""
+import logging
 from celery import shared_task
-from celery.utils.log import get_task_logger
+from django.utils import timezone
+from core.models import User
+from api.ai.data_pipeline import DataPipeline
+from api.ai.model_trainer import ModelTrainer
 
-logger = get_task_logger(__name__)
+logger = logging.getLogger(__name__)
 
-
-@shared_task(bind=True, max_retries=3)
-def comprehensive_analysis_task(self, patient_id, job_id=None, user_id=None, analysis_type="comprehensive"):
+@shared_task(bind=True)
+def retrain_model_task(self, model_type: str, data_source: str, hospital_id: str = None, user_id: int = None):
     """
-    Async task to run comprehensive AI analysis on patient records.
-
-    Uses CrewAI multi-agent system to:
-    - Analyze clinical history
-    - Predict disease risks
-    - Suggest diagnoses
-    - Perform triage assessment
-    - Find similar patients
-    - Recommend referrals
-
-    Args:
-        patient_id: UUID of patient
-        job_id: UUID of AIAnalysisJob (for progress tracking)
-        user_id: UUID of user who requested analysis
-        analysis_type: Type of analysis to run
-
-    Returns:
-        dict with analysis results and metadata
+    Async task for retraining AI models.
     """
     try:
-        from patients.models import Patient
-        from api.models import AIAnalysisJob, AIAnalysis
-        from core.models import User
-        from api.ai.agents.orchestrator import AIOrchestrator
-        from api.ai.processors import DataProcessor
+        user = User.objects.get(id=user_id) if user_id else None
+        pipeline = DataPipeline()
+        trainer = ModelTrainer(trained_by_user=user)
 
-        # Reload patient and user objects in task context
-        try:
-            patient = Patient.objects.get(id=patient_id)
-        except Patient.DoesNotExist:
-            logger.error(f"Patient not found: {patient_id}")
-            if job_id:
-                try:
-                    job = AIAnalysisJob.objects.get(id=job_id)
-                    job.mark_failed("Patient not found")
-                except BaseException as e:
-                    logger.debug(f"Could not mark job {job_id} as failed: {str(e)}")
-            return {"status": "error", "message": "Patient not found"}
-
-        # Get the job if provided
-        job = None
-        if job_id:
-            try:
-                job = AIAnalysisJob.objects.get(id=job_id)
-                job.mark_processing()
-            except BaseException:
-                logger.warning(f"Job not found: {job_id}")
-
-        logger.info(f"Starting comprehensive AI analysis for patient {patient_id}, job {job_id}")
-
-        # Update progress
-        if job:
-            job.update_progress(10, "Fetching patient data")
-
-        # Extract EMR data
-        data_processor = DataProcessor()
-        patient_data = data_processor.extract_patient_data(patient)
-
-        if job:
-            job.update_progress(25, "Processing clinical data")
-
-        # Get orchestrator
-        orchestrator = AIOrchestrator()
-
-        if job:
-            job.update_progress(35, "Running AI agents")
-
-        # Run comprehensive analysis using parallel orchestrator
-        import asyncio
-        from api.ai.governance import validate_ai_output, log_ai_call
-        from api.ai.persistence import save_comprehensive_analysis
-        from api.ai.feature_engineering import FeatureEngineer
+        # Update progress: LOADING_DATA
+        self.update_state(state='LOADING_DATA', meta={'progress': 10})
         
-        # Prepare features
+        df = None
+        if data_source == 'synthetic':
+            df = pipeline.generate_synthetic_data(2000, model_type)
+        elif data_source == 'database':
+            df = pipeline.load_from_database(hospital_id=hospital_id)
+        
+        # Update progress: VALIDATING
+        self.update_state(state='VALIDATING', meta={'progress': 30})
+        validation = pipeline.validate_dataset(df, model_type)
+        if not validation.passed:
+            return {"status": "failed", "errors": validation.errors}
+
+        # Update progress: TRAINING
+        self.update_state(state='TRAINING', meta={'progress': 50})
+        if model_type == 'risk_prediction':
+            result = trainer.train_risk_model(df)
+        elif model_type == 'triage':
+            result = trainer.train_triage_model(df)
+        else:
+            return {"status": "failed", "error": f"Unknown model type: {model_type}"}
+
+        # Update progress: EVALUATING
+        self.update_state(state='EVALUATING', meta={'progress': 80})
+        
+        # Update progress: SAVING
+        self.update_state(state='SAVING', meta={'progress': 90})
+        version = trainer.save_model_version(
+            result.model, 
+            result.evaluation_report, 
+            model_type, 
+            data_source, 
+            len(df)
+        )
+
+        return {
+            "status": "success",
+            "version_tag": version.version_tag,
+            "metrics": result.metrics
+        }
+
+    except Exception as e:
+        logger.error(f"Retraining task failed: {str(e)}", exc_info=True)
+        return {"status": "error", "message": str(e)}
+
+
+@shared_task(name='ai.comprehensive_analysis_task')
+def comprehensive_analysis_task(patient_id: str, job_id: str, user_id: str, analysis_type: str = 'comprehensive'):
+    """
+    Async task for comprehensive multi-agent patient analysis.
+    """
+    from api.models import AIAnalysisJob
+    from api.ai.data_processor import DataProcessor
+    from api.ai.feature_engineering import FeatureEngineer
+    from api.ai.agents import get_orchestrator
+    from api.ai.persistence import save_comprehensive_analysis
+    from patients.models import Patient
+    from core.models import User
+    
+    try:
+        job = AIAnalysisJob.objects.get(id=job_id)
+        job.status = 'processing'
+        job.current_step = 'Extracting patient data'
+        job.progress_pct = 10
+        job.save()
+        
+        user = User.objects.get(id=user_id)
+        data_processor = DataProcessor(user)
+        patient = Patient.objects.get(id=patient_id)
+        patient_data = data_processor.extract_complete_patient_data(patient)
+        
+        job.current_step = 'Engineering clinical features'
+        job.progress_pct = 30
+        job.save()
+        
         feature_engineer = FeatureEngineer()
         features = feature_engineer.create_feature_vector(patient_data)
-        features['patient_id'] = str(patient_id)
         
-        # Run in parallel
+        job.current_step = 'Running multi-agent reasoning'
+        job.progress_pct = 50
+        job.save()
+        
+        orchestrator = get_orchestrator()
+        analysis_result = orchestrator.analyze_patient_comprehensive(
+            patient_data,
+            features,
+            analysis_type=analysis_type
+        )
+        
+        job.current_step = 'Persisting clinical insights'
+        job.progress_pct = 90
+        job.save()
+        
+        save_comprehensive_analysis(
+            patient=patient,
+            hospital=job.hospital,
+            user=user,
+            analysis_result=analysis_result
+        )
+        
+        job.status = 'completed'
+        job.progress_pct = 100
+        job.completed_at = timezone.now()
+        job.result_data = analysis_result
+        job.save()
+        
+        return {"status": "success", "job_id": job_id}
+        
+    except Exception as e:
+        logger.error(f"Comprehensive analysis task failed: {str(e)}", exc_info=True)
         try:
-            analysis_output = asyncio.run(orchestrator.analyze_patient_comprehensive_parallel(
-                patient_data=patient_data,
-                features=features,
-                include_similarity=True,
-                include_referral=True
-            ))
-            
-            # Validate output
-            is_valid, error = validate_ai_output('comprehensive', analysis_output)
-            if not is_valid:
-                raise ValueError(f"AI Output Validation Failed: {error}")
-                
-        except Exception as e:
-            logger.error(f"Parallel analysis failed, falling back: {e}")
-            analysis_output = orchestrator.analyze_patient_comprehensive(
-                patient_id=str(patient_id),
-                patient_data=patient_data,
-                include_similarity=True,
-                include_referral=True
-            )
-
-        if job:
-            job.update_progress(85, "Saving results")
-
-        # Save results atomically
-        performed_by = User.objects.get(id=user_id) if user_id else None
-        analysis = save_comprehensive_analysis(
-            patient=patient,
-            hospital=patient.registered_at,
-            user=performed_by,
-            analysis_result=analysis_output
-        )
-
-        # Log for governance
-        log_ai_call(
-            user=performed_by,
-            hospital=patient.registered_at,
-            analysis_type='comprehensive',
-            input_summary=f"Patient {patient_id} comprehensive analysis",
-            output_summary=analysis_output.get('clinical_summary', ''),
-            model_version='1.1.0-hardened',
-            confidence=analysis_output.get('confidence_score'),
-            latency_ms=analysis_output.get('metrics', {}).get('total_duration_ms')
-        )
-
-        # Results are already saved atomically by save_comprehensive_analysis
-
-        # Mark job as complete
-        if job:
-            job.mark_completed(analysis)
-
-        logger.info(f"Successfully completed AI analysis for patient {patient_id}, job {job_id}")
-        return {
-            "status": "success",
-            "patient_id": str(patient_id),
-            "analysis_id": str(analysis.id),
-            "job_id": str(job_id) if job_id else None,
-            "analysis_type": analysis_type,
-            "confidence_score": analysis.overall_confidence
-        }
-
-    except Exception as exc:
-        logger.error(f"Error running AI analysis for patient {patient_id}: {exc}")
-
-        # Mark job as failed
-        if job_id:
-            try:
-                job = AIAnalysisJob.objects.get(id=job_id)
-                job.mark_failed(str(exc))
-            except BaseException:
-                pass
-
-        # Retry with exponential backoff
-        raise self.retry(exc=exc, countdown=5 ** self.request.retries)
+            job = AIAnalysisJob.objects.get(id=job_id)
+            job.status = 'failed'
+            job.error_message = str(e)
+            job.save()
+        except:
+            pass
+        return {"status": "error", "message": str(e)}
 
 
-@shared_task(bind=True, max_retries=3)
-def risk_prediction_task(self, patient_id, job_id=None, user_id=None, disease_types=None):
+@shared_task(name='ai.risk_prediction_task')
+def risk_prediction_task(patient_id: str, job_id: str, user_id: str):
     """
-    Async task to run disease risk prediction for a patient.
-
-    Args:
-        patient_id: UUID of patient
-        job_id: UUID of AIAnalysisJob (for progress tracking)
-        user_id: UUID of user who requested analysis
-        disease_types: List of disease types to predict (or None for all)
-
-    Returns:
-        dict with risk scores
+    Async task for disease risk prediction.
     """
+    from api.models import AIAnalysisJob
+    from api.ai.services import RiskPredictionService
+    from core.models import User
+    
     try:
-        from patients.models import Patient
-        from api.models import AIAnalysisJob, AIAnalysis
-        from core.models import User
-        from api.ai.services.services import RiskPredictionService
-        from api.ai.processors import DataProcessor
+        job = AIAnalysisJob.objects.get(id=job_id)
+        job.status = 'processing'
+        job.progress_pct = 20
+        job.save()
+        
+        user = User.objects.get(id=user_id)
+        service = RiskPredictionService(user)
+        result = service.predict_risk(patient_id)
+        
+        job.status = 'completed'
+        job.progress_pct = 100
+        job.completed_at = timezone.now()
+        job.result_data = result
+        job.save()
+        
+        return {"status": "success", "job_id": job_id}
+        
+    except Exception as e:
+        logger.error(f"Risk prediction task failed: {str(e)}", exc_info=True)
+        try:
+            job = AIAnalysisJob.objects.get(id=job_id)
+            job.status = 'failed'
+            job.error_message = str(e)
+            job.save()
+        except:
+            pass
+        return {"status": "error", "message": str(e)}
 
-        patient = Patient.objects.get(id=patient_id)
 
-        job = None
-        if job_id:
+@shared_task(name='ai.rebuild_faiss_index')
+def rebuild_faiss_index():
+    """
+    Nightly task: Rebuild the FAISS similarity index for all patients.
+    """
+    from django.conf import settings
+    import os
+    from api.ai.data_processor import DataProcessor
+    from api.ai.ml_models import get_similarity_matcher
+    from patients.models import Patient
+    
+    try:
+        logger.info("Starting FAISS index rebuild...")
+        matcher = get_similarity_matcher()
+        
+        # Fetch all active patients
+        patients = Patient.objects.filter(is_archived=False)
+        processor = DataProcessor(None) # System context
+        
+        all_features = []
+        for p in patients:
             try:
-                job = AIAnalysisJob.objects.get(id=job_id)
-                job.mark_processing()
-            except BaseException as e:
-                logger.debug(f"Could not mark job {job_id} as processing: {str(e)}")
-
-        logger.info(f"Running risk prediction for patient {patient_id}, job {job_id}")
-
-        if job:
-            job.update_progress(15, "Extracting clinical data")
-
-        # Extract data
-        data_processor = DataProcessor()
-        patient_data = data_processor.extract_patient_data(patient)
-
-        if job:
-            job.update_progress(40, "Running risk prediction model")
-
-        # Run risk prediction
-        risk_service = RiskPredictionService(user=User.objects.get(id=user_id) if user_id else None)
-        predictions = risk_service.predict_disease_risk(patient_data, disease_types)
-
-        if job:
-            job.update_progress(80, "Saving predictions")
-
-        # Save results atomically using unified persistence layer
-        from api.ai.persistence import save_risk_prediction
-        analysis = save_risk_prediction(
-            patient=patient,
-            hospital=patient.registered_at,
-            user=User.objects.get(id=user_id) if user_id else None,
-            prediction_result=predictions
-        )
-
-        if job:
-            job.mark_completed(analysis)
-
-        logger.info(f"Risk prediction completed for patient {patient_id}")
-        return {
-            "status": "success",
-            "patient_id": str(patient_id),
-            "analysis_id": str(analysis.id),
-            "predictions_count": len(predictions.get('predictions', {}))
-        }
-
-    except Exception as exc:
-        logger.error(f"Error in risk prediction for patient {patient_id}: {exc}")
-
-        raise self.retry(exc=exc, countdown=5 ** self.request.retries)
-
-        if job_id:
-            try:
-                job = AIAnalysisJob.objects.get(id=job_id)
-                job.mark_failed(str(exc))
-            except BaseException as e:
-                logger.debug(f"Could not update job {job_id} failure status: {str(e)}")
-
-
-# Persistence is now handled by api.ai.persistence module
+                p_data = processor.extract_complete_patient_data(p)
+                features = processor._extract_and_engineer_features(p)
+                features['patient_id'] = str(p.id)
+                all_features.append(features)
+            except Exception as e:
+                continue
+                
+        if all_features:
+            matcher.index_patients(all_features)
+            index_path = os.path.join(settings.BASE_DIR, 'data', 'ai_models', 'patient_similarity.faiss')
+            matcher.save_to_disk(index_path)
+            logger.info(f"FAISS index rebuilt with {len(all_features)} patients.")
+        
+        return {"status": "success", "indexed_count": len(all_features)}
+        
+    except Exception as e:
+        logger.error(f"FAISS index rebuild failed: {str(e)}", exc_info=True)
+        return {"status": "error", "message": str(e)}

@@ -23,6 +23,7 @@ const COMMON_NAV = {
   referrals: { href: "/referrals", label: "Referrals" },
   emergencyQueue: { href: "/emergency", label: "Emergency Queue" },
   pharmacyWorklist: { href: "/pharmacy", label: "Pharmacy" },
+  pharmacyInventory: { href: "/pharmacy/inventory", label: "Pharmacy Inventory" },
   userManagement: { href: "/admin/users", label: "User Management" },
   auditLogs: { href: "/admin/audit-logs", label: "Audit Logs" },
   facilities: { href: "/admin/facilities", label: "Facility config" },
@@ -78,6 +79,7 @@ export const navByRole: Record<string, NavItem[]> = {
 
   pharmacy_technician: [
     COMMON_NAV.pharmacyWorklist,
+    COMMON_NAV.pharmacyInventory,
     COMMON_NAV.dashboard,
   ],
 
@@ -85,6 +87,7 @@ export const navByRole: Record<string, NavItem[]> = {
     COMMON_NAV.dashboard,
     COMMON_NAV.emergencyQueue,
     COMMON_NAV.pharmacyWorklist,
+    COMMON_NAV.pharmacyInventory,
     COMMON_NAV.patientSearch,
     COMMON_NAV.appointments,
     COMMON_NAV.admissions,

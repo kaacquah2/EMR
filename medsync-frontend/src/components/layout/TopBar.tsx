@@ -9,6 +9,7 @@ import { useToast } from "@/lib/toast-context";
 import { Button } from "@/components/ui/button";
 import { ConnectionStatusIndicator } from "@/components/ui/ConnectionStatusIndicator";
 import { API_BASE } from "@/lib/api-base";
+import { ThemeToggle } from "@/components/ui/ThemeToggle";
 import { Search } from "lucide-react";
 
 function getBreadcrumb(pathname: string): string[] {
@@ -23,9 +24,20 @@ function getBreadcrumb(pathname: string): string[] {
     "audit-logs": "Audit Logs",
     lab: "Lab",
     orders: "Orders",
+    results: "Results",
     superadmin: "Super Admin",
+    settings: "Settings",
+    appointments: "Appointments",
+    worklist: "Worklist",
+    admissions: "Admissions",
+    pharmacy: "Pharmacy",
+    vitals: "Vitals",
   };
-  return parts.map((p) => labels[p] || p);
+  return parts.map((p) => {
+    // If it looks like a UUID, call it "Profile" or "Detail"
+    if (p.length > 20 && /[0-9a-f]{8}/i.test(p)) return "Profile";
+    return labels[p] || p.charAt(0).toUpperCase() + p.slice(1);
+  });
 }
 
 type FacilityOption = { facility_id: string; name: string };
@@ -140,7 +152,7 @@ export function TopBar() {
 
   return (
     <>
-      <header className="flex h-14 items-center justify-between border-b-2 border-[var(--teal-500)]/20 bg-white dark:bg-[#1E293B] px-4 md:px-6 shadow-sm">
+      <header className="flex h-14 items-center justify-between border-b border-[var(--teal-500)]/20 bg-white dark:bg-slate-900 px-4 md:px-6 shadow-sm">
         <div className="flex items-center gap-2">
           {/* UX-24: Hamburger button for mobile sidebar */}
           <button
@@ -233,7 +245,7 @@ export function TopBar() {
                     const f = facilities.find((x) => x.facility_id === v);
                     setViewAs(v, f?.name ?? null);
                   }}
-                  className="rounded border border-[#0B8A96]/40 bg-white px-2 py-1 text-xs text-[#0F172A] focus:border-[#0B8A96] focus:outline-none"
+                  className="rounded border border-[#0B8A96]/40 bg-white px-2 py-1 text-xs text-slate-900 dark:text-slate-100 focus:border-[#0B8A96] focus:outline-none"
                   title="View as facility (support)"
                 >
                   <option value="">All hospitals</option>
@@ -259,8 +271,12 @@ export function TopBar() {
               {validatingChain ? "Validating…" : "Validate chain"}
             </Button>
           )}
-          <ConnectionStatusIndicator />
-          <span className="font-mono text-sm text-[#475569]">{timeStr}</span>
+          <div className="flex items-center gap-1 bg-slate-100 dark:bg-slate-800 rounded-full px-2 py-1 ml-2">
+            <ConnectionStatusIndicator />
+            <div className="h-4 w-px bg-slate-300 dark:bg-slate-700 mx-1" />
+            <ThemeToggle />
+          </div>
+          <span className="font-mono text-sm text-[var(--gray-700)] dark:text-[var(--gray-300)] hidden sm:inline ml-2">{timeStr}</span>
         </div>
       </header>
     </>

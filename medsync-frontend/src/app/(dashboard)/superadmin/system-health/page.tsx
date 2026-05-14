@@ -86,27 +86,27 @@ export default function SuperAdminSystemHealthPage() {
         <Link href="/superadmin" className="text-sm font-medium text-[#2563EB]">
           ← Dashboard
         </Link>
-        <h1 className="mt-2 font-sora text-2xl font-bold text-[#0F172A]">System health</h1>
-        <p className="text-sm text-[#64748B]">Last refreshed {refreshedAt ? refreshedAt.slice(11, 16) : "—"}</p>
+        <h1 className="mt-2 font-sora text-2xl font-bold text-slate-900 dark:text-slate-100">System health</h1>
+        <p className="text-sm text-slate-500 dark:text-slate-500">Last refreshed {refreshedAt ? refreshedAt.slice(11, 16) : "—"}</p>
       </div>
 
       <Card className="p-6">
         <div className="space-y-3 text-sm">
           {Object.keys(services).length === 0 ? (
-            <div className="text-[#64748B]">No health data.</div>
+            <div className="text-slate-500 dark:text-slate-500">No health data.</div>
           ) : (
             DASHBOARD_HEALTH_ROWS.map(({ label, key }) => {
               const svc = services[key];
               const ms = svc?.latency_ms ?? svc?.response_ms;
               return (
-                <div key={key} className="flex flex-wrap items-center justify-between gap-3 rounded border border-[#E2E8F0] px-3 py-2">
+                <div key={key} className="flex flex-wrap items-center justify-between gap-3 rounded border border-slate-200 dark:border-slate-800 px-3 py-2">
                   <div className="flex items-center gap-2">
                     <span className={`h-2.5 w-2.5 rounded-full ${dot(svc?.status)}`} />
-                    <span className="font-medium text-[#0F172A]">{label}</span>
-                    <span className="text-[#64748B]">{svc?.status ?? "unknown"}</span>
+                    <span className="font-medium text-slate-900 dark:text-slate-100">{label}</span>
+                    <span className="text-slate-500 dark:text-slate-500">{svc?.status ?? "unknown"}</span>
                   </div>
                   <div className="flex items-center gap-3">
-                    <div className="text-[#64748B]">{ms ? `${Math.trunc(ms)}ms` : "—"}</div>
+                    <div className="text-slate-500 dark:text-slate-500">{ms ? `${Math.trunc(ms)}ms` : "—"}</div>
                     <Link
                       href={runbookHref(key)}
                       className="text-xs font-medium text-[#2563EB] hover:underline"
@@ -124,16 +124,16 @@ export default function SuperAdminSystemHealthPage() {
       </Card>
 
       <div>
-        <h2 className="font-sora text-lg font-semibold text-[#0F172A]">Runbooks</h2>
-        <p className="mt-1 text-sm text-[#64748B]">
+        <h2 className="font-sora text-lg font-semibold text-slate-900 dark:text-slate-100">Runbooks</h2>
+        <p className="mt-1 text-sm text-slate-500 dark:text-slate-500">
           Quick checks per service. For external wiki links, set{" "}
-          <code className="rounded bg-[#F1F5F9] px-1">NEXT_PUBLIC_OPS_DOCS_BASE</code> in the frontend env.
+          <code className="rounded bg-slate-100 dark:bg-slate-900 px-1">NEXT_PUBLIC_OPS_DOCS_BASE</code> in the frontend env.
         </p>
         <div className="mt-4 space-y-6">
           {DASHBOARD_HEALTH_ROWS.map(({ label, key }) => (
-            <section key={key} id={`svc-${key}`} className="scroll-mt-24 rounded-lg border border-[#E2E8F0] bg-white p-4">
-              <h3 className="font-semibold text-[#0F172A]">{label}</h3>
-              <ul className="mt-2 list-inside list-disc space-y-1 text-sm text-[#64748B]">
+            <section key={key} id={`svc-${key}`} className="scroll-mt-24 rounded-lg border border-slate-200 dark:border-slate-800 bg-white p-4">
+              <h3 className="font-semibold text-slate-900 dark:text-slate-100">{label}</h3>
+              <ul className="mt-2 list-inside list-disc space-y-1 text-sm text-slate-500 dark:text-slate-500">
                 {(RUNBOOK_BLURBS[key] ?? ["No additional notes."]).map((line) => (
                   <li key={line}>{line}</li>
                 ))}

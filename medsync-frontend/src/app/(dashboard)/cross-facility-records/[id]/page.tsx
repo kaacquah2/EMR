@@ -69,7 +69,7 @@ export default function CrossFacilityRecordsPage() {
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
-        <h1 className="font-sora text-2xl font-bold text-[#0F172A]">
+        <h1 className="font-sora text-2xl font-bold text-slate-900 dark:text-slate-100">
           Cross-facility records
         </h1>
         <Link href="/patients/search">
@@ -78,7 +78,7 @@ export default function CrossFacilityRecordsPage() {
       </div>
 
       {loading && (
-        <div className="rounded-lg border border-[#CBD5E1] bg-white p-8 text-center text-[#64748B]">
+        <div className="rounded-lg border border-slate-300 dark:border-slate-700 bg-white p-8 text-center text-slate-500 dark:text-slate-500">
           Loading...
         </div>
       )}
@@ -91,7 +91,7 @@ export default function CrossFacilityRecordsPage() {
 
       {forbidden && !data && (
         <Card className="p-6">
-          <p className="text-[#64748B] mb-4">
+          <p className="text-slate-500 dark:text-slate-500 mb-4">
             You do not have consent to view this patient&apos;s records. Request emergency access (break-glass)?
           </p>
           {!showBreakGlassForm ? (
@@ -136,14 +136,14 @@ export default function CrossFacilityRecordsPage() {
       {data && (
         <>
           <Card className="p-4">
-            <p className="text-sm font-medium text-[#0F172A]">
+            <p className="text-sm font-medium text-slate-900 dark:text-slate-100">
               {data.demographics.full_name} — {data.demographics.national_id ?? "No national ID"}
             </p>
-            <p className="text-sm text-[#64748B] mt-1">
+            <p className="text-sm text-slate-500 dark:text-slate-500 mt-1">
               DOB: {data.demographics.date_of_birth} | Scope: {data.scope} | Read-only
             </p>
             {data.facilities?.length > 0 && (
-              <p className="text-xs text-[#64748B] mt-2">
+              <p className="text-xs text-slate-500 dark:text-slate-500 mt-2">
                 Facilities: {data.facilities.map((f) => f.name).join(", ")}
               </p>
             )}
@@ -151,7 +151,7 @@ export default function CrossFacilityRecordsPage() {
 
           {data.records && data.records.length > 0 ? (
             <div className="space-y-4">
-              <h2 className="font-sora text-lg font-semibold text-[#0F172A]">Records</h2>
+              <h2 className="font-sora text-lg font-semibold text-slate-900 dark:text-slate-100">Records</h2>
               {data.records.map((r) => (
                 <RecordTimelineCard
                   key={r.record_id}
@@ -161,7 +161,7 @@ export default function CrossFacilityRecordsPage() {
               ))}
             </div>
           ) : (
-            <p className="text-[#64748B]">No records to display for this scope.</p>
+            <p className="text-slate-500 dark:text-slate-500">No records to display for this scope.</p>
           )}
         </>
       )}

@@ -84,7 +84,7 @@ export default function AdminFacilitiesPage() {
   if (user.role === "hospital_admin") {
     return (
       <div className="space-y-6">
-        <h1 className="font-sora text-3xl font-bold text-[#0F172A]">Facility config</h1>
+        <h1 className="font-sora text-3xl font-bold text-slate-900 dark:text-slate-100">Facility config</h1>
         <HospitalFacilityConfig />
       </div>
     );
@@ -159,29 +159,29 @@ export default function AdminFacilitiesPage() {
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
-        <h1 className="font-sora text-3xl font-bold text-[#0F172A]">Facilities</h1>
+        <h1 className="font-sora text-3xl font-bold text-slate-900 dark:text-slate-100">Facilities</h1>
         <Button onClick={openCreate}>Add Facility</Button>
       </div>
 
       <Card className="p-6">
         {loading ? (
-          <p className="text-[#64748B]">Loading...</p>
+          <p className="text-slate-500 dark:text-slate-500">Loading...</p>
         ) : facilities.length === 0 ? (
-          <p className="text-[#64748B]">No facilities. Add one to get started.</p>
+          <p className="text-slate-500 dark:text-slate-500">No facilities. Add one to get started.</p>
         ) : (
           <div className="overflow-x-auto">
             <table className="w-full">
               <thead>
-                <tr className="border-b border-[#E2E8F0]">
-                  <th className="px-4 py-2 text-left text-xs font-semibold text-[#64748B]">Name</th>
-                  <th className="px-4 py-2 text-left text-xs font-semibold text-[#64748B]">Region</th>
-                  <th className="px-4 py-2 text-left text-xs font-semibold text-[#64748B]">NHIS Code</th>
-                  <th className="px-4 py-2 text-right text-xs font-semibold text-[#64748B]">Actions</th>
+                <tr className="border-b border-slate-200 dark:border-slate-800">
+                  <th className="px-4 py-2 text-left text-xs font-semibold text-slate-500 dark:text-slate-500">Name</th>
+                  <th className="px-4 py-2 text-left text-xs font-semibold text-slate-500 dark:text-slate-500">Region</th>
+                  <th className="px-4 py-2 text-left text-xs font-semibold text-slate-500 dark:text-slate-500">NHIS Code</th>
+                  <th className="px-4 py-2 text-right text-xs font-semibold text-slate-500 dark:text-slate-500">Actions</th>
                 </tr>
               </thead>
               <tbody>
                 {facilities.map((f) => (
-                  <tr key={f.facility_id} className="border-b border-[#F1F5F9]">
+                  <tr key={f.facility_id} className="border-b border-slate-100 dark:border-slate-900">
                     <td className="px-4 py-2 font-medium">{f.name}</td>
                     <td className="px-4 py-2">{f.region}</td>
                     <td className="px-4 py-2">{f.nhis_code}</td>
@@ -206,21 +206,21 @@ export default function AdminFacilitiesPage() {
               <DialogTitle>Add Facility</DialogTitle>
             </DialogHeader>
             <form onSubmit={handleCreate} className="space-y-3">
-              <label className="block text-sm font-medium text-[#0F172A]">Name *</label>
+              <label className="block text-sm font-medium text-slate-900 dark:text-slate-100">Name *</label>
               <Input
                 value={form.name}
                 onChange={(e) => setForm((s) => ({ ...s, name: e.target.value }))}
                 required
                 placeholder="Facility name"
               />
-              <label className="block text-sm font-medium text-[#0F172A]">NHIS Code *</label>
+              <label className="block text-sm font-medium text-slate-900 dark:text-slate-100">NHIS Code *</label>
               <Input
                 value={form.nhis_code}
                 onChange={(e) => setForm((s) => ({ ...s, nhis_code: e.target.value }))}
                 required
                 placeholder="NHIS code"
               />
-              <label className="block text-sm font-medium text-[#0F172A]">Region</label>
+              <label className="block text-sm font-medium text-slate-900 dark:text-slate-100">Region</label>
               <Input
                 value={form.region}
                 onChange={(e) => setForm((s) => ({ ...s, region: e.target.value }))}
@@ -252,17 +252,17 @@ export default function AdminFacilitiesPage() {
               <DialogTitle>Edit Facility</DialogTitle>
             </DialogHeader>
             <form onSubmit={handleUpdate} className="space-y-3">
-              <label className="block text-sm font-medium text-[#0F172A]">Name</label>
+              <label className="block text-sm font-medium text-slate-900 dark:text-slate-100">Name</label>
               <Input
                 value={editForm.name}
                 onChange={(e) => setEditForm((s) => ({ ...s, name: e.target.value }))}
               />
-              <label className="block text-sm font-medium text-[#0F172A]">NHIS Code</label>
+              <label className="block text-sm font-medium text-slate-900 dark:text-slate-100">NHIS Code</label>
               <Input
                 value={editForm.nhis_code}
                 onChange={(e) => setEditForm((s) => ({ ...s, nhis_code: e.target.value }))}
               />
-              <label className="block text-sm font-medium text-[#0F172A]">Region</label>
+              <label className="block text-sm font-medium text-slate-900 dark:text-slate-100">Region</label>
               <Input
                 value={editForm.region}
                 onChange={(e) => setEditForm((s) => ({ ...s, region: e.target.value }))}

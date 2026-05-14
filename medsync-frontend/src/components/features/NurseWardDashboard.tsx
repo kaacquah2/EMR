@@ -30,11 +30,7 @@ export function NurseWardDashboard() {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <div>
-          <h2 className="text-2xl font-bold text-[var(--gray-900)]">{data.ward_name}</h2>
-          <p className="text-sm text-[var(--gray-500)]">Current shift: {data.current_shift}</p>
-        </div>
+      <div className="flex justify-end">
         <Button onClick={fetch} variant="outline">Refresh</Button>
       </div>
 

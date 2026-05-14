@@ -111,7 +111,7 @@ export function HospitalFacilityConfig() {
 
   return (
     <div className="space-y-6">
-      <div className="flex flex-wrap gap-2 border-b border-[#E2E8F0] pb-2">
+      <div className="flex flex-wrap gap-2 border-b border-slate-200 dark:border-slate-800 pb-2">
         {tabs.map((t) => (
           <button
             key={t.id}
@@ -119,7 +119,7 @@ export function HospitalFacilityConfig() {
             onClick={() => setTab(t.id)}
             className={
               "rounded-lg px-4 py-2 text-sm font-medium " +
-              (tab === t.id ? "bg-[#0B8A96] text-white" : "bg-[#F1F5F9] text-[#64748B] hover:bg-[#E2E8F0]")
+              (tab === t.id ? "bg-[#0B8A96] text-white" : "bg-slate-100 dark:bg-slate-900 text-slate-500 dark:text-slate-500 hover:bg-slate-200 dark:bg-slate-800")
             }
           >
             {t.label}
@@ -129,16 +129,16 @@ export function HospitalFacilityConfig() {
 
       {tab === "wards" && (
         <Card className="p-6">
-          <h2 className="mb-4 font-sora text-lg font-semibold text-[#0F172A]">Wards</h2>
+          <h2 className="mb-4 font-sora text-lg font-semibold text-slate-900 dark:text-slate-100">Wards</h2>
           <form onSubmit={addWard} className="mb-6 flex flex-wrap items-end gap-2">
             <div>
-              <label className="block text-xs text-[#64748B]">Name</label>
+              <label className="block text-xs text-slate-500 dark:text-slate-500">Name</label>
               <Input value={newWard.name} onChange={(e) => setNewWard((f) => ({ ...f, name: e.target.value }))} />
             </div>
             <div>
-              <label className="block text-xs text-[#64748B]">Type</label>
+              <label className="block text-xs text-slate-500 dark:text-slate-500">Type</label>
               <select
-                className="rounded-md border border-[#E2E8F0] px-2 py-2 text-sm"
+                className="rounded-md border border-slate-200 dark:border-slate-800 px-2 py-2 text-sm"
                 value={newWard.ward_type}
                 onChange={(e) => setNewWard((f) => ({ ...f, ward_type: e.target.value }))}
               >
@@ -152,20 +152,20 @@ export function HospitalFacilityConfig() {
             <Button type="submit">Add ward</Button>
           </form>
           {wardLoading ? (
-            <p className="text-[#64748B]">Loading…</p>
+            <p className="text-slate-500 dark:text-slate-500">Loading…</p>
           ) : (
             <table className="w-full text-sm">
               <thead>
-                <tr className="border-b border-[#E2E8F0]">
+                <tr className="border-b border-slate-200 dark:border-slate-800">
                   <th className="py-2 text-left">Name</th>
                   <th className="py-2 text-left">Type</th>
                 </tr>
               </thead>
               <tbody>
                 {wards.map((w) => (
-                  <tr key={w.ward_id} className="border-b border-[#F1F5F9]">
+                  <tr key={w.ward_id} className="border-b border-slate-100 dark:border-slate-900">
                     <td className="py-2">{w.ward_name}</td>
-                    <td className="py-2 text-[#64748B]">{w.ward_type}</td>
+                    <td className="py-2 text-slate-500 dark:text-slate-500">{w.ward_type}</td>
                   </tr>
                 ))}
               </tbody>
@@ -176,12 +176,12 @@ export function HospitalFacilityConfig() {
 
       {tab === "beds" && (
         <Card className="p-6">
-          <h2 className="mb-4 font-sora text-lg font-semibold text-[#0F172A]">Bulk add beds</h2>
+          <h2 className="mb-4 font-sora text-lg font-semibold text-slate-900 dark:text-slate-100">Bulk add beds</h2>
           <form onSubmit={bulkBeds} className="flex flex-wrap items-end gap-2">
             <div>
-              <label className="block text-xs text-[#64748B]">Ward</label>
+              <label className="block text-xs text-slate-500 dark:text-slate-500">Ward</label>
               <select
-                className="rounded-md border border-[#E2E8F0] px-2 py-2 text-sm"
+                className="rounded-md border border-slate-200 dark:border-slate-800 px-2 py-2 text-sm"
                 value={bulkWardId}
                 onChange={(e) => setBulkWardId(e.target.value)}
               >
@@ -194,7 +194,7 @@ export function HospitalFacilityConfig() {
               </select>
             </div>
             <div>
-              <label className="block text-xs text-[#64748B]">Count</label>
+              <label className="block text-xs text-slate-500 dark:text-slate-500">Count</label>
               <Input value={bulkCount} onChange={(e) => setBulkCount(e.target.value)} className="w-24" />
             </div>
             <Button type="submit">Add beds</Button>
@@ -204,7 +204,7 @@ export function HospitalFacilityConfig() {
 
       {tab === "departments" && (
         <Card className="p-6">
-          <h2 className="mb-4 font-sora text-lg font-semibold text-[#0F172A]">Departments</h2>
+          <h2 className="mb-4 font-sora text-lg font-semibold text-slate-900 dark:text-slate-100">Departments</h2>
           <form onSubmit={addDept} className="mb-4 flex gap-2">
             <Input
               placeholder="Department name"
@@ -224,7 +224,7 @@ export function HospitalFacilityConfig() {
 
       {tab === "labs" && (
         <Card className="p-6">
-          <h2 className="mb-4 font-sora text-lg font-semibold text-[#0F172A]">Lab units</h2>
+          <h2 className="mb-4 font-sora text-lg font-semibold text-slate-900 dark:text-slate-100">Lab units</h2>
           <form onSubmit={addLab} className="mb-4 flex gap-2">
             <Input
               placeholder="Lab unit name"
@@ -244,10 +244,10 @@ export function HospitalFacilityConfig() {
 
       {tab === "tests" && (
         <Card className="p-6">
-          <h2 className="mb-4 font-sora text-lg font-semibold text-[#0F172A]">Lab test types</h2>
+          <h2 className="mb-4 font-sora text-lg font-semibold text-slate-900 dark:text-slate-100">Lab test types</h2>
           <form onSubmit={addTest} className="mb-4 flex flex-wrap gap-2">
             <select
-              className="rounded-md border border-[#E2E8F0] px-2 py-2 text-sm"
+              className="rounded-md border border-slate-200 dark:border-slate-800 px-2 py-2 text-sm"
               value={testForm.lab_unit_id}
               onChange={(e) => setTestForm((f) => ({ ...f, lab_unit_id: e.target.value }))}
             >
@@ -272,16 +272,16 @@ export function HospitalFacilityConfig() {
           </form>
           <table className="w-full text-sm">
             <thead>
-              <tr className="border-b border-[#E2E8F0]">
+              <tr className="border-b border-slate-200 dark:border-slate-800">
                 <th className="py-2 text-left">Test</th>
                 <th className="py-2 text-left">Lab unit</th>
               </tr>
             </thead>
             <tbody>
               {labTestTypes.map((t, i) => (
-                <tr key={`${t.test_name}-${i}`} className="border-b border-[#F1F5F9]">
+                <tr key={`${t.test_name}-${i}`} className="border-b border-slate-100 dark:border-slate-900">
                   <td className="py-2">{t.test_name}</td>
-                  <td className="py-2 text-[#64748B]">{t.lab_unit_name}</td>
+                  <td className="py-2 text-slate-500 dark:text-slate-500">{t.lab_unit_name}</td>
                 </tr>
               ))}
             </tbody>

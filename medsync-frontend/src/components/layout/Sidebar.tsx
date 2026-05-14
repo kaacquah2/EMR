@@ -11,7 +11,7 @@ import { useApi } from "@/hooks/use-api";
 import { usePollWhenVisible } from "@/hooks/use-poll-when-visible";
 import { useNurseSidebarBadges } from "@/hooks/use-nurse-sidebar-badges";
 import { ShiftWidget } from "@/components/features/ShiftWidget";
-import { ThemeToggle } from "@/components/ui/ThemeToggle";
+import { Tooltip } from "@/components/ui/Tooltip";
 import {
   LayoutDashboard,
   Users,
@@ -102,11 +102,10 @@ interface NavItemProps {
 }
 
 function NavItem({ href, label, isActive, collapsed, badge, tag, onClick, icon: Icon }: NavItemProps) {
-  return (
+  const linkContent = (
     <Link
       href={href}
       onClick={onClick}
-      title={collapsed ? label : undefined}
       className={
         "group relative flex items-center rounded-lg transition-all duration-150 " +
         (collapsed 
@@ -116,24 +115,25 @@ function NavItem({ href, label, isActive, collapsed, badge, tag, onClick, icon: 
           ? (collapsed 
               ? "bg-[rgba(11,138,150,0.2)] text-white shadow-[inset_0_0_0_1px_rgba(14,175,190,0.15)]"
               : "border-l-[3px] border-[#0EAFBE] bg-[rgba(11,138,150,0.2)] text-white shadow-[inset_0_0_0_1px_rgba(14,175,190,0.15)]")
-          : "text-white/92 hover:bg-[#1A3A5C]/80 hover:text-white")
+          : "text-white/92 hover:bg-slate-800/80 hover:text-white")
       }
     >
       <Icon className={collapsed ? "h-5 w-5" : "h-4 w-4 flex-shrink-0"} />
       {!collapsed && <span className="text-sm font-medium truncate">{label}</span>}
       {!collapsed && badge}
       {!collapsed && tag}
-      
-      {/* Tooltip on hover when collapsed */}
-      {collapsed && (
-        <div className="pointer-events-none absolute left-full ml-2 whitespace-nowrap rounded-md bg-[#1A3A5C] px-2.5 py-1.5 text-xs font-medium text-white opacity-0 shadow-lg transition-opacity group-hover:opacity-100 z-50">
-          {label}
-          {/* Arrow */}
-          <div className="absolute left-0 top-1/2 -ml-1 -translate-y-1/2 border-4 border-transparent border-r-[#1A3A5C]" />
-        </div>
-      )}
     </Link>
   );
+
+  if (collapsed) {
+    return (
+      <Tooltip content={label} side="right">
+        {linkContent}
+      </Tooltip>
+    );
+  }
+
+  return linkContent;
 }
 
 const AI_NEW_TAG_KEY = "medsync_ai_integration_new_seen";
@@ -286,14 +286,14 @@ export function Sidebar() {
       {/* Mobile overlay backdrop */}
       {!collapsed && (
         <div
-          className="fixed inset-0 z-30 bg-black/40 lg:hidden"
+          className="fixed inset-0 z-30 bg-black/40 hidden"
           onClick={() => setCollapsed(true)}
           aria-hidden="true"
         />
       )}
       <aside
         className={
-          "sidebar-bg fixed left-0 top-0 z-40 flex h-screen flex-col transition-all duration-200 " +
+          "sidebar-bg fixed left-0 top-0 z-40 hidden md:flex h-screen flex-col transition-all duration-200 " +
           (collapsed
             ? "w-16 -translate-x-full lg:translate-x-0"
             : "w-[260px]")
@@ -540,31 +540,27 @@ export function Sidebar() {
           </div>
         )}
         <div className="flex flex-col gap-1.5">
-          {!collapsed && (
-            <div className="mb-2">
-              <ThemeToggle />
-            </div>
+
+          {collapsed ? (
+            <Tooltip content="Log out" side="right">
+              <button
+                type="button"
+                onClick={() => void logout()}
+                className="group relative flex items-center justify-center rounded-lg p-2 text-white/92 hover:bg-slate-800 hover:text-white transition-colors"
+              >
+                <LogOut className="h-5 w-5" />
+              </button>
+            </Tooltip>
+          ) : (
+            <button
+              type="button"
+              onClick={() => void logout()}
+              className="group relative flex w-full items-center rounded-lg px-3 py-2 text-left text-sm text-white/92 hover:bg-slate-800 hover:text-white transition-colors"
+            >
+              <LogOut className="mr-2 h-4 w-4" />
+              Log out
+            </button>
           )}
-          <button
-            type="button"
-            onClick={() => void logout()}
-            title={collapsed ? "Log out" : undefined}
-            className={
-              "group relative flex items-center rounded-lg text-white/92 hover:bg-[#1A3A5C] hover:text-white transition-colors " +
-              (collapsed ? "justify-center p-2" : "w-full px-3 py-2 text-left text-sm")
-            }
-          >
-            <LogOut className={collapsed ? "h-5 w-5" : "h-4 w-4 mr-2"} />
-            {!collapsed && "Log out"}
-            
-            {/* Tooltip when collapsed */}
-            {collapsed && (
-              <div className="pointer-events-none absolute left-full ml-2 whitespace-nowrap rounded-md bg-[#1A3A5C] px-2.5 py-1.5 text-xs font-medium text-white opacity-0 shadow-lg transition-opacity group-hover:opacity-100 z-50">
-                Log out
-                <div className="absolute left-0 top-1/2 -ml-1 -translate-y-1/2 border-4 border-transparent border-r-[#1A3A5C]" />
-              </div>
-            )}
-          </button>
         </div>
       </div>
     </aside>

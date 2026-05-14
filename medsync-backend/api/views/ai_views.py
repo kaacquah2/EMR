@@ -25,7 +25,7 @@ from rest_framework.request import Request
 
 from api.decorators import requires_role
 from api.ai.governance import ai_governance_clinical
-from api.rate_limiting import AIEndpointThrottle, AIHospitalThrottle
+from api.rate_limiting import AIEndpointThrottle, AIHospitalThrottle, AIThrottle
 from django.conf import settings
 from api.utils import get_patient_queryset, get_effective_hospital, get_request_hospital
 from api.models import AIAnalysis
@@ -145,10 +145,10 @@ def build_ai_status_payload() -> dict:
 @ai_governance_clinical('status', model_version='1.0.0-placeholder')
 def ai_status(request: Request) -> Response:
     """Lightweight AI integration status for the Super Admin dashboard."""
-    return Response(build_ai_status_payload())
+    return Response({"data": build_ai_status_payload()})
 
 @api_view(['POST'])
-@throttle_classes([AIEndpointThrottle, AIHospitalThrottle])
+@throttle_classes([AIEndpointThrottle, AIHospitalThrottle, AIThrottle])
 @requires_role('doctor', 'nurse', 'hospital_admin', 'super_admin')
 @ai_governance_clinical('comprehensive_analysis', model_version='1.0.0-placeholder')
 def analyze_patient_comprehensive(request: Request, patient_id: str) -> Response:
@@ -157,11 +157,11 @@ def analyze_patient_comprehensive(request: Request, patient_id: str) -> Response
 
     ⚠️  DEPRECATION: Synchronous analysis is deprecated. Please use POST /api/v1/ai/async-analysis instead.
     """
-    return Response({
+    return Response({"data": {
         "message": "Synchronous comprehensive analysis is deprecated due to resource intensity. Please use the async endpoint.",
         "async_endpoint": "/api/v1/ai/async-analysis/",
         "patient_id": patient_id
-    }, status=status.HTTP_400_BAD_REQUEST)
+    }}, status=status.HTTP_400_BAD_REQUEST)
 
     # Legacy code (unreachable)
     try:
@@ -245,7 +245,7 @@ def analyze_patient_comprehensive(request: Request, patient_id: str) -> Response
 
 
 @api_view(['POST'])
-@throttle_classes([AIEndpointThrottle, AIHospitalThrottle])
+@throttle_classes([AIEndpointThrottle, AIHospitalThrottle, AIThrottle])
 @requires_role('doctor', 'nurse', 'super_admin')
 @ai_governance_clinical('risk_prediction', model_version='1.0.0-placeholder')
 def predict_patient_risk(request: Request, patient_id: str) -> Response:
@@ -281,7 +281,7 @@ def predict_patient_risk(request: Request, patient_id: str) -> Response:
         )
 
         logger.info(f"Risk prediction for patient {patient_id}")
-        return Response(result, status=status.HTTP_200_OK)
+        return Response({"data": result}, status=status.HTTP_200_OK)
 
     except AIServiceException as e:
         return Response({'error': str(e)}, status=status.HTTP_400_BAD_REQUEST)
@@ -294,7 +294,7 @@ def predict_patient_risk(request: Request, patient_id: str) -> Response:
 
 
 @api_view(['POST'])
-@throttle_classes([AIEndpointThrottle, AIHospitalThrottle])
+@throttle_classes([AIEndpointThrottle, AIHospitalThrottle, AIThrottle])
 @requires_role('doctor', 'super_admin')
 @ai_governance_clinical('clinical_decision_support', model_version='1.0.0-placeholder')
 def get_clinical_decision_support(request: Request, patient_id: str) -> Response:
@@ -331,7 +331,7 @@ def get_clinical_decision_support(request: Request, patient_id: str) -> Response
         )
 
         logger.info(f"CDS for patient {patient_id}")
-        return Response(result, status=status.HTTP_200_OK)
+        return Response({"data": result}, status=status.HTTP_200_OK)
 
     except AIServiceException as e:
         return Response({'error': str(e)}, status=status.HTTP_400_BAD_REQUEST)
@@ -344,7 +344,7 @@ def get_clinical_decision_support(request: Request, patient_id: str) -> Response
 
 
 @api_view(['POST'])
-@throttle_classes([AIEndpointThrottle, AIHospitalThrottle])
+@throttle_classes([AIEndpointThrottle, AIHospitalThrottle, AIThrottle])
 @requires_role('nurse', 'doctor', 'super_admin')
 @ai_governance_clinical('triage', model_version='1.0.0-placeholder')
 def triage_patient(request: Request, patient_id: str) -> Response:
@@ -385,7 +385,7 @@ def triage_patient(request: Request, patient_id: str) -> Response:
         )
 
         logger.info(f"Triage for patient {patient_id}: {result.get('triage_level')}")
-        return Response(result, status=status.HTTP_200_OK)
+        return Response({"data": result}, status=status.HTTP_200_OK)
 
     except AIServiceException as e:
         return Response({'error': str(e)}, status=status.HTTP_400_BAD_REQUEST)
@@ -398,7 +398,7 @@ def triage_patient(request: Request, patient_id: str) -> Response:
 
 
 @api_view(['POST'])
-@throttle_classes([AIEndpointThrottle, AIHospitalThrottle])
+@throttle_classes([AIEndpointThrottle, AIHospitalThrottle, AIThrottle])
 @requires_role('doctor', 'super_admin')
 @ai_governance_clinical('similarity_search', model_version='1.0.0-placeholder')
 def find_similar_patients(request: Request, patient_id: str) -> Response:
@@ -433,7 +433,7 @@ def find_similar_patients(request: Request, patient_id: str) -> Response:
         )
 
         logger.info(f"Similarity search for patient {patient_id}")
-        return Response(result, status=status.HTTP_200_OK)
+        return Response({"data": result}, status=status.HTTP_200_OK)
 
     except AIServiceException as e:
         return Response({'error': str(e)}, status=status.HTTP_400_BAD_REQUEST)
@@ -448,7 +448,7 @@ def find_similar_patients(request: Request, patient_id: str) -> Response:
 
 
 @api_view(['POST'])
-@throttle_classes([AIEndpointThrottle, AIHospitalThrottle])
+@throttle_classes([AIEndpointThrottle, AIHospitalThrottle, AIThrottle])
 @requires_role('doctor', 'hospital_admin', 'super_admin')
 @ai_governance_clinical('referral_recommendation', model_version='1.0.0-placeholder')
 def recommend_referral_hospital(request: Request, patient_id: str) -> Response:
@@ -486,7 +486,7 @@ def recommend_referral_hospital(request: Request, patient_id: str) -> Response:
         )
 
         logger.info(f"Referral recommendation for patient {patient_id}")
-        return Response(result, status=status.HTTP_200_OK)
+        return Response({"data": result}, status=status.HTTP_200_OK)
 
     except AIServiceException as e:
         return Response({'error': str(e)}, status=status.HTTP_400_BAD_REQUEST)
@@ -499,7 +499,7 @@ def recommend_referral_hospital(request: Request, patient_id: str) -> Response:
 
 
 @api_view(['GET'])
-@throttle_classes([AIEndpointThrottle, AIHospitalThrottle])
+@throttle_classes([AIEndpointThrottle, AIHospitalThrottle, AIThrottle])
 @requires_role('doctor', 'nurse', 'super_admin')
 @ai_governance_clinical('analysis_history', model_version='1.0.0-placeholder')
 def get_analysis_history(request: Request, patient_id: str) -> Response:
@@ -565,7 +565,7 @@ def get_analysis_history(request: Request, patient_id: str) -> Response:
 
 
 @api_view(['POST'])
-@throttle_classes([AIEndpointThrottle, AIHospitalThrottle])
+@throttle_classes([AIEndpointThrottle, AIHospitalThrottle, AIThrottle])
 @requires_role('doctor', 'hospital_admin', 'super_admin')
 def start_async_analysis(request: Request, patient_id: str) -> Response:
     """
@@ -744,7 +744,7 @@ def get_async_analysis_status(request: Request, job_id: str) -> Response:
 
         # Serialize and return job status
         serializer = AIAnalysisJobSerializer(job)
-        return Response(serializer.data, status=status.HTTP_200_OK)
+        return Response({"data": serializer.data}, status=status.HTTP_200_OK)
 
     except Exception as e:
         logger.error(f"Error getting async analysis status: {e}")
@@ -755,7 +755,7 @@ def get_async_analysis_status(request: Request, job_id: str) -> Response:
 
 
 @api_view(['GET'])
-@throttle_classes([AIEndpointThrottle, AIHospitalThrottle])
+@throttle_classes([AIEndpointThrottle, AIHospitalThrottle, AIThrottle])
 @requires_role('doctor', 'hospital_admin', 'super_admin')
 @ai_governance_clinical('antibiotic_guidance', model_version='1.0.0-placeholder')
 def antibiotic_guidance(request: Request) -> Response:
@@ -804,7 +804,7 @@ def antibiotic_guidance(request: Request) -> Response:
 
 
 @api_view(['GET'])
-@throttle_classes([AIEndpointThrottle, AIHospitalThrottle])
+@throttle_classes([AIEndpointThrottle, AIHospitalThrottle, AIThrottle])
 @requires_role('doctor', 'nurse', 'receptionist', 'hospital_admin', 'super_admin')
 @ai_governance_clinical('no_show_risk', model_version='1.0.0-placeholder')
 def no_show_risk(request: Request) -> Response:

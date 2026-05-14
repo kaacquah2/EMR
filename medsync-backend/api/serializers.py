@@ -17,9 +17,124 @@ from records.models import (
     LabOrder,
     LabResult,
     Vital,
+    Encounter,
     EncounterDraft,
     ShiftHandover,
 )
+from api.models import DrugStock, Dispensation, StockMovement, StockAlert, ModelVersion
+
+
+class ModelVersionSerializer(serializers.ModelSerializer):
+    trained_by_name = serializers.CharField(source="trained_by.full_name", read_only=True)
+    approved_by_name = serializers.CharField(source="approved_by.full_name", read_only=True)
+
+    class Meta:
+        model = ModelVersion
+        fields = [
+            "id",
+            "model_type",
+            "version_tag",
+            "trained_at",
+            "trained_by",
+            "trained_by_name",
+            "training_data_source",
+            "training_sample_count",
+            "evaluation_metrics",
+            "comparison_vs_previous",
+            "is_production",
+            "clinical_use_approved",
+            "approved_by",
+            "approved_by_name",
+            "approved_at",
+            "approval_notes",
+            "joblib_path",
+            "created_at",
+            "updated_at",
+        ]
+        read_only_fields = ["id", "trained_at", "created_at", "updated_at"]
+
+
+class EncounterSerializer(serializers.ModelSerializer):
+    patient_id = serializers.SerializerMethodField()
+    hospital_id = serializers.SerializerMethodField()
+    created_by_name = serializers.CharField(source="created_by.full_name", read_only=True)
+    assigned_department_name = serializers.CharField(source="assigned_department.name", read_only=True, allow_null=True)
+    assigned_doctor_name = serializers.CharField(source="assigned_doctor.full_name", read_only=True, allow_null=True)
+
+    class Meta:
+        model = Encounter
+        fields = [
+            "id",
+            "patient_id",
+            "hospital_id",
+            "encounter_type",
+            "encounter_date",
+            "notes",
+            "created_by_name",
+            "assigned_department_id",
+            "assigned_department_name",
+            "assigned_doctor_id",
+            "assigned_doctor_name",
+            "status",
+            "visit_status",
+            "chief_complaint",
+            "hpi",
+            "examination_findings",
+            "assessment_plan",
+            "discharge_summary",
+        ]
+
+    def get_patient_id(self, obj):
+        return str(obj.patient_id)
+
+    def get_hospital_id(self, obj):
+        return str(obj.hospital_id)
+
+
+class EncounterWorklistSerializer(serializers.ModelSerializer):
+    patient_id = serializers.SerializerMethodField()
+    patient_name = serializers.CharField(source="patient.full_name", read_only=True)
+    ghana_health_id = serializers.CharField(source="patient.ghana_health_id", read_only=True)
+    assigned_department_name = serializers.CharField(source="assigned_department.name", read_only=True, allow_null=True)
+    assigned_doctor_name = serializers.CharField(source="assigned_doctor.full_name", read_only=True, allow_null=True)
+    created_by_name = serializers.CharField(source="created_by.full_name", read_only=True)
+    
+    # These fields are expected by the worklist but not directly on Encounter
+    has_active_allergy = serializers.BooleanField(read_only=True, default=False)
+    triage_badge = serializers.SerializerMethodField()
+    pending_labs = serializers.IntegerField(read_only=True, default=0)
+    pending_prescriptions = serializers.IntegerField(read_only=True, default=0)
+    active_alerts = serializers.IntegerField(read_only=True, default=0)
+
+    class Meta:
+        model = Encounter
+        fields = [
+            "id",
+            "patient_id",
+            "patient_name",
+            "ghana_health_id",
+            "encounter_type",
+            "encounter_date",
+            "status",
+            "visit_status",
+            "assigned_department_id",
+            "assigned_department_name",
+            "assigned_doctor_id",
+            "assigned_doctor_name",
+            "created_by_name",
+            "notes",
+            "has_active_allergy",
+            "triage_badge",
+            "pending_labs",
+            "pending_prescriptions",
+            "active_alerts",
+        ]
+
+    def get_patient_id(self, obj):
+        return str(obj.patient_id)
+
+    def get_triage_badge(self, obj):
+        return "consulting" if obj.status == "in_consultation" else "waiting"
 
 
 class PatientSerializer(serializers.ModelSerializer):
@@ -918,3 +1033,166 @@ class InvoiceCreateSerializer(serializers.ModelSerializer):
                     **item_data
                 )
         return invoice
+
+# ============================================================================
+# PHARMACY SERIALIZERS
+# ============================================================================
+
+class DrugStockSerializer(serializers.ModelSerializer):
+    hospital_name = serializers.CharField(source='hospital.name', read_only=True)
+    is_low_stock = serializers.SerializerMethodField()
+    is_expired = serializers.SerializerMethodField()
+    days_until_expiry = serializers.SerializerMethodField()
+    
+    class Meta:
+        model = DrugStock
+        fields = [
+            'id',
+            'hospital',
+            'hospital_name',
+            'drug_name',
+            'generic_name',
+            'batch_number',
+            'quantity',
+            'unit',
+            'reorder_level',
+            'expiry_date',
+            'supplier',
+            'cost_per_unit',
+            'stored_location',
+            'notes',
+            'is_low_stock',
+            'is_expired',
+            'days_until_expiry',
+            'created_at',
+            'updated_at',
+        ]
+        read_only_fields = ['id', 'created_at', 'updated_at']
+    
+    def get_is_low_stock(self, obj):
+        return obj.is_low_stock()
+    
+    def get_is_expired(self, obj):
+        return obj.is_expired()
+    
+    def get_days_until_expiry(self, obj):
+        return obj.days_until_expiry()
+
+
+class DrugStockDetailSerializer(DrugStockSerializer):
+    dispensations = serializers.SerializerMethodField()
+    movements = serializers.SerializerMethodField()
+    
+    def get_dispensations(self, obj):
+        dispensations = obj.dispensations.all()[:50]  # Last 50
+        return DispensationReadSerializer(dispensations, many=True).data
+    
+    def get_movements(self, obj):
+        movements = obj.movements.all()[:50]  # Last 50
+        return StockMovementSerializer(movements, many=True).data
+
+
+class DispensationReadSerializer(serializers.ModelSerializer):
+    drug_stock_name = serializers.CharField(source='drug_stock.drug_name', read_only=True)
+    dispensed_by_name = serializers.CharField(source='dispensed_by.full_name', read_only=True, allow_null=True)
+    prescription_id = serializers.CharField(source='prescription.id', read_only=True)
+    
+    class Meta:
+        model = Dispensation
+        fields = [
+            'id',
+            'prescription_id',
+            'drug_stock',
+            'drug_stock_name',
+            'quantity_dispensed',
+            'dispensed_by',
+            'dispensed_by_name',
+            'dispensed_at',
+            'batch_notes',
+        ]
+        read_only_fields = ['id', 'dispensed_at']
+
+
+class DispensationCreateSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Dispensation
+        fields = [
+            'prescription',
+            'drug_stock',
+            'quantity_dispensed',
+            'dispensed_by',
+            'batch_notes',
+        ]
+    
+    def validate(self, data):
+        drug_stock = data.get('drug_stock')
+        quantity = data.get('quantity_dispensed')
+        
+        if drug_stock and quantity:
+            if drug_stock.quantity < quantity:
+                raise serializers.ValidationError(
+                    f"Insufficient stock. Available: {drug_stock.quantity}, Requested: {quantity}"
+                )
+        
+        return data
+
+
+class StockMovementSerializer(serializers.ModelSerializer):
+    performed_by_name = serializers.CharField(source='performed_by.full_name', read_only=True, allow_null=True)
+    drug_stock_name = serializers.CharField(source='drug_stock.drug_name', read_only=True)
+    movement_type_display = serializers.CharField(source='get_movement_type_display', read_only=True)
+    
+    class Meta:
+        model = StockMovement
+        fields = [
+            'id',
+            'drug_stock',
+            'drug_stock_name',
+            'movement_type',
+            'movement_type_display',
+            'quantity',
+            'quantity_before',
+            'quantity_after',
+            'reason',
+            'performed_by',
+            'performed_by_name',
+            'dispensation',
+            'created_at',
+        ]
+        read_only_fields = ['id', 'created_at']
+
+
+class StockAlertSerializer(serializers.ModelSerializer):
+    hospital_name = serializers.CharField(source='hospital.name', read_only=True)
+    drug_stock_name = serializers.CharField(source='drug_stock.drug_name', read_only=True)
+    drug_batch = serializers.CharField(source='drug_stock.batch_number', read_only=True)
+    acknowledged_by_name = serializers.CharField(source='acknowledged_by.full_name', read_only=True, allow_null=True)
+    alert_type_display = serializers.CharField(source='get_alert_type_display', read_only=True)
+    severity_display = serializers.CharField(source='get_severity_display', read_only=True)
+    status_display = serializers.CharField(source='get_status_display', read_only=True)
+    
+    class Meta:
+        model = StockAlert
+        fields = [
+            'id',
+            'hospital',
+            'hospital_name',
+            'drug_stock',
+            'drug_stock_name',
+            'drug_batch',
+            'alert_type',
+            'alert_type_display',
+            'message',
+            'severity',
+            'severity_display',
+            'status',
+            'status_display',
+            'acknowledged_by',
+            'acknowledged_by_name',
+            'acknowledged_at',
+            'resolved_at',
+            'created_at',
+            'updated_at',
+        ]
+        read_only_fields = ['id', 'created_at', 'updated_at']
+

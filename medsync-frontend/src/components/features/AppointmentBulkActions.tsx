@@ -146,7 +146,7 @@ export default function AppointmentBulkActions({
   if (selectableAppointments.length === 0) {
     return (
       <Card className="p-6 bg-slate-50">
-        <p className="text-[#64748B]">No scheduled appointments available for bulk operations</p>
+        <p className="text-slate-500 dark:text-slate-500">No scheduled appointments available for bulk operations</p>
       </Card>
     );
   }
@@ -190,7 +190,7 @@ export default function AppointmentBulkActions({
         <div className="space-y-4">
           {/* Header */}
           <div className="flex items-center justify-between">
-            <h3 className="font-sora text-lg font-bold text-[#0F172A]">
+            <h3 className="font-sora text-lg font-bold text-slate-900 dark:text-slate-100">
               Bulk Operations ({selectedIds.size} selected)
             </h3>
             {selectedIds.size > 0 && (
@@ -229,7 +229,7 @@ export default function AppointmentBulkActions({
           {actionMode === "reschedule" && (
             <div className="space-y-3 p-4 bg-blue-50 rounded-lg border border-blue-200">
               <div>
-                <label className="block text-sm font-medium text-[#0F172A]">New Date & Time *</label>
+                <label className="block text-sm font-medium text-slate-900 dark:text-slate-100">New Date & Time *</label>
                 <Input
                   type="datetime-local"
                   value={rescheduleTo}
@@ -263,7 +263,7 @@ export default function AppointmentBulkActions({
           {actionMode === "cancel" && (
             <div className="space-y-3 p-4 bg-red-50 rounded-lg border border-red-200">
               <div>
-                <label className="block text-sm font-medium text-[#0F172A]">Cancellation Reason *</label>
+                <label className="block text-sm font-medium text-slate-900 dark:text-slate-100">Cancellation Reason *</label>
                 <Input
                   value={cancelReason}
                   onChange={(e) => setCancelReason(e.target.value)}
@@ -299,16 +299,16 @@ export default function AppointmentBulkActions({
       <Card className="p-6">
         <div className="space-y-3">
           {/* Select All Checkbox */}
-          <div className="flex items-center gap-3 pb-3 border-b border-[#E2E8F0]">
+          <div className="flex items-center gap-3 pb-3 border-b border-slate-200 dark:border-slate-800">
             <input
               type="checkbox"
               checked={
                 selectableAppointments.length > 0 && selectedIds.size === selectableAppointments.length
               }
               onChange={handleSelectAll}
-              className="h-4 w-4 rounded border-[#CBD5E1]"
+              className="h-4 w-4 rounded border-slate-300 dark:border-slate-700"
             />
-            <span className="text-sm font-medium text-[#0F172A]">
+            <span className="text-sm font-medium text-slate-900 dark:text-slate-100">
               Select All ({selectableAppointments.length})
             </span>
           </div>
@@ -318,19 +318,19 @@ export default function AppointmentBulkActions({
             {selectableAppointments.map((apt) => (
               <div
                 key={apt.id}
-                className="flex items-center gap-3 p-3 rounded-lg border border-[#E2E8F0] hover:bg-[#F8FAFC]"
+                className="flex items-center gap-3 p-3 rounded-lg border border-slate-200 dark:border-slate-800 hover:bg-slate-50 dark:bg-slate-900"
               >
                 <input
                   type="checkbox"
                   checked={selectedIds.has(apt.id)}
                   onChange={() => handleToggleSelect(apt.id)}
-                  className="h-4 w-4 rounded border-[#CBD5E1]"
+                  className="h-4 w-4 rounded border-slate-300 dark:border-slate-700"
                 />
                 <div className="flex-1">
-                  <p className="font-medium text-[#0F172A]">{apt.patient_name}</p>
-                  <p className="text-xs text-[#64748B]">{apt.ghana_health_id}</p>
+                  <p className="font-medium text-slate-900 dark:text-slate-100">{apt.patient_name}</p>
+                  <p className="text-xs text-slate-500 dark:text-slate-500">{apt.ghana_health_id}</p>
                 </div>
-                <div className="flex items-center gap-2 text-sm text-[#64748B]">
+                <div className="flex items-center gap-2 text-sm text-slate-500 dark:text-slate-500">
                   <Clock className="h-4 w-4" />
                   {new Date(apt.scheduled_at).toLocaleString()}
                 </div>

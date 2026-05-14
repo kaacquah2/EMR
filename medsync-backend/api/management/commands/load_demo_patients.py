@@ -22,8 +22,8 @@ class Command(BaseCommand):
         parser.add_argument(
             "--file",
             type=str,
-            default="demo_patients.json",
-            help="Path to the generated JSON file (default: demo_patients.json)"
+            default="data/seeds/demo_patients.json",
+            help="Path to the generated JSON file (default: data/seeds/demo_patients.json)"
         )
         parser.add_argument(
             "--hospital-id",

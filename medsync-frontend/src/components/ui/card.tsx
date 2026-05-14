@@ -16,7 +16,7 @@ const Card = React.forwardRef<HTMLDivElement, CardProps>(
   ({ className = "", accent, ...props }, ref) => (
     <div
       ref={ref}
-      className={`rounded-xl border border-[var(--gray-300)]/80 bg-white dark:bg-[#1E293B] dark:border-[#334155] p-6 shadow-[0_1px_3px_rgba(0,0,0,0.06),0_2px_8px_rgba(11,138,150,0.04)] ${accent ? accentClasses[accent] : ""} ${className}`}
+      className={`rounded-xl border border-[var(--gray-300)]/80 bg-white dark:bg-slate-800 dark:bg-slate-200 dark:border-[#334155] p-6 shadow-[0_1px_3px_rgba(0,0,0,0.06),0_2px_8px_rgba(11,138,150,0.04)] ${accent ? accentClasses[accent] : ""} ${className}`}
       {...props}
     />
   )

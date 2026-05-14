@@ -13,6 +13,7 @@ from interop.models import Referral
 from api.utils import get_patient_queryset, get_encounter_queryset, get_effective_hospital, get_request_hospital
 from api.pagination import paginate_queryset
 from api.state_machines import validate_visit_status_transition, StateMachineError
+from api.serializers import EncounterSerializer, EncounterWorklistSerializer
 
 
 @api_view(["GET", "POST"])
@@ -35,28 +36,8 @@ def encounter_list(request, pk):
             .select_related("created_by", "assigned_department", "assigned_doctor")
             .order_by("-encounter_date")
         )
-        page, next_cursor, has_more = paginate_queryset(qs, request, page_size=20, max_page_size=100)
-        data = [
-            {
-                "id": str(e.id),
-                "encounter_type": e.encounter_type,
-                "encounter_date": e.encounter_date.isoformat(),
-                "notes": e.notes,
-                "created_by": e.created_by.full_name,
-                "assigned_department_id": str(e.assigned_department_id) if e.assigned_department_id else None,
-                "assigned_department_name": e.assigned_department.name if e.assigned_department else None,
-                "assigned_doctor_id": str(e.assigned_doctor_id) if e.assigned_doctor_id else None,
-                "assigned_doctor_name": e.assigned_doctor.full_name if e.assigned_doctor else None,
-                "status": e.status,
-                "visit_status": e.visit_status,
-                "chief_complaint": e.chief_complaint,
-                "hpi": e.hpi,
-                "examination_findings": e.examination_findings,
-                "assessment_plan": e.assessment_plan,
-                "discharge_summary": e.discharge_summary,
-            }
-            for e in page
-        ]
+        page, next_cursor, has_more = paginate_queryset(qs, request, page_size=20, max_page_size=100, use_cursor=True)
+        data = EncounterSerializer(page, many=True).data
         return Response({"data": data, "next_cursor": next_cursor, "has_more": has_more})
     if request.method == "POST":
         if request.user.role not in ("super_admin", "hospital_admin", "doctor"):
@@ -124,24 +105,7 @@ def encounter_list(request, pk):
             discharge_summary=discharge_summary,
         )
         return Response(
-            {
-                "id": str(
-                    encounter.id),
-                "encounter_type": encounter.encounter_type,
-                "encounter_date": encounter.encounter_date.isoformat(),
-                "notes": encounter.notes,
-                "assigned_department_id": str(
-                    encounter.assigned_department_id) if encounter.assigned_department_id else None,
-                "assigned_doctor_id": str(
-                    encounter.assigned_doctor_id) if encounter.assigned_doctor_id else None,
-                "status": encounter.status,
-                "visit_status": encounter.visit_status,
-                "chief_complaint": encounter.chief_complaint,
-                "hpi": encounter.hpi,
-                "examination_findings": encounter.examination_findings,
-                "assessment_plan": encounter.assessment_plan,
-                "discharge_summary": encounter.discharge_summary,
-            },
+            {"data": EncounterSerializer(encounter).data},
             status=status.HTTP_201_CREATED,
         )
     return Response(status=status.HTTP_405_METHOD_NOT_ALLOWED)
@@ -209,30 +173,15 @@ def worklist_encounters(request):
             )
         }
     page, next_cursor, has_more = paginate_queryset(qs, request, page_size=50, max_page_size=200)
-    data = [
-        {
-            "id": str(e.id),
-            "patient_id": str(e.patient_id),
-            "patient_name": e.patient.full_name,
-            "ghana_health_id": e.patient.ghana_health_id,
-            "encounter_type": e.encounter_type,
-            "encounter_date": e.encounter_date.isoformat(),
-            "status": e.status,
-            "visit_status": e.visit_status,
-            "assigned_department_id": str(e.assigned_department_id) if e.assigned_department_id else None,
-            "assigned_department_name": e.assigned_department.name if e.assigned_department else None,
-            "assigned_doctor_id": str(e.assigned_doctor_id) if e.assigned_doctor_id else None,
-            "assigned_doctor_name": e.assigned_doctor.full_name if e.assigned_doctor else None,
-            "created_by": e.created_by.full_name if e.created_by else None,
-            "notes": e.notes,
-            "has_active_allergy": str(e.patient_id) in allergy_patient_ids_str,
-            "triage_badge": "consulting" if e.status == "in_consultation" else "waiting",
-            "pending_labs": int(pending_labs_by_patient.get(str(e.patient_id), 0)),
-            "pending_prescriptions": int(pending_rx_by_patient.get(str(e.patient_id), 0)),
-            "active_alerts": int(active_alerts_by_patient.get(str(e.patient_id), 0)),
-        }
-        for e in page
-    ]
+    
+    # Inject dynamic fields for EncounterWorklistSerializer
+    for e in page:
+        e.has_active_allergy = str(e.patient_id) in allergy_patient_ids_str
+        e.pending_labs = int(pending_labs_by_patient.get(str(e.patient_id), 0))
+        e.pending_prescriptions = int(pending_rx_by_patient.get(str(e.patient_id), 0))
+        e.active_alerts = int(active_alerts_by_patient.get(str(e.patient_id), 0))
+
+    data = EncounterWorklistSerializer(page, many=True).data
     # Query actual referral count for the requesting doctor's facility
     hospital = get_effective_hospital(request)
     referral_count = 0
@@ -279,39 +228,7 @@ def encounter_detail(request, patient_pk, encounter_id):
             status=status.HTTP_404_NOT_FOUND,
         )
     if request.method == "GET":
-        return Response({"id": str(encounter.id),
-                         "encounter_type": encounter.encounter_type,
-                         "encounter_date": encounter.encounter_date.isoformat(),
-                         "notes": encounter.notes,
-                         "created_by": encounter.created_by.full_name,
-                         "assigned_department_id": (
-                             str(encounter.assigned_department_id)
-                             if encounter.assigned_department_id
-                             else None
-                         ),
-                         "assigned_department_name": (
-                             encounter.assigned_department.name
-                             if encounter.assigned_department
-                             else None
-                         ),
-                         "assigned_doctor_id": (
-                             str(encounter.assigned_doctor_id)
-                             if encounter.assigned_doctor_id
-                             else None
-                         ),
-                         "assigned_doctor_name": (
-                             encounter.assigned_doctor.full_name
-                             if encounter.assigned_doctor
-                             else None
-                         ),
-                         "status": encounter.status,
-                         "visit_status": encounter.visit_status,
-                         "chief_complaint": encounter.chief_complaint,
-                         "hpi": encounter.hpi,
-                         "examination_findings": encounter.examination_findings,
-                         "assessment_plan": encounter.assessment_plan,
-                         "discharge_summary": encounter.discharge_summary,
-                         })
+        return Response({"data": EncounterSerializer(encounter).data})
     if request.method == "PATCH":
         data = request.data
         update_fields = []
@@ -368,18 +285,7 @@ def encounter_detail(request, patient_pk, encounter_id):
                 update_fields.append("assigned_doctor_id")
         if update_fields:
             encounter.save(update_fields=update_fields)
-        return Response(
-            {
-                "id": str(encounter.id),
-                "status": encounter.status,
-                "visit_status": encounter.visit_status,
-                "chief_complaint": encounter.chief_complaint,
-                "hpi": encounter.hpi,
-                "examination_findings": encounter.examination_findings,
-                "assessment_plan": encounter.assessment_plan,
-                "discharge_summary": encounter.discharge_summary,
-            }
-        )
+        return Response({"data": EncounterSerializer(encounter).data})
     return Response(status=status.HTTP_405_METHOD_NOT_ALLOWED)
 
 
@@ -421,9 +327,7 @@ def close_encounter(request, patient_pk, encounter_id):
     encounter.save()
     return Response(
         {
-            "id": str(encounter.id),
-            "status": encounter.status,
-            "visit_status": encounter.visit_status,
+            "data": EncounterSerializer(encounter).data,
             "confirmation_items": confirmation or [],
         }
     )

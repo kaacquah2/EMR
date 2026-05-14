@@ -7,6 +7,8 @@ import { useLabOrders } from "@/hooks/use-lab";
 import { Badge } from "@/components/ui/badge";
 import { Card } from "@/components/ui/card";
 import { LabBulkResultForm } from "@/components/features/LabBulkResultForm";
+import { EmptyState } from "@/components/ui/empty-state";
+import { Beaker } from "lucide-react";
 
 export default function LabOrdersPage() {
   const router = useRouter();
@@ -42,28 +44,28 @@ export default function LabOrdersPage() {
   );
 
   const tatText = (minutesRemaining: number | null) => {
-    if (minutesRemaining == null) return { label: "N/A", cls: "text-[#64748B]" };
+    if (minutesRemaining == null) return { label: "N/A", cls: "text-slate-500 dark:text-slate-500" };
     if (minutesRemaining < 0) return { label: `OVERDUE ${Math.abs(minutesRemaining)} min`, cls: "text-[#DC2626] font-semibold" };
     if (minutesRemaining < 30) return { label: `Due in ${minutesRemaining} min`, cls: "text-[#DC2626] font-semibold" };
     return { label: `Due in ${minutesRemaining} min`, cls: "text-[#334155]" };
   };
 
-  if (user && !canAccess) return <div className="flex min-h-[200px] items-center justify-center text-[#64748B]">Redirecting...</div>;
+  if (user && !canAccess) return <div className="flex min-h-[200px] items-center justify-center text-slate-500 dark:text-slate-500">Redirecting...</div>;
 
   return (
     <div className="space-y-6">
-      <h1 className="font-sora text-2xl font-bold text-[#0F172A]">
+      <h1 className="font-sora text-2xl font-bold text-slate-900 dark:text-slate-100">
         Lab Worklist
       </h1>
 
       <div className="grid gap-3 md:grid-cols-4">
-        <Card className="p-4"><p className="text-sm text-[#64748B]">STAT orders</p><p className="text-2xl font-bold text-red-700">{stats.stat_orders}</p></Card>
-        <Card className="p-4"><p className="text-sm text-[#64748B]">Urgent orders</p><p className="text-2xl font-bold text-amber-700">{stats.urgent_orders}</p></Card>
-        <Card className="p-4"><p className="text-sm text-[#64748B]">Routine orders</p><p className="text-2xl font-bold text-slate-700">{stats.routine_orders}</p></Card>
-        <Card className="p-4"><p className="text-sm text-[#64748B]">In progress</p><p className="text-2xl font-bold text-blue-700">{stats.in_progress_orders}</p></Card>
+        <Card className="p-4"><p className="text-sm text-slate-500 dark:text-slate-500">STAT orders</p><p className="text-2xl font-bold text-red-700">{stats.stat_orders}</p></Card>
+        <Card className="p-4"><p className="text-sm text-slate-500 dark:text-slate-500">Urgent orders</p><p className="text-2xl font-bold text-amber-700">{stats.urgent_orders}</p></Card>
+        <Card className="p-4"><p className="text-sm text-slate-500 dark:text-slate-500">Routine orders</p><p className="text-2xl font-bold text-slate-700">{stats.routine_orders}</p></Card>
+        <Card className="p-4"><p className="text-sm text-slate-500 dark:text-slate-500">In progress</p><p className="text-2xl font-bold text-blue-700">{stats.in_progress_orders}</p></Card>
       </div>
 
-      <div className="flex gap-2 border-b border-[#CBD5E1] overflow-x-auto">
+      <div className="flex gap-2 border-b border-slate-300 dark:border-slate-700 overflow-x-auto">
         {[
           ["all", "All"],
           ["pending", "Pending"],
@@ -77,7 +79,7 @@ export default function LabOrdersPage() {
             type="button"
             onClick={() => setTab(value as typeof tab)}
             className={`border-b-2 px-3 py-2 text-sm font-medium whitespace-nowrap ${
-              tab === value ? "border-[#0B8A96] text-[#0B8A96]" : "border-transparent text-[#64748B]"
+              tab === value ? "border-[#0B8A96] text-[#0B8A96]" : "border-transparent text-slate-500 dark:text-slate-500"
             }`}
           >
             {label}
@@ -90,9 +92,13 @@ export default function LabOrdersPage() {
       ) : (
         <Card className="p-6">
           {loading ? (
-            <p className="text-[#64748B]">Loading...</p>
+            <p className="text-slate-500 dark:text-slate-500">Loading...</p>
           ) : rows.length === 0 ? (
-            <p className="text-[#64748B]">No matching orders.</p>
+            <EmptyState
+              icon={<Beaker className="h-12 w-12" />}
+              title="No lab orders"
+              description="There are no lab orders matching the selected filter."
+            />
           ) : (
             <div className="space-y-2">
               {rows.map((o) => {
@@ -100,12 +106,12 @@ export default function LabOrdersPage() {
                 return (
                 <div
                   key={o.id}
-                  className="flex cursor-pointer items-center justify-between rounded-lg border border-[#E2E8F0] p-4 hover:bg-[#F8FAFC]"
+                  className="flex cursor-pointer items-center justify-between rounded-lg border border-slate-200 dark:border-slate-800 p-4 hover:bg-slate-50 dark:bg-slate-900"
                   onClick={() => router.push(`/lab/orders/${o.id}`)}
                 >
                   <div>
                     <p className="font-medium">{o.patient_name} ({o.gha_id}) - {o.test_name}</p>
-                    <p className="text-sm text-[#64748B]">
+                    <p className="text-sm text-slate-500 dark:text-slate-500">
                       {o.ordering_doctor_name} - {o.ordered_at?.slice(0, 16)}
                     </p>
                     <p className={`text-sm ${tat.cls}`}>{tat.label}</p>

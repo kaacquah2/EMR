@@ -6,6 +6,15 @@ import { useAuth } from "@/lib/auth-context";
 import { useLabResults } from "@/hooks/use-lab";
 import { Badge } from "@/components/ui/badge";
 import { Card } from "@/components/ui/card";
+import {
+  Table,
+  TableHeader,
+  TableRow,
+  TableHead,
+  TableBody,
+  TableCell,
+} from "@/components/ui/Table";
+import { Pagination } from "@/components/ui/Pagination";
 import { Download, Filter, X } from "lucide-react";
 
 export default function LabResultsPage() {
@@ -79,17 +88,17 @@ export default function LabResultsPage() {
     window.URL.revokeObjectURL(url);
   };
 
-  if (user && !canAccess) return <div className="flex min-h-[200px] items-center justify-center text-[#64748B]">Redirecting...</div>;
+  if (user && !canAccess) return <div className="flex min-h-[200px] items-center justify-center text-slate-500 dark:text-slate-500">Redirecting...</div>;
 
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
-        <h1 className="font-sora text-2xl font-bold text-[#0F172A]">Lab Results Archive</h1>
+        <h1 className="font-sora text-2xl font-bold text-slate-900 dark:text-slate-100">Lab Results Archive</h1>
         {results.length > 0 && (
           <button
             type="button"
             onClick={downloadResults}
-            className="flex items-center gap-2 px-4 py-2 border border-[#CBD5E1] rounded hover:bg-[#F8FAFC] text-sm font-medium"
+            className="flex items-center gap-2 px-4 py-2 border border-slate-300 dark:border-slate-700 rounded hover:bg-slate-50 dark:bg-slate-900 text-sm font-medium"
           >
             <Download className="h-4 w-4" />
             Download CSV
@@ -100,8 +109,8 @@ export default function LabResultsPage() {
       {/* Filters */}
       <Card className="p-4 space-y-4">
         <div className="flex items-center gap-2">
-          <Filter className="h-4 w-4 text-[#64748B]" />
-          <h3 className="font-medium text-[#0F172A]">Filters</h3>
+          <Filter className="h-4 w-4 text-slate-500 dark:text-slate-500" />
+          <h3 className="font-medium text-slate-900 dark:text-slate-100">Filters</h3>
           {(statusFilter.length > 0 || dateFrom || dateTo) && (
             <button
               type="button"
@@ -117,7 +126,7 @@ export default function LabResultsPage() {
         <div className="grid gap-4 md:grid-cols-4">
           {/* Status Filter */}
           <div className="space-y-2">
-            <label className="text-sm font-medium text-[#0F172A]">Status</label>
+            <label className="text-sm font-medium text-slate-900 dark:text-slate-100">Status</label>
             <div className="flex flex-wrap gap-2">
               {["resulted", "verified", "pending"].map((status) => (
                 <button
@@ -127,7 +136,7 @@ export default function LabResultsPage() {
                   className={`px-2 py-1 rounded text-sm font-medium transition ${
                     statusFilter.includes(status)
                       ? "bg-[#0B8A96] text-white"
-                      : "bg-[#F1F5F9] text-[#0F172A] hover:bg-[#E2E8F0]"
+                      : "bg-slate-100 dark:bg-slate-900 text-slate-900 dark:text-slate-100 hover:bg-slate-200 dark:bg-slate-800"
                   }`}
                 >
                   {status.charAt(0).toUpperCase() + status.slice(1)}
@@ -138,7 +147,7 @@ export default function LabResultsPage() {
 
           {/* Date From */}
           <div className="space-y-2">
-            <label htmlFor="date-from" className="text-sm font-medium text-[#0F172A]">
+            <label htmlFor="date-from" className="text-sm font-medium text-slate-900 dark:text-slate-100">
               From
             </label>
             <input
@@ -146,13 +155,13 @@ export default function LabResultsPage() {
               type="date"
               value={dateFrom}
               onChange={(e) => setDateFrom(e.target.value)}
-              className="w-full px-3 py-1 border border-[#CBD5E1] rounded text-sm"
+              className="w-full px-3 py-1 border border-slate-300 dark:border-slate-700 rounded text-sm"
             />
           </div>
 
           {/* Date To */}
           <div className="space-y-2">
-            <label htmlFor="date-to" className="text-sm font-medium text-[#0F172A]">
+            <label htmlFor="date-to" className="text-sm font-medium text-slate-900 dark:text-slate-100">
               To
             </label>
             <input
@@ -160,7 +169,7 @@ export default function LabResultsPage() {
               type="date"
               value={dateTo}
               onChange={(e) => setDateTo(e.target.value)}
-              className="w-full px-3 py-1 border border-[#CBD5E1] rounded text-sm"
+              className="w-full px-3 py-1 border border-slate-300 dark:border-slate-700 rounded text-sm"
             />
           </div>
         </div>
@@ -169,72 +178,57 @@ export default function LabResultsPage() {
       {/* Results */}
       <Card className="p-6">
         {loading ? (
-          <p className="text-[#64748B]">Loading...</p>
+          <p className="text-slate-500 dark:text-slate-500">Loading...</p>
         ) : results.length === 0 ? (
-          <p className="text-[#64748B]">No results found.</p>
+          <p className="text-slate-500 dark:text-slate-500">No results found.</p>
         ) : (
           <div className="space-y-4">
             {/* Results Table */}
             <div className="overflow-x-auto">
-              <table className="w-full text-sm">
-                <thead>
-                  <tr className="border-b border-[#CBD5E1]">
-                    <th className="text-left py-3 px-2 font-medium text-[#0F172A]">Patient</th>
-                    <th className="text-left py-3 px-2 font-medium text-[#0F172A]">GHA ID</th>
-                    <th className="text-left py-3 px-2 font-medium text-[#0F172A]">Test</th>
-                    <th className="text-left py-3 px-2 font-medium text-[#0F172A]">Result</th>
-                    <th className="text-left py-3 px-2 font-medium text-[#0F172A]">Reference</th>
-                    <th className="text-left py-3 px-2 font-medium text-[#0F172A]">Status</th>
-                    <th className="text-left py-3 px-2 font-medium text-[#0F172A]">Lab Tech</th>
-                    <th className="text-left py-3 px-2 font-medium text-[#0F172A]">Date</th>
-                  </tr>
-                </thead>
-                <tbody>
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Patient</TableHead>
+                    <TableHead>GHA ID</TableHead>
+                    <TableHead>Test</TableHead>
+                    <TableHead>Result</TableHead>
+                    <TableHead>Reference</TableHead>
+                    <TableHead>Status</TableHead>
+                    <TableHead>Lab Tech</TableHead>
+                    <TableHead>Date</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
                   {results.map((r) => (
-                    <tr key={r.id} className="border-b border-[#E2E8F0] hover:bg-[#F8FAFC]">
-                      <td className="py-3 px-2">
-                        <p className="font-medium text-[#0F172A]">{r.patient_name}</p>
-                      </td>
-                      <td className="py-3 px-2 text-[#64748B]">{r.gha_id}</td>
-                      <td className="py-3 px-2 text-[#0F172A]">{r.test_name}</td>
-                      <td className="py-3 px-2 font-medium">{r.result_value}</td>
-                      <td className="py-3 px-2 text-[#64748B]">{r.reference_range}</td>
-                      <td className="py-3 px-2">
+                    <TableRow key={r.id}>
+                      <TableCell>
+                        <p className="font-medium text-slate-900 dark:text-white">{r.patient_name}</p>
+                      </TableCell>
+                      <TableCell className="text-slate-500 dark:text-slate-400">{r.gha_id}</TableCell>
+                      <TableCell className="text-slate-900 dark:text-white">{r.test_name}</TableCell>
+                      <TableCell className="font-medium">{r.result_value}</TableCell>
+                      <TableCell className="text-slate-500 dark:text-slate-400">{r.reference_range}</TableCell>
+                      <TableCell>
                         <Badge className={statusBadgeClass(r.status)}>
                           {r.status.charAt(0).toUpperCase() + r.status.slice(1)}
                         </Badge>
-                      </td>
-                      <td className="py-3 px-2 text-[#64748B]">{r.lab_tech_name}</td>
-                      <td className="py-3 px-2 text-[#64748B]">{r.created_at?.split("T")[0]}</td>
-                    </tr>
+                      </TableCell>
+                      <TableCell className="text-slate-500 dark:text-slate-400">{r.lab_tech_name}</TableCell>
+                      <TableCell className="text-slate-500 dark:text-slate-400">{r.created_at?.split("T")[0]}</TableCell>
+                    </TableRow>
                   ))}
-                </tbody>
-              </table>
+                </TableBody>
+              </Table>
             </div>
 
             {/* Pagination */}
-            <div className="flex items-center justify-between pt-4 border-t border-[#CBD5E1]">
-              <p className="text-sm text-[#64748B]">
-                Showing {offset + 1} to {Math.min(offset + limit, total)} of {total} results
-              </p>
-              <div className="flex gap-2">
-                <button
-                  type="button"
-                  onClick={() => setOffset(Math.max(0, offset - limit))}
-                  disabled={offset === 0}
-                  className="px-3 py-1 border border-[#CBD5E1] rounded hover:bg-[#F8FAFC] disabled:opacity-50 text-sm"
-                >
-                  Previous
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setOffset(offset + limit)}
-                  disabled={offset + limit >= total}
-                  className="px-3 py-1 border border-[#CBD5E1] rounded hover:bg-[#F8FAFC] disabled:opacity-50 text-sm"
-                >
-                  Next
-                </button>
-              </div>
+            <div className="pt-4 border-t border-slate-200 dark:border-slate-800">
+              <Pagination
+                total={total}
+                limit={limit}
+                offset={offset}
+                onOffsetChange={setOffset}
+              />
             </div>
           </div>
         )}

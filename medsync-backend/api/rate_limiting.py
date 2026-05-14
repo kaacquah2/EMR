@@ -103,19 +103,41 @@ class MFAUserThrottle(UserRateThrottle):
 
         # Only apply to MFA verification attempts
         mfa_token = None
+        
+        # 1. Try DRF data attribute (most reliable for DRF views)
         if hasattr(request, "data"):
-            mfa_token = request.data.get("mfa_token")
-        if not mfa_token and hasattr(request, "POST"):
-            mfa_token = request.POST.get("mfa_token")
-        if not mfa_token and hasattr(request, "body"):
             try:
-                body = request.body.decode("utf-8") if isinstance(request.body,
-                                                                  (bytes, bytearray)) else str(request.body)
-                obj = json.loads(body) if body else {}
-                if isinstance(obj, dict):
-                    mfa_token = obj.get("mfa_token")
+                mfa_token = request.data.get("mfa_token")
             except Exception:
-                mfa_token = None
+                pass
+
+        # 2. Try standard POST params
+        if not mfa_token:
+            try:
+                mfa_token = request.POST.get("mfa_token")
+            except Exception:
+                pass
+
+        # 3. Try parsing raw body if still not found (handles some test cases/raw JSON)
+        if not mfa_token:
+            try:
+                # Safely check if we can read body without triggering RawPostDataException
+                django_request = getattr(request, "_request", request)
+                
+                body = None
+                if hasattr(django_request, "_body"):
+                    body = django_request._body
+                else:
+                    # This reads the stream but caches it in _body for future calls
+                    body = django_request.body
+                
+                if body:
+                    data = json.loads(body)
+                    if isinstance(data, dict):
+                        mfa_token = data.get("mfa_token")
+            except Exception:
+                pass
+
         if not mfa_token:
             return None  # Skip if no MFA token present
 
@@ -220,6 +242,19 @@ class AIEndpointThrottle(UserRateThrottle):
         return f"throttle_ai_{request.user.id}"
 
 
+class AIThrottle(UserRateThrottle):
+    """
+    Daily rate limit for AI operations to save credits.
+    Controlled by 'ai' rate in settings.
+    """
+    scope = "ai"
+
+    def get_cache_key(self, request, view):
+        if not request.user or not request.user.is_authenticated:
+            return None
+        return f"throttle_ai_daily_{request.user.id}"
+
+
 class AIHospitalThrottle(UserRateThrottle):
     """
     Rate limit AI endpoints: 200 requests per hour per hospital.
@@ -286,6 +321,7 @@ THROTTLE_CONFIG = {
 def check_rate_limit(key, limit, window_seconds):
     """
     Manual rate limit check without DRF's BaseThrottle.
+    FAIL-CLOSED: Returns (False, 0, window) if cache is unreachable.
 
     Args:
         key: Cache key identifier (e.g., "user_123_action")
@@ -295,22 +331,33 @@ def check_rate_limit(key, limit, window_seconds):
     Returns:
         (allowed, remaining_attempts, retry_after_seconds)
     """
-    current_count = cache.get(key, 0)
+    try:
+        current_count = cache.get(key, 0)
+        
+        # If Redis returns None but didn't raise, treat as error (fail closed)
+        if current_count is None:
+            return False, 0, window_seconds
 
-    if current_count >= limit:
-        # Calculate retry-after
-        expiry = cache.ttl(key)  # Returns seconds until expiry
-        retry_after = max(1, expiry) if expiry else window_seconds
-        return False, 0, retry_after
+        if current_count >= limit:
+            # Calculate retry-after
+            try:
+                expiry = cache.ttl(key)  # Returns seconds until expiry
+                retry_after = max(1, expiry) if expiry else window_seconds
+            except Exception:
+                retry_after = window_seconds
+            return False, 0, retry_after
 
-    # Increment counter
-    if current_count == 0:
-        cache.set(key, 1, timeout=window_seconds)
-    else:
-        cache.incr(key)
+        # Increment counter
+        if current_count == 0:
+            cache.set(key, 1, timeout=window_seconds)
+        else:
+            cache.incr(key)
 
-    remaining = limit - (current_count + 1)
-    return True, remaining, 0
+        remaining = limit - (current_count + 1)
+        return True, remaining, 0
+    except Exception:
+        # FAIL-CLOSED: Deny access if cache is down to prevent brute force
+        return False, 0, window_seconds
 
 
 def is_rate_limited(request, action, limit=10, window_seconds=3600):

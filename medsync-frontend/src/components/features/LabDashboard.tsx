@@ -53,7 +53,7 @@ export function LabDashboard() {
   if (loading && !metrics) {
     return (
       <div className="space-y-6">
-        <div className="h-8 w-56 animate-pulse rounded bg-[#E2E8F0] dark:bg-[#334155]" />
+        <div className="h-8 w-56 animate-pulse rounded bg-slate-200 dark:bg-slate-800 dark:bg-[#334155]" />
         <div className="grid gap-4 md:grid-cols-3">
           {Array.from({ length: 3 }).map((_, i) => <CardSkeleton key={i} lines={2} />)}
         </div>
@@ -65,10 +65,6 @@ export function LabDashboard() {
 
   return (
     <div className="space-y-6">
-      <div>
-        <h2 className="text-2xl font-bold text-[var(--gray-900)]">Laboratory Dashboard</h2>
-        <p className="text-sm text-[var(--gray-500)] mt-1">Turnaround performance and breach monitoring</p>
-      </div>
 
       {error && (
         <ErrorBanner message={error} onRetry={() => { setError(null); void fetchLabMetrics(); }} />

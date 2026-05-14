@@ -24,7 +24,7 @@ export default function HomePage() {
 
   return (
     <div className="flex min-h-screen items-center justify-center bg-[#F5F3EE]">
-      <p className="text-[#64748B]">Redirecting...</p>
+      <p className="text-slate-500 dark:text-slate-500">Redirecting...</p>
     </div>
   );
 }

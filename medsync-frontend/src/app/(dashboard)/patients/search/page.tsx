@@ -20,7 +20,18 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import {
+  Table,
+  TableHeader,
+  TableRow,
+  TableHead,
+  TableBody,
+  TableCell,
+} from "@/components/ui/Table";
 import { downloadCsv } from "@/lib/export-csv";
+import { EmptyState } from "@/components/ui/empty-state";
+import { Breadcrumbs } from "@/components/ui/breadcrumbs";
+import { SearchX } from "lucide-react";
 
 // RBAC-01: moved to centralised permissions.ts
 
@@ -37,15 +48,15 @@ const VirtualPatientList = ({
     return (
       <div 
         style={style} 
-        className="flex items-center border-b border-[#E2E8F0] hover:bg-[#F8FAFC] px-4"
+        className="flex items-center border-b border-slate-200 dark:border-slate-800 hover:bg-slate-50 dark:bg-slate-900 px-4"
       >
-        <div className="w-[25%] font-medium text-[#0F172A] truncate pr-4">{p.full_name}</div>
-        <div className="w-[20%] font-mono text-sm text-[#64748B] truncate pr-4">{p.ghana_health_id}</div>
-        <div className="w-[10%] text-sm text-[#64748B]">
+        <div className="w-[25%] font-medium text-slate-900 dark:text-slate-100 truncate pr-4">{p.full_name}</div>
+        <div className="w-[20%] font-mono text-sm text-slate-500 dark:text-slate-500 truncate pr-4">{p.ghana_health_id}</div>
+        <div className="w-[10%] text-sm text-slate-500 dark:text-slate-500">
           {Math.max(0, new Date().getFullYear() - new Date(p.date_of_birth).getFullYear())}
         </div>
-        <div className="w-[10%] text-sm text-[#64748B]">{p.gender}</div>
-        <div className="w-[15%] text-sm text-[#64748B] truncate">{p.nhis_number || "—"}</div>
+        <div className="w-[10%] text-sm text-slate-500 dark:text-slate-500">{p.gender}</div>
+        <div className="w-[15%] text-sm text-slate-500 dark:text-slate-500 truncate">{p.nhis_number || "—"}</div>
         <div className="w-[20%] flex justify-end gap-3 text-sm">
           {isReceptionist ? (
             <>
@@ -162,12 +173,13 @@ export default function PatientSearchPage() {
   const canRegister = hasRole(user?.role, REGISTER_PATIENT_ROLES);
   const canExport = hasRole(user?.role, [ROLES.HOSPITAL_ADMIN, ROLES.SUPER_ADMIN]);
 
-  if (user && !canAccess) return <div className="flex min-h-[200px] items-center justify-center text-[#64748B]">Redirecting...</div>;
+  if (user && !canAccess) return <div className="flex min-h-[200px] items-center justify-center text-slate-500 dark:text-slate-500">Redirecting...</div>;
 
   return (
     <div className="space-y-6">
+      <Breadcrumbs items={[{ label: "Patients" }]} />
       <div className="flex flex-wrap items-center justify-between gap-2">
-        <h1 className="font-sora text-2xl font-bold text-[#0F172A]">
+        <h1 className="font-sora text-2xl font-bold text-slate-900 dark:text-slate-100">
           Patient Search
         </h1>
         <div className="flex gap-2">
@@ -211,7 +223,7 @@ export default function PatientSearchPage() {
                 className={`rounded-lg px-3 py-2 text-sm font-medium ${
                   searchType === t
                     ? "bg-[#0B8A96] text-white"
-                    : "bg-[#F1F5F9] text-[#64748B] hover:bg-[#E2E8F0]"
+                    : "bg-slate-100 dark:bg-slate-900 text-slate-500 dark:text-slate-500 hover:bg-slate-200 dark:bg-slate-800"
                 }`}
               >
                 {t === "ghana_id" ? "Ghana Health ID" : t === "dob" ? "Date of Birth" : "Name"}
@@ -229,37 +241,43 @@ export default function PatientSearchPage() {
       )}
 
       {loading && (
-        <div className="rounded-lg border border-[#CBD5E1] bg-white p-8 text-center text-[#64748B]">
+        <div className="rounded-lg border border-slate-300 dark:border-slate-700 bg-white p-8 text-center text-slate-500 dark:text-slate-500">
           Loading...
         </div>
       )}
 
       {!loading && results.length === 0 && query.trim() && (
-        <Card className="p-8 text-center">
-          <p className="text-[#64748B]">Patient not found.</p>
-          {canRegister && (
-            <Link href="/patients/register" className="mt-4 inline-block">
-              <Button variant="secondary">Register them?</Button>
-            </Link>
-          )}
+        <Card className="p-0">
+          <EmptyState
+            icon={<SearchX className="h-12 w-12" />}
+            title="Patient not found"
+            description={`No local patients matched "${query}".`}
+            action={
+              canRegister ? (
+                <Link href="/patients/register">
+                  <Button variant="secondary">Register new patient</Button>
+                </Link>
+              ) : undefined
+            }
+          />
         </Card>
       )}
 
       {!loading && results.length > 0 && (
         <Card className="overflow-hidden p-0">
           <div className="overflow-x-auto">
-            <table className="w-full">
-              <thead>
-                <tr className="border-b border-[#E2E8F0] bg-[#F8FAFC]">
-                  <th className="px-4 py-3 text-left text-xs font-semibold uppercase text-[#64748B] w-[25%]">Name</th>
-                  <th className="px-4 py-3 text-left text-xs font-semibold uppercase text-[#64748B] w-[20%]">Ghana Health ID</th>
-                  <th className="px-4 py-3 text-left text-xs font-semibold uppercase text-[#64748B] w-[10%]">Age</th>
-                  <th className="px-4 py-3 text-left text-xs font-semibold uppercase text-[#64748B] w-[10%]">Gender</th>
-                  <th className="px-4 py-3 text-left text-xs font-semibold uppercase text-[#64748B] w-[15%]">NHIS</th>
-                  <th className="px-4 py-3 text-left text-xs font-semibold uppercase text-[#64748B] w-[20%] text-right">Actions</th>
-                </tr>
-              </thead>
-            </table>
+            <Table className="w-full table-fixed">
+              <TableHeader>
+                <TableRow>
+                  <TableHead className="w-[25%] uppercase text-xs">Name</TableHead>
+                  <TableHead className="w-[20%] uppercase text-xs">Ghana Health ID</TableHead>
+                  <TableHead className="w-[10%] uppercase text-xs">Age</TableHead>
+                  <TableHead className="w-[10%] uppercase text-xs">Gender</TableHead>
+                  <TableHead className="w-[15%] uppercase text-xs">NHIS</TableHead>
+                  <TableHead align="right" className="w-[20%] uppercase text-xs">Actions</TableHead>
+                </TableRow>
+              </TableHeader>
+            </Table>
             
             <div className="h-[400px] w-full">
               <VirtualPatientList 
@@ -304,35 +322,35 @@ export default function PatientSearchPage() {
         </Card>
         {globalError && <p className="mt-2 text-sm text-[#DC2626]">{globalError}</p>}
         {globalLoading && (
-          <div className="mt-4 rounded-lg border border-[#CBD5E1] bg-white p-8 text-center text-[#64748B]">
+          <div className="mt-4 rounded-lg border border-slate-300 dark:border-slate-700 bg-white p-8 text-center text-slate-500 dark:text-slate-500">
             Loading...
           </div>
         )}
         {!globalLoading && globalResults.length > 0 && (
           <Card className="mt-4 overflow-hidden p-0">
             <div className="overflow-x-auto">
-              <table className="w-full">
-                <thead>
-                  <tr className="border-b border-[#E2E8F0] bg-[#F8FAFC]">
-                    <th className="px-4 py-3 text-left text-xs font-semibold uppercase text-[#64748B]">Name</th>
-                    <th className="px-4 py-3 text-left text-xs font-semibold uppercase text-[#64748B]">National ID</th>
-                    <th className="px-4 py-3 text-left text-xs font-semibold uppercase text-[#64748B]">DOB</th>
-                    <th className="px-4 py-3 text-left text-xs font-semibold uppercase text-[#64748B]">Facilities</th>
-                    <th className="px-4 py-3 text-left text-xs font-semibold uppercase text-[#64748B]">Actions</th>
-                  </tr>
-                </thead>
-                <tbody>
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead className="uppercase text-xs">Name</TableHead>
+                    <TableHead className="uppercase text-xs">National ID</TableHead>
+                    <TableHead className="uppercase text-xs">DOB</TableHead>
+                    <TableHead className="uppercase text-xs">Facilities</TableHead>
+                    <TableHead className="uppercase text-xs">Actions</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
                   {globalResults.map((gp) => (
-                    <tr key={gp.global_patient_id} className="border-b border-[#E2E8F0] hover:bg-[#F8FAFC]">
-                      <td className="px-4 py-3 font-medium text-[#0F172A]">{gp.full_name}</td>
-                      <td className="px-4 py-3 font-mono text-sm text-[#64748B]">{gp.national_id ?? "—"}</td>
-                      <td className="px-4 py-3 text-sm text-[#64748B]">{gp.date_of_birth}</td>
-                      <td className="px-4 py-3 text-sm text-[#64748B]">
+                    <TableRow key={gp.global_patient_id}>
+                      <TableCell className="font-medium text-slate-900 dark:text-white">{gp.full_name}</TableCell>
+                      <TableCell className="font-mono text-sm text-slate-500 dark:text-slate-400">{gp.national_id ?? "—"}</TableCell>
+                      <TableCell className="text-sm text-slate-500 dark:text-slate-400">{gp.date_of_birth}</TableCell>
+                      <TableCell className="text-sm text-slate-500 dark:text-slate-400">
                         {(gp.facility_names && gp.facility_names.length > 0)
                           ? gp.facility_names.join(", ")
                           : "—"}
-                      </td>
-                      <td className="px-4 py-3 flex gap-2">
+                      </TableCell>
+                      <TableCell className="flex gap-2">
                         <Button
                           variant="secondary"
                           size="sm"
@@ -344,17 +362,21 @@ export default function PatientSearchPage() {
                         <Link href={`/cross-facility-records/${gp.global_patient_id}`}>
                           <Button variant="secondary" size="sm">View records</Button>
                         </Link>
-                      </td>
-                    </tr>
+                      </TableCell>
+                    </TableRow>
                   ))}
-                </tbody>
-              </table>
+                </TableBody>
+              </Table>
             </div>
           </Card>
         )}
         {!globalLoading && globalQuery.trim() && globalResults.length === 0 && (
-          <Card className="mt-4 p-8 text-center">
-            <p className="text-[#64748B]">No global patient found.</p>
+          <Card className="mt-4 p-0">
+            <EmptyState
+              icon={<SearchX className="h-12 w-12" />}
+              title="No global patient found"
+              description="No patients found in the nationwide registry matching your query."
+            />
           </Card>
         )}
       </div>
@@ -369,7 +391,7 @@ export default function PatientSearchPage() {
           </DialogHeader>
           {linkGlobalPatient && (
             <>
-              <p className="text-sm text-[#64748B]">
+              <p className="text-sm text-slate-500 dark:text-slate-500">
                 Linking <strong>{linkGlobalPatient.full_name}</strong> to your facility.
               </p>
               <Input

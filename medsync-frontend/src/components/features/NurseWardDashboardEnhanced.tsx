@@ -47,7 +47,7 @@ export function NurseWardDashboardEnhanced() {
   if (loading && !data) {
     return (
       <div className="space-y-8">
-        <div className="h-8 w-64 animate-pulse rounded bg-[#E2E8F0] dark:bg-[#334155]" />
+        <div className="h-8 w-64 animate-pulse rounded bg-slate-200 dark:bg-slate-800 dark:bg-[#334155]" />
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
           {Array.from({ length: 4 }).map((_, i) => <CardSkeleton key={i} lines={2} />)}
         </div>

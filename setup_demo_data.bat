@@ -20,12 +20,12 @@ if not exist "manage.py" (
 
 REM Step 1: Generate synthetic data
 echo Step 1: Generating synthetic patient data...
-if not exist "demo_patients.json" (
+if not exist "medsync-backend\data\seeds\demo_patients.json" (
     python ml\generate_demo_patients.py --count=150
 ) else (
     echo.
-    echo INFO: demo_patients.json already exists, skipping generation
-    echo       Delete it to regenerate: del demo_patients.json
+    echo INFO: demo_patients.json already exists in seeds, skipping generation
+    echo       Delete it to regenerate: del medsync-backend\data\seeds\demo_patients.json
     echo.
 )
 
@@ -48,7 +48,7 @@ python manage.py migrate --no-input >nul 2>&1
 REM Step 4: Load data
 echo.
 echo Step 3: Loading patients into database...
-python manage.py load_demo_patients --file=..\demo_patients.json
+python manage.py load_demo_patients --file=data\seeds\demo_patients.json
 
 cd ..
 

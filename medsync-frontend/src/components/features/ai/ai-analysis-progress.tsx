@@ -77,9 +77,9 @@ export function AIAnalysisProgress({
   // Idle state
   if (status === "idle" && !jobId) {
     return (
-      <div className="rounded-xl border border-[#E2E8F0]/80 bg-white p-6 shadow-[0_1px_3px_rgba(0,0,0,0.06),0_2px_8px_rgba(11,138,150,0.04)]">
+      <div className="rounded-xl border border-slate-200 dark:border-slate-800/80 bg-white p-6 shadow-[0_1px_3px_rgba(0,0,0,0.06),0_2px_8px_rgba(11,138,150,0.04)]">
         <div className="mb-4">
-          <h3 className="font-sora text-xl font-bold text-[#0F172A]">
+          <h3 className="font-sora text-xl font-bold text-slate-900 dark:text-slate-100">
             AI-Powered Analysis
           </h3>
         </div>
@@ -103,9 +103,9 @@ export function AIAnalysisProgress({
     const displayPercent = Math.min(progressPercent, 99);
 
     return (
-      <div className="rounded-xl border border-[#E2E8F0]/80 bg-white p-6 shadow-[0_1px_3px_rgba(0,0,0,0.06),0_2px_8px_rgba(11,138,150,0.04)]">
+      <div className="rounded-xl border border-slate-200 dark:border-slate-800/80 bg-white p-6 shadow-[0_1px_3px_rgba(0,0,0,0.06),0_2px_8px_rgba(11,138,150,0.04)]">
         <div className="mb-6 flex items-center justify-between">
-          <h3 className="font-sora text-xl font-bold text-[#0F172A]">
+          <h3 className="font-sora text-xl font-bold text-slate-900 dark:text-slate-100">
             AI Analysis in Progress
           </h3>
           <button
@@ -132,7 +132,7 @@ export function AIAnalysisProgress({
           <p className="mb-2 text-sm font-medium text-[#475569]">
             {currentStep || "Processing..."}
           </p>
-          <div className="relative h-3 w-full overflow-hidden rounded-full bg-[#E2E8F0]">
+          <div className="relative h-3 w-full overflow-hidden rounded-full bg-slate-200 dark:bg-slate-800">
             <div
               className="h-full bg-[#3B82F6] transition-all duration-300 ease-out"
               style={{ width: `${displayPercent}%` }}
@@ -140,7 +140,7 @@ export function AIAnalysisProgress({
           </div>
         </div>
 
-        <p className="text-right text-xs text-[#64748B]">
+        <p className="text-right text-xs text-slate-500 dark:text-slate-500">
           Progress: {displayPercent}%
         </p>
       </div>
@@ -150,7 +150,7 @@ export function AIAnalysisProgress({
   // Completed state
   if (status === "completed" && analysis) {
     return (
-      <div className="rounded-xl border border-[#E2E8F0]/80 bg-white p-6 shadow-[0_1px_3px_rgba(0,0,0,0.06),0_2px_8px_rgba(11,138,150,0.04)]">
+      <div className="rounded-xl border border-slate-200 dark:border-slate-800/80 bg-white p-6 shadow-[0_1px_3px_rgba(0,0,0,0.06),0_2px_8px_rgba(11,138,150,0.04)]">
         <div className="mb-6">
           <div className="flex items-center gap-3 mb-4">
             <svg
@@ -164,7 +164,7 @@ export function AIAnalysisProgress({
                 clipRule="evenodd"
               />
             </svg>
-            <h3 className="font-sora text-xl font-bold text-[#0F172A]">
+            <h3 className="font-sora text-xl font-bold text-slate-900 dark:text-slate-100">
               Analysis Complete
             </h3>
           </div>
@@ -181,7 +181,7 @@ export function AIAnalysisProgress({
         {/* Recommendations */}
         {analysis.recommendations && analysis.recommendations.length > 0 && (
           <div className="mb-6">
-            <h4 className="mb-3 font-sora font-bold text-[#0F172A]">
+            <h4 className="mb-3 font-sora font-bold text-slate-900 dark:text-slate-100">
               Recommendations
             </h4>
             <ul className="space-y-2">
@@ -208,7 +208,7 @@ export function AIAnalysisProgress({
         {/* Risk Factors */}
         {analysis.risk_factors && analysis.risk_factors.length > 0 && (
           <div className="mb-6">
-            <h4 className="mb-3 font-sora font-bold text-[#0F172A]">
+            <h4 className="mb-3 font-sora font-bold text-slate-900 dark:text-slate-100">
               Risk Factors
             </h4>
             <div className="flex flex-wrap gap-2">
@@ -281,10 +281,10 @@ export function AIAnalysisProgress({
   // Cancelled state
   if (status === "cancelled") {
     return (
-      <div className="rounded-xl border border-[#E2E8F0]/80 bg-white p-6 shadow-[0_1px_3px_rgba(0,0,0,0.06),0_2px_8px_rgba(11,138,150,0.04)]">
+      <div className="rounded-xl border border-slate-200 dark:border-slate-800/80 bg-white p-6 shadow-[0_1px_3px_rgba(0,0,0,0.06),0_2px_8px_rgba(11,138,150,0.04)]">
         <div className="flex gap-3 items-start">
           <svg
-            className="h-6 w-6 flex-shrink-0 text-[#64748B] mt-0.5"
+            className="h-6 w-6 flex-shrink-0 text-slate-500 dark:text-slate-500 mt-0.5"
             fill="currentColor"
             viewBox="0 0 20 20"
           >
@@ -298,7 +298,7 @@ export function AIAnalysisProgress({
             <h3 className="mb-2 font-sora font-bold text-[#475569]">
               Analysis Cancelled
             </h3>
-            <p className="mb-4 text-sm text-[#64748B]">
+            <p className="mb-4 text-sm text-slate-500 dark:text-slate-500">
               The analysis has been cancelled. You can start a new analysis at any time.
             </p>
             <button

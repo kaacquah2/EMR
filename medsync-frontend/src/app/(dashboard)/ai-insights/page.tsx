@@ -7,6 +7,7 @@ import { useAuth } from "@/lib/auth-context";
 import { useApi } from "@/hooks/use-api";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import { AIDisclaimer } from "@/components/ui/AIDisclaimer";
 
 type RecentPatient = {
   id: string;
@@ -46,9 +47,10 @@ export default function AIInsightsPage() {
 
   return (
     <div className="space-y-6">
+      <AIDisclaimer />
       <div>
-        <h1 className="font-sora text-2xl font-bold text-[#0F172A]">AI Insights</h1>
-        <p className="mt-1 text-sm text-[#64748B]">
+        <h1 className="font-sora text-2xl font-bold text-slate-900 dark:text-slate-100">AI Insights</h1>
+        <p className="mt-1 text-sm text-slate-500 dark:text-slate-500">
           Open a patient and review risk, triage, and recommendation insights.
         </p>
       </div>
@@ -62,15 +64,15 @@ export default function AIInsightsPage() {
         </CardHeader>
         <CardContent className="space-y-3">
           {loading ? (
-            <p className="text-sm text-[#64748B]">Loading…</p>
+            <p className="text-sm text-slate-500 dark:text-slate-500">Loading…</p>
           ) : patients.length === 0 ? (
-            <p className="text-sm text-[#64748B]">No recent patients. Use patient search to open AI insights.</p>
+            <p className="text-sm text-slate-500 dark:text-slate-500">No recent patients. Use patient search to open AI insights.</p>
           ) : (
             patients.map((p) => (
-              <div key={p.id} className="flex items-center justify-between gap-3 rounded-lg border border-[#E2E8F0] p-3">
+              <div key={p.id} className="flex items-center justify-between gap-3 rounded-lg border border-slate-200 dark:border-slate-800 p-3">
                 <div>
-                  <p className="text-sm font-semibold text-[#0F172A]">{p.full_name}</p>
-                  <p className="text-xs text-[#64748B]">{p.ghana_health_id}</p>
+                  <p className="text-sm font-semibold text-slate-900 dark:text-slate-100">{p.full_name}</p>
+                  <p className="text-xs text-slate-500 dark:text-slate-500">{p.ghana_health_id}</p>
                 </div>
                 <Link href={`/patients/${p.id}/ai-insights`}>
                   <Button size="sm">Open AI Insights</Button>

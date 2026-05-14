@@ -12,6 +12,6 @@ export default function EncounterNewAliasPage() {
     router.replace(`/patients/${id}/encounters/new`);
   }, [id, router]);
 
-  return <div className="py-8 text-center text-[#64748B]">Redirecting...</div>;
+  return <div className="py-8 text-center text-slate-500 dark:text-slate-500">Redirecting...</div>;
 }
 

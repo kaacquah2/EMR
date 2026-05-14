@@ -1,0 +1,36 @@
+TRIAGE ASSESSMENT — Patient {patient_id}
+════════════════════════════════════════
+
+CHIEF COMPLAINT: {chief_complaint}
+
+VITAL SIGNS:
+  Blood Pressure: {bp_systolic}/{bp_diastolic} mmHg
+  Heart Rate:     {heart_rate} bpm
+  SpO2:           {spo2}%
+  Temperature:    {temperature}°C
+  Resp Rate:      {resp_rate} /min
+
+ESI LEVEL ASSESSMENT:
+Based on the presenting vital signs and chief complaint, evaluate
+using the Emergency Severity Index (ESI) 5-level triage system:
+
+  ESI-1 (Critical):  Immediate life-saving intervention required
+  ESI-2 (Emergent):  High-risk situation, confused/lethargic, severe pain
+  ESI-3 (Urgent):    Stable vitals but requires 2+ resources
+  ESI-4 (Less Urgent): Stable, requires 1 resource
+  ESI-5 (Non-Urgent): Stable, requires 0 resources
+
+ABNORMAL INDICATORS:
+- Systolic BP > 180 or < 90: CRITICAL
+- Heart Rate > 120 or < 50: CRITICAL
+- SpO2 < 90%: CRITICAL
+- Temperature > 39.0°C: HIGH
+- Resp Rate > 24 or < 10: HIGH
+
+ASSIGNED TRIAGE LEVEL: {triage_level}
+CONFIDENCE: {confidence}
+
+RECOMMENDED ACTION: {recommended_action}
+
+⚠️ DISCLAIMER: AI-generated triage for demonstration only.
+NOT clinically validated. Always defer to clinical judgment.

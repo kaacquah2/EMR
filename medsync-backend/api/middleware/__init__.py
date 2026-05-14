@@ -42,11 +42,13 @@ class ViewAsHospitalMiddleware:
 class ForcedPasswordChangeMiddleware:
     """
     Enforces server-side password change after temporary password login.
+    JWT-AWARE: Correctly identifies users even if they are using Bearer tokens.
 
     If a user has must_change_password_on_login=True, only allows requests to:
     - /api/v1/auth/change-password-on-login
     - /api/v1/auth/logout
     - /api/v1/auth/me
+    - /api/v1/auth/refresh
 
     All other requests are rejected with 403 Forbidden.
     Prevents users from bypassing the frontend flag.
@@ -54,32 +56,45 @@ class ForcedPasswordChangeMiddleware:
 
     # Endpoints allowed without password change
     ALLOWED_ENDPOINTS = [
-        '/api/v1/auth/change-password-on-login',
-        '/api/v1/auth/logout',
-        '/api/v1/auth/me',
+        "/api/v1/auth/change-password-on-login",
+        "/api/v1/auth/logout",
+        "/api/v1/auth/me",
+        "/api/v1/auth/refresh",
     ]
 
     def __init__(self, get_response):
         self.get_response = get_response
 
     def __call__(self, request):
-        # Check if user is authenticated and has must_change_password_on_login flag
-        if request.user and request.user.is_authenticated:
-            if getattr(request.user, 'must_change_password_on_login', False):
-                # Check if current path is in allowed list
-                is_allowed = any(
-                    request.path.startswith(endpoint)
-                    for endpoint in self.ALLOWED_ENDPOINTS
-                )
+        # 1. Ensure user is authenticated
+        # If request.user is anonymous, it might be because DRF hasn't run yet
+        user = request.user
+        if not user or not user.is_authenticated:
+            # Try to perform manual JWT authentication if Bearer token is present
+            auth_header = request.META.get("HTTP_AUTHORIZATION", "")
+            if auth_header.startswith("Bearer "):
+                from rest_framework_simplejwt.authentication import JWTAuthentication
 
-                if not is_allowed:
-                    return _rendered_json_response(
-                        {
-                            "detail": "Password change required. Please use POST /api/v1/auth/change-password-on-login",
-                            "code": "PASSWORD_CHANGE_REQUIRED",
-                        },
-                        status_code=403,
-                    )
+                try:
+                    auth_result = JWTAuthentication().authenticate(request)
+                    if auth_result:
+                        user, _ = auth_result
+                except Exception:
+                    pass
+
+        # 2. Check if user MUST change password
+        if user and user.is_authenticated and getattr(user, "must_change_password_on_login", False):
+            # Check if current path is in allowed list
+            is_allowed = any(request.path.startswith(endpoint) for endpoint in self.ALLOWED_ENDPOINTS)
+
+            if not is_allowed:
+                return _rendered_json_response(
+                    {
+                        "detail": "Password change required. Please use POST /api/v1/auth/change-password-on-login",
+                        "code": "PASSWORD_CHANGE_REQUIRED",
+                    },
+                    status_code=403,
+                )
 
         return self.get_response(request)
 
@@ -97,8 +112,8 @@ class BreakGlassExpiryMiddleware:
 
     # Endpoints where break-glass access might be used
     BREAK_GLASS_ENDPOINTS = [
-        '/api/v1/global-patient/',
-        '/api/v1/break-glass',
+        "/api/v1/global-patient/",
+        "/api/v1/break-glass",
     ]
 
     def __init__(self, get_response):
@@ -110,10 +125,7 @@ class BreakGlassExpiryMiddleware:
             return self.get_response(request)
 
         # Only check endpoints where break-glass might be used
-        is_protected_endpoint = any(
-            request.path.startswith(endpoint)
-            for endpoint in self.BREAK_GLASS_ENDPOINTS
-        )
+        is_protected_endpoint = any(request.path.startswith(endpoint) for endpoint in self.BREAK_GLASS_ENDPOINTS)
 
         if not is_protected_endpoint:
             return self.get_response(request)
@@ -121,10 +133,9 @@ class BreakGlassExpiryMiddleware:
         # Check for expired break-glass logs for this user
         # Get the most recent break-glass log for this user
         recent_log = (
-            BreakGlassLog.objects
-            .filter(accessed_by=request.user)
-            .select_related('facility', 'global_patient')
-            .order_by('-created_at')
+            BreakGlassLog.objects.filter(accessed_by=request.user)
+            .select_related("facility", "global_patient")
+            .order_by("-created_at")
             .first()
         )
 
@@ -164,9 +175,9 @@ class RequestLoggingMiddleware:
     """
 
     EXCLUDED_PATHS = [
-        '/api/v1/auth/login',
-        '/api/v1/auth/mfa-verify',
-        '/api/v1/auth/password-reset',
+        "/api/v1/auth/login",
+        "/api/v1/auth/mfa-verify",
+        "/api/v1/auth/password-reset",
     ]
 
     def __init__(self, get_response):
@@ -174,22 +185,24 @@ class RequestLoggingMiddleware:
 
     def __call__(self, request):
         import time
+
         start_time = time.time()
-        
+
         response = self.get_response(request)
-        
+
         duration = time.time() - start_time
-        
+
         # Avoid logging sensitive payloads by only logging meta info
         if not any(request.path.startswith(p) for p in self.EXCLUDED_PATHS):
             import logging
+
             logger = logging.getLogger("api.traffic")
             user_id = request.user.id if request.user and request.user.is_authenticated else "anon"
             logger.info(
                 f"API_REQUEST | {request.method} {request.path} | "
                 f"Status: {response.status_code} | Duration: {duration:.3f}s | User: {user_id}"
             )
-            
+
         return response
 
 
@@ -204,17 +217,18 @@ class CSPMiddleware:
 
     def __call__(self, request):
         response = self.get_response(request)
-        
+
         from django.conf import settings
+
         csp_config = getattr(settings, "SECURE_CONTENT_SECURITY_POLICY", None)
-        
+
         if csp_config:
             # Construct CSP string from dictionary
             policies = []
             for directive, sources in csp_config.items():
                 policies.append(f"{directive} {' '.join(sources)}")
-            
+
             csp_string = "; ".join(policies)
             response["Content-Security-Policy"] = csp_string
-            
+
         return response

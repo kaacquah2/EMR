@@ -10,8 +10,8 @@ export function useNurses() {
   const getNursesAtHospital = useCallback(
     async (hospitalId: string): Promise<User[]> => {
       try {
-        const response = await api.get<User[]>(`/admin/nurses?hospital_id=${hospitalId}`);
-        return Array.isArray(response) ? response : [];
+        const response = await api.get<{ data: User[] }>(`/admin/nurses?hospital_id=${hospitalId}`);
+        return response.data || [];
       } catch (err) {
         console.error("Failed to fetch nurses:", err);
         return [];

@@ -141,7 +141,7 @@ export default function AppointmentReminderUI() {
       {/* Reminder Configuration */}
       <Card className="p-6">
         <div className="flex items-center justify-between mb-6">
-          <h2 className="font-sora text-lg font-bold text-[#0F172A]">Reminder Configurations</h2>
+          <h2 className="font-sora text-lg font-bold text-slate-900 dark:text-slate-100">Reminder Configurations</h2>
           {!showForm && (
             <Button onClick={() => setShowForm(true)} className="bg-[#0EAFBE]">
               + Add Reminder
@@ -154,13 +154,13 @@ export default function AppointmentReminderUI() {
           <div className="mb-6 p-4 bg-blue-50 rounded-lg border border-blue-200 space-y-4">
             <div className="grid gap-4 md:grid-cols-2">
               <div>
-                <label className="block text-sm font-medium text-[#0F172A]">Type *</label>
+                <label className="block text-sm font-medium text-slate-900 dark:text-slate-100">Type *</label>
                 <select
                   value={newConfig.reminder_type}
                   onChange={(e) =>
                     setNewConfig({ ...newConfig, reminder_type: e.target.value as "sms" | "email" | "both" })
                   }
-                  className="w-full mt-1 rounded-lg border border-[#E2E8F0] bg-white px-3 py-2 text-sm"
+                  className="w-full mt-1 rounded-lg border border-slate-200 dark:border-slate-800 bg-white px-3 py-2 text-sm"
                 >
                   <option value="sms">SMS</option>
                   <option value="email">Email</option>
@@ -168,7 +168,7 @@ export default function AppointmentReminderUI() {
                 </select>
               </div>
               <div>
-                <label className="block text-sm font-medium text-[#0F172A]">Hours Before *</label>
+                <label className="block text-sm font-medium text-slate-900 dark:text-slate-100">Hours Before *</label>
                 <Input
                   type="number"
                   min="1"
@@ -188,9 +188,9 @@ export default function AppointmentReminderUI() {
                   type="checkbox"
                   checked={newConfig.is_active}
                   onChange={(e) => setNewConfig({ ...newConfig, is_active: e.target.checked })}
-                  className="h-4 w-4 rounded border-[#CBD5E1]"
+                  className="h-4 w-4 rounded border-slate-300 dark:border-slate-700"
                 />
-                <span className="text-sm text-[#0F172A]">Active</span>
+                <span className="text-sm text-slate-900 dark:text-slate-100">Active</span>
               </label>
             </div>
 
@@ -214,22 +214,22 @@ export default function AppointmentReminderUI() {
 
         {/* Configs List */}
         {loading ? (
-          <p className="text-[#64748B]">Loading...</p>
+          <p className="text-slate-500 dark:text-slate-500">Loading...</p>
         ) : configs.length === 0 ? (
-          <p className="text-[#64748B]">No reminder configurations yet.</p>
+          <p className="text-slate-500 dark:text-slate-500">No reminder configurations yet.</p>
         ) : (
           <div className="space-y-3">
             {configs.map((config) => (
               <div
                 key={config.id}
-                className="flex items-center justify-between p-4 rounded-lg border border-[#E2E8F0] hover:bg-[#F8FAFC]"
+                className="flex items-center justify-between p-4 rounded-lg border border-slate-200 dark:border-slate-800 hover:bg-slate-50 dark:bg-slate-900"
               >
                 <div className="flex items-center gap-3 flex-1">
                   <div className="flex items-center gap-2 text-[#0EAFBE]">
                     {getReminderIcon(config.reminder_type)}
                     <span className="text-sm font-medium capitalize">{config.reminder_type}</span>
                   </div>
-                  <span className="text-sm text-[#64748B]">{config.hours_before}h before</span>
+                  <span className="text-sm text-slate-500 dark:text-slate-500">{config.hours_before}h before</span>
                   {config.last_sent_at && (
                     <span className="text-xs text-[#94A3B8]">
                       Last sent: {new Date(config.last_sent_at).toLocaleDateString()}
@@ -252,7 +252,7 @@ export default function AppointmentReminderUI() {
                   <button
                     type="button"
                     onClick={() => handleEditConfig(config)}
-                    className="px-3 py-1 rounded border border-[#E2E8F0] text-xs text-[#0F172A] hover:bg-[#F1F5F9]"
+                    className="px-3 py-1 rounded border border-slate-200 dark:border-slate-800 text-xs text-slate-900 dark:text-slate-100 hover:bg-slate-100 dark:bg-slate-900"
                   >
                     Edit
                   </button>
@@ -272,25 +272,25 @@ export default function AppointmentReminderUI() {
 
       {/* Reminder History */}
       <Card className="p-6">
-        <h2 className="font-sora text-lg font-bold text-[#0F172A] mb-4">Recent Reminders</h2>
+        <h2 className="font-sora text-lg font-bold text-slate-900 dark:text-slate-100 mb-4">Recent Reminders</h2>
 
         {history.length === 0 ? (
-          <p className="text-[#64748B]">No reminder history yet.</p>
+          <p className="text-slate-500 dark:text-slate-500">No reminder history yet.</p>
         ) : (
           <div className="space-y-3 max-h-96 overflow-y-auto">
             {history.map((item) => (
               <div
                 key={item.id}
-                className="flex items-start justify-between p-4 rounded-lg border border-[#E2E8F0] hover:bg-[#F8FAFC]"
+                className="flex items-start justify-between p-4 rounded-lg border border-slate-200 dark:border-slate-800 hover:bg-slate-50 dark:bg-slate-900"
               >
                 <div className="flex-1">
                   <div className="flex items-center gap-2">
-                    <span className="font-medium text-[#0F172A]">{item.patient_name}</span>
+                    <span className="font-medium text-slate-900 dark:text-slate-100">{item.patient_name}</span>
                     <span className={`px-2 py-0.5 rounded text-xs font-medium ${getStatusColor(item.status)}`}>
                       {item.status}
                     </span>
                   </div>
-                  <p className="text-sm text-[#64748B] mt-1">
+                  <p className="text-sm text-slate-500 dark:text-slate-500 mt-1">
                     {getReminderIcon(item.reminder_type)} {item.reminder_type.toUpperCase()}
                   </p>
                   {item.error_message && (
@@ -301,8 +301,8 @@ export default function AppointmentReminderUI() {
                   )}
                 </div>
                 <div className="flex items-center gap-2 text-right">
-                  <Clock className="h-4 w-4 text-[#64748B]" />
-                  <span className="text-xs text-[#64748B]">
+                  <Clock className="h-4 w-4 text-slate-500 dark:text-slate-500" />
+                  <span className="text-xs text-slate-500 dark:text-slate-500">
                     {new Date(item.sent_at).toLocaleString()}
                   </span>
                 </div>

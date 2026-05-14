@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
+import { DatePicker } from "@/components/ui/DatePicker";
 import { AllergyConflictModal } from "@/components/features/AllergyConflictModal";
 import { useToast } from "@/lib/toast-context";
 import { ROLES } from "@/lib/permissions";
@@ -277,14 +278,14 @@ export function AddRecordForm({ patientId, onSuccess, onClose, initialType }: Ad
   if (!selectedType) {
     return (
       <div className="space-y-4">
-        <p className="text-sm text-[#64748B]">Select record type</p>
+        <p className="text-sm text-slate-500 dark:text-slate-500">Select record type</p>
         <div className="grid grid-cols-2 gap-2">
           {recordTypes.map((t) => (
             <button
               key={t.id}
               type="button"
               onClick={() => setSelectedType(t.id)}
-              className="rounded-lg border-2 border-[#CBD5E1] p-4 text-left text-sm font-medium transition-colors hover:border-[#0B8A96] hover:bg-[#F0FDFA]"
+              className="rounded-lg border-2 border-slate-300 dark:border-slate-700 p-4 text-left text-sm font-medium transition-colors hover:border-[#0B8A96] hover:bg-[#F0FDFA]"
             >
               {t.label}
             </button>
@@ -328,12 +329,12 @@ export function AddRecordForm({ patientId, onSuccess, onClose, initialType }: Ad
             required
           />
           {icdSuggestions.length > 0 && (
-            <div className="rounded-lg border border-[#E2E8F0] bg-white p-2 text-sm">
+            <div className="rounded-lg border border-slate-200 dark:border-slate-800 bg-white p-2 text-sm">
               {icdSuggestions.slice(0, 6).map((s) => (
                 <button
                   key={`${s.code}-${s.description}`}
                   type="button"
-                  className="block w-full rounded px-2 py-1 text-left hover:bg-[#F8FAFC]"
+                  className="block w-full rounded px-2 py-1 text-left hover:bg-slate-50 dark:bg-slate-900"
                   onClick={() => setForm((f) => ({ ...f, icd10_code: s.code, icd10_description: s.description }))}
                 >
                   <span className="font-mono">{s.code}</span> - {s.description}
@@ -357,12 +358,23 @@ export function AddRecordForm({ patientId, onSuccess, onClose, initialType }: Ad
             <option value="severe">Severe</option>
             <option value="critical">Critical</option>
           </Select>
-          <Input
-            label="Onset date"
-            type="date"
-            value={form.onset_date}
-            onChange={(e) => setForm((f) => ({ ...f, onset_date: e.target.value }))}
-          />
+          <div className="z-10 relative">
+            <DatePicker
+              label="Onset date"
+              value={form.onset_date ? new Date(form.onset_date + "T12:00:00") : null}
+              onChange={(date) => {
+                if (date) {
+                  const y = date.getFullYear();
+                  const m = String(date.getMonth() + 1).padStart(2, '0');
+                  const d = String(date.getDate()).padStart(2, '0');
+                  setForm((f) => ({ ...f, onset_date: `${y}-${m}-${d}` }));
+                } else {
+                  setForm((f) => ({ ...f, onset_date: "" }));
+                }
+              }}
+              format="YYYY-MM-DD"
+            />
+          </div>
           <div className="flex items-center gap-2">
             <input
               type="checkbox"
@@ -372,10 +384,12 @@ export function AddRecordForm({ patientId, onSuccess, onClose, initialType }: Ad
             />
             <label htmlFor="chronic">Chronic</label>
           </div>
-          <Input
+          <Textarea
             label="Notes"
             value={form.notes}
             onChange={(e) => setForm((f) => ({ ...f, notes: e.target.value }))}
+            maxLength={500}
+            showCount
           />
         </>
       )}
@@ -389,12 +403,12 @@ export function AddRecordForm({ patientId, onSuccess, onClose, initialType }: Ad
             required
           />
           {drugSuggestions.length > 0 && (
-            <div className="rounded-lg border border-[#E2E8F0] bg-white p-2 text-sm">
+            <div className="rounded-lg border border-slate-200 dark:border-slate-800 bg-white p-2 text-sm">
               {drugSuggestions.slice(0, 6).map((s) => (
                 <button
                   key={s.name}
                   type="button"
-                  className="flex w-full items-center justify-between rounded px-2 py-1 text-left hover:bg-[#F8FAFC]"
+                  className="flex w-full items-center justify-between rounded px-2 py-1 text-left hover:bg-slate-50 dark:bg-slate-900"
                   onClick={() => setForm((f) => ({ ...f, drug_name: s.name }))}
                 >
                   <span>{s.name}</span>
@@ -437,10 +451,12 @@ export function AddRecordForm({ patientId, onSuccess, onClose, initialType }: Ad
             <option value="inhalation">Inhalation</option>
             <option value="other">Other</option>
           </Select>
-          <Input
+          <Textarea
             label="Notes"
             value={form.notes}
             onChange={(e) => setForm((f) => ({ ...f, notes: e.target.value }))}
+            maxLength={500}
+            showCount
           />
         </>
       )}
@@ -471,7 +487,7 @@ export function AddRecordForm({ patientId, onSuccess, onClose, initialType }: Ad
                 required
               />
             )}
-            <p className="mt-1 text-xs text-[#64748B]">Order is routed to the correct lab unit.</p>
+            <p className="mt-1 text-xs text-slate-500 dark:text-slate-500">Order is routed to the correct lab unit.</p>
           </div>
           <Select
             label="Urgency"
@@ -482,10 +498,12 @@ export function AddRecordForm({ patientId, onSuccess, onClose, initialType }: Ad
             <option value="urgent">Urgent</option>
             <option value="stat">STAT</option>
           </Select>
-          <Input
+          <Textarea
             label="Notes for lab"
             value={form.notes}
             onChange={(e) => setForm((f) => ({ ...f, notes: e.target.value }))}
+            maxLength={500}
+            showCount
           />
         </>
       )}
@@ -579,10 +597,12 @@ export function AddRecordForm({ patientId, onSuccess, onClose, initialType }: Ad
             <option value="severe">Severe</option>
             <option value="life_threatening">Life Threatening</option>
           </Select>
-          <Input
+          <Textarea
             label="Notes"
             value={form.notes}
             onChange={(e) => setForm((f) => ({ ...f, notes: e.target.value }))}
+            maxLength={500}
+            showCount
           />
         </>
       )}

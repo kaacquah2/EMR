@@ -48,7 +48,7 @@ export function ConfirmDialog({
           <DialogHeader>
             <DialogTitle>{title}</DialogTitle>
           </DialogHeader>
-          <p className="text-sm text-[#64748B] mb-6">{message}</p>
+          <p className="text-sm text-slate-500 dark:text-slate-500 mb-6">{message}</p>
           <div className="flex justify-end gap-2">
             <Button
               type="button"

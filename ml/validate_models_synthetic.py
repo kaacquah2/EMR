@@ -264,7 +264,7 @@ def main():
     parser.add_argument(
         "--file",
         type=str,
-        default="demo_patients.json",
+        default="medsync-backend/data/seeds/demo_patients.json",
         help="Path to synthetic data JSON file"
     )
     parser.add_argument(

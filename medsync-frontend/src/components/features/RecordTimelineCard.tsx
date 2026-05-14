@@ -28,11 +28,11 @@ export function RecordTimelineCard({ record, hospitalName, onAmend, canAmend }: 
     >
       <div className="flex justify-between gap-4">
         <div className="flex-1">
-          <span className="font-mono text-xs text-[#64748B]">
+          <span className="font-mono text-xs text-slate-500 dark:text-slate-500">
             {new Date(record.created_at).toLocaleString()}
           </span>
           {hospitalName && (
-            <span className="ml-2 rounded-full bg-[#F1F5F9] px-2 py-0.5 text-xs text-[#64748B]">
+            <span className="ml-2 rounded-full bg-slate-100 dark:bg-slate-900 px-2 py-0.5 text-xs text-slate-500 dark:text-slate-500">
               Recorded at {hospitalName}
             </span>
           )}
@@ -75,7 +75,7 @@ export function RecordTimelineCard({ record, hospitalName, onAmend, canAmend }: 
         )}
       </div>
       {record.amendment_reason && (
-        <p className="mt-2 text-xs text-[#64748B]">Amendment reason: {record.amendment_reason}</p>
+        <p className="mt-2 text-xs text-slate-500 dark:text-slate-500">Amendment reason: {record.amendment_reason}</p>
       )}
     </div>
   );

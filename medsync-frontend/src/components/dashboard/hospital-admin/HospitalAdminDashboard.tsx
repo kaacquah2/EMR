@@ -253,7 +253,7 @@ export function HospitalAdminDashboard({
             </CardHeader>
             <CardContent className="space-y-0 divide-y divide-[#E2E8F0]">
               {staff.length === 0 ? (
-                <p className="py-4 text-sm text-[#64748B]">No staff loaded.</p>
+                <p className="py-4 text-sm text-slate-500 dark:text-slate-500">No staff loaded.</p>
               ) : (
                 staff.map((u) => {
                   const b = staffBadge(u);
@@ -261,13 +261,13 @@ export function HospitalAdminDashboard({
                   return (
                     <div key={u.user_id} className="flex flex-wrap items-start justify-between gap-2 py-3 first:pt-0">
                       <div>
-                        <p className="font-medium text-[#0F172A]">{u.full_name || u.email}</p>
-                        <p className="text-xs text-[#64748B]">{staffSubtitle(u)}</p>
+                        <p className="font-medium text-slate-900 dark:text-slate-100">{u.full_name || u.email}</p>
+                        <p className="text-xs text-slate-500 dark:text-slate-500">{staffSubtitle(u)}</p>
                       </div>
                       <div className="flex flex-wrap items-center gap-2">
                         <span className={`rounded px-2 py-0.5 text-xs font-semibold ${b.cls}`}>{b.label}</span>
                         {u.account_status === "active" ? (
-                          <span className="text-xs text-[#64748B]">{relAgo(u.last_login)}</span>
+                          <span className="text-xs text-slate-500 dark:text-slate-500">{relAgo(u.last_login)}</span>
                         ) : null}
                         {u.account_status === "active" && u.mfa_enabled === false ? (
                           <Button
@@ -324,7 +324,7 @@ export function HospitalAdminDashboard({
             </CardHeader>
             <CardContent className="space-y-3">
               {wards.length === 0 ? (
-                <p className="text-sm text-[#64748B]">No ward data.</p>
+                <p className="text-sm text-slate-500 dark:text-slate-500">No ward data.</p>
               ) : (
                 wards.map((w) => {
                   const total = w.total_beds || 0;
@@ -335,12 +335,12 @@ export function HospitalAdminDashboard({
                   return (
                     <div key={w.id}>
                       <div className="mb-1 flex justify-between text-sm">
-                        <span className="font-medium text-[#0F172A]">{w.name}</span>
-                        <span className={full ? "font-semibold text-[#E24B4A]" : "text-[#64748B]"}>
+                        <span className="font-medium text-slate-900 dark:text-slate-100">{w.name}</span>
+                        <span className={full ? "font-semibold text-[#E24B4A]" : "text-slate-500 dark:text-slate-500"}>
                           {occ}/{total} beds{full ? " FULL" : ""}
                         </span>
                       </div>
-                      <div className="h-2 w-full overflow-hidden rounded-full bg-[#E2E8F0]">
+                      <div className="h-2 w-full overflow-hidden rounded-full bg-slate-200 dark:bg-slate-800">
                         <div
                           className="h-full rounded-full transition-all"
                           style={{
@@ -371,7 +371,7 @@ export function HospitalAdminDashboard({
             </CardHeader>
             <CardContent className="space-y-0 divide-y divide-[#E2E8F0]">
               {pendingList.length === 0 ? (
-                <p className="py-4 text-sm text-[#64748B]">No pending invitations.</p>
+                <p className="py-4 text-sm text-slate-500 dark:text-slate-500">No pending invitations.</p>
               ) : (
                 pendingList.slice(0, 8).map((row) => {
                   const email = String(row.email ?? "");
@@ -383,8 +383,8 @@ export function HospitalAdminDashboard({
                   return (
                     <div key={String(row.user_id)} className="flex flex-wrap items-center justify-between gap-2 py-3 first:pt-0">
                       <div>
-                        <p className="font-medium text-[#0F172A]">{email}</p>
-                        <p className="text-xs text-[#64748B]">
+                        <p className="font-medium text-slate-900 dark:text-slate-100">{email}</p>
+                        <p className="text-xs text-slate-500 dark:text-slate-500">
                           {role}
                           {created ? ` · sent ${relAgo(created)}` : ""}
                         </p>
@@ -430,15 +430,15 @@ export function HospitalAdminDashboard({
             </CardHeader>
             <CardContent className="space-y-0 divide-y divide-[#E2E8F0]">
               {rbacRows.length === 0 ? (
-                <p className="py-4 text-sm text-[#64748B]">No reviews overdue (70+ days).</p>
+                <p className="py-4 text-sm text-slate-500 dark:text-slate-500">No reviews overdue (70+ days).</p>
               ) : (
                 rbacRows.map((r) => {
                   const badge = rbacBadge(r.days_overdue);
                   return (
                     <div key={r.user_id} className="flex flex-wrap items-center justify-between gap-2 py-3 first:pt-0">
                       <div>
-                        <p className="font-medium text-[#0F172A]">{r.full_name}</p>
-                        <p className="text-xs text-[#64748B]">{r.role.replace(/_/g, " ")}</p>
+                        <p className="font-medium text-slate-900 dark:text-slate-100">{r.full_name}</p>
+                        <p className="text-xs text-slate-500 dark:text-slate-500">{r.role.replace(/_/g, " ")}</p>
                       </div>
                       <span className={`rounded px-2 py-0.5 text-xs font-semibold ${badge.cls}`}>{badge.text}</span>
                     </div>
@@ -457,7 +457,7 @@ export function HospitalAdminDashboard({
             </CardHeader>
             <CardContent>
               {auditList.length === 0 ? (
-                <p className="text-sm text-[#64748B]">No recent events.</p>
+                <p className="text-sm text-slate-500 dark:text-slate-500">No recent events.</p>
               ) : (
                 <ul className="space-y-2 text-sm">
                   {auditList.slice(0, 5).map((e, i) => {
@@ -466,8 +466,8 @@ export function HospitalAdminDashboard({
                     return (
                       <li key={i} className="flex flex-wrap items-center gap-2">
                         <span className={`rounded px-2 py-0.5 text-xs font-semibold ${badgeCls}`}>{ac}</span>
-                        <span className="text-[#0F172A]">{e.user_name}</span>
-                        <span className="ml-auto text-xs text-[#64748B]">{formatAuditTime(e.timestamp)}</span>
+                        <span className="text-slate-900 dark:text-slate-100">{e.user_name}</span>
+                        <span className="ml-auto text-xs text-slate-500 dark:text-slate-500">{formatAuditTime(e.timestamp)}</span>
                       </li>
                     );
                   })}

@@ -1,8 +1,9 @@
 'use client';
 
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useAuth } from '@/lib/auth-context';
 import { useApi } from '@/hooks/use-api';
+import { usePharmacyWorklist, type PrescriptionItem } from '@/hooks/use-pharmacy';
 import {
   Pill,
   Clock,
@@ -12,53 +13,7 @@ import {
   Package,
 } from 'lucide-react';
 
-interface PrescriptionItem {
-  prescription_id: string;
-  patient_id: string;
-  patient_name: string;
-  drug_name: string;
-  dosage: string;
-  frequency: string;
-  duration_days: number | null;
-  route: string;
-  priority: 'stat' | 'urgent' | 'routine';
-  prescribed_by: string;
-  prescribed_at: string;
-  wait_time_minutes: number;
-  allergy_conflict: boolean;
-  drug_interaction_checked: boolean;
-  drug_interactions: DrugInteraction[] | null;
-  notes: string | null;
-}
-
-interface DrugInteraction {
-  interacting_drug: string;
-  severity: 'mild' | 'moderate' | 'severe';
-  description: string;
-}
-
-interface WorklistSummary {
-  total_pending: number;
-  stat_count: number;
-  urgent_count: number;
-  routine_count: number;
-}
-
-interface WorklistData {
-  worklist: PrescriptionItem[];
-  summary: WorklistSummary;
-}
-
-interface DispenseModalState {
-  isOpen: boolean;
-  prescription: PrescriptionItem | null;
-}
-
-interface DispenseFormData {
-  dispensed_quantity: string;
-  dispense_notes: string;
-  drug_interaction_override: boolean;
-}
+// Types are now in use-pharmacy hook
 
 const PRIORITY_COLORS = {
   stat: {
@@ -87,14 +42,29 @@ const PRIORITY_COLORS = {
   },
 };
 
+interface DispenseModalState {
+  isOpen: boolean;
+  prescription: PrescriptionItem | null;
+}
+
+interface DispenseFormData {
+  dispensed_quantity: string;
+  dispense_notes: string;
+  drug_interaction_override: boolean;
+}
+
 export default function PharmacyWorklistPage() {
   const { user } = useAuth();
   const api = useApi();
-  const [worklistData, setWorklistData] = useState<WorklistData | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-  const [autoRefresh, setAutoRefresh] = useState(true);
-  const [lastRefresh, setLastRefresh] = useState<Date | null>(null);
+  
+  const { 
+    data: worklistData, 
+    loading, 
+    error, 
+    fetchWorklist 
+  } = usePharmacyWorklist();
+
+  const [lastRefresh, setLastRefresh] = useState<Date | null>(new Date());
   const [dispenseModal, setDispenseModal] = useState<DispenseModalState>({
     isOpen: false,
     prescription: null,
@@ -107,32 +77,12 @@ export default function PharmacyWorklistPage() {
   const [dispensing, setDispensing] = useState(false);
   const [dispenseError, setDispenseError] = useState<string | null>(null);
 
-  const fetchWorklist = useCallback(async () => {
-    try {
-      setError(null);
-      const data = await api.get<WorklistData>('/pharmacy/worklist');
-      setWorklistData(data);
-      setLastRefresh(new Date());
-    } catch (err: unknown) {
-      if (process.env.NODE_ENV === 'development') {
-        console.error('Failed to fetch pharmacy worklist:', err);
-      }
-      const errorObj = err as { message?: string };
-      setError(errorObj.message || 'Failed to load pharmacy worklist');
-    } finally {
-      setLoading(false);
-    }
-  }, [api]);
-
-  // Auto-refresh every 15 seconds
+  // Update last refresh when data changes
   useEffect(() => {
-    fetchWorklist();
-
-    if (autoRefresh) {
-      const interval = setInterval(fetchWorklist, 15000);
-      return () => clearInterval(interval);
+    if (worklistData) {
+      setLastRefresh(new Date());
     }
-  }, [autoRefresh, fetchWorklist]);
+  }, [worklistData]);
 
   const formatWaitTime = (minutes: number) => {
     if (minutes < 60) return `${minutes}m`;
@@ -272,16 +222,6 @@ export default function PharmacyWorklistPage() {
         </div>
 
         <div className="flex items-center gap-3">
-          <label className="flex items-center gap-2 text-sm text-gray-700">
-            <input
-              type="checkbox"
-              checked={autoRefresh}
-              onChange={(e) => setAutoRefresh(e.target.checked)}
-              className="rounded border-gray-300"
-            />
-            Auto-refresh (15s)
-          </label>
-
           <button
             onClick={fetchWorklist}
             disabled={loading}
@@ -551,7 +491,7 @@ export default function PharmacyWorklistPage() {
                   </div>
                   <ul className="text-sm text-amber-900 space-y-1">
                     {dispenseModal.prescription.drug_interactions.map(
-                      (interaction, idx) => (
+                      (interaction: { interacting_drug: string; severity: string; description: string }, idx: number) => (
                         <li key={idx}>
                           <span className="font-medium">
                             {interaction.interacting_drug}
@@ -592,7 +532,7 @@ export default function PharmacyWorklistPage() {
                   min="1"
                   value={dispenseForm.dispensed_quantity}
                   onChange={(e) =>
-                    setDispenseForm((prev) => ({
+                    setDispenseForm((prev: DispenseFormData) => ({
                       ...prev,
                       dispensed_quantity: e.target.value,
                     }))
@@ -615,7 +555,7 @@ export default function PharmacyWorklistPage() {
                   rows={3}
                   value={dispenseForm.dispense_notes}
                   onChange={(e) =>
-                    setDispenseForm((prev) => ({
+                    setDispenseForm((prev: DispenseFormData) => ({
                       ...prev,
                       dispense_notes: e.target.value,
                     }))
@@ -635,7 +575,7 @@ export default function PharmacyWorklistPage() {
                       id="drug_interaction_override"
                       checked={dispenseForm.drug_interaction_override}
                       onChange={(e) =>
-                        setDispenseForm((prev) => ({
+                        setDispenseForm((prev: DispenseFormData) => ({
                           ...prev,
                           drug_interaction_override: e.target.checked,
                         }))

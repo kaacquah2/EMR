@@ -8,20 +8,12 @@ import { StatCard } from "@/components/ui/stat-card";
 import { EmptyState } from "@/components/ui/empty-state";
 import { ErrorBanner } from "@/components/ui/error-banner";
 import { CardSkeleton } from "@/components/ui/skeleton";
-import { TriageBadge, triageSortRank } from "@/components/ui/badge";
-import { useApi } from "@/hooks/use-api";
+import { triageSortRank, TriageBadge } from "@/components/ui/badge";
 import { useWorklistEncounters, type WorklistEncounter } from "@/hooks/use-encounters";
 import { usePollWhenVisible } from "@/hooks/use-poll-when-visible";
 import { useAlerts, useResolveAlert } from "@/hooks/use-alerts";
+import { useDashboardStats } from "@/hooks/use-dashboard-stats";
 import { useAuth } from "@/lib/auth-context";
-
-type DoctorMetrics = {
-  queue_count: number;
-  critical_alerts: number;
-  new_lab_results: number;
-  pending_prescriptions: number;
-  referrals_awaiting: number;
-};
 
 const REFRESH_INTERVAL_MS = 60_000;
 
@@ -35,49 +27,25 @@ function AllergyIndicator({ hasAllergy }: { hasAllergy?: boolean }) {
 }
 
 export function DoctorDashboard() {
-  const api = useApi();
   const { user } = useAuth();
   const { encounters, summary, fetch: fetchWorklist } = useWorklistEncounters();
   const { alerts, fetch: fetchAlerts } = useAlerts("active", undefined, user?.hospital_id || null);
   const { resolve: resolveAlert, loading: resolvingAlert } = useResolveAlert();
+  const { stats: metrics, loading: dashboardLoading, error: dashboardError, refresh: fetchDashboard } = useDashboardStats();
 
-  const [metrics, setMetrics] = React.useState<DoctorMetrics>({
-    queue_count: 0,
-    critical_alerts: 0,
-    new_lab_results: 0,
-    pending_prescriptions: 0,
-    referrals_awaiting: 0,
-  });
-  const [loading, setLoading] = React.useState(true);
-  const [error, setError] = React.useState<string | null>(null);
   const [dismissedAlertIds, setDismissedAlertIds] = React.useState<Set<string>>(new Set());
   const [lastRefreshedAt, setLastRefreshedAt] = React.useState<Date | null>(null);
   const [referenceNowMs, setReferenceNowMs] = React.useState<number>(0);
 
-  const fetchDashboard = React.useCallback(async () => {
-    try {
-      const data = await api.get<Partial<DoctorMetrics>>("/dashboard");
-      setMetrics({
-        queue_count: Number(data.queue_count ?? 0),
-        critical_alerts: Number(data.critical_alerts ?? 0),
-        new_lab_results: Number(data.new_lab_results ?? 0),
-        pending_prescriptions: Number(data.pending_prescriptions ?? 0),
-        referrals_awaiting: Number(data.referrals_awaiting ?? 0),
-      });
-      setError(null);
-    } catch {
-      setError("Failed to load dashboard metrics. Please try again.");
-    }
-  }, [api]);
-
   const refreshAll = React.useCallback(async () => {
-    setLoading(true);
     const refreshedAt = new Date();
     await Promise.all([fetchDashboard(), fetchWorklist(true), fetchAlerts()]);
     setLastRefreshedAt(refreshedAt);
     setReferenceNowMs(refreshedAt.getTime());
-    setLoading(false);
   }, [fetchAlerts, fetchDashboard, fetchWorklist]);
+
+  const loading = dashboardLoading && encounters.length === 0;
+  const error = dashboardError;
 
   React.useEffect(() => {
     void refreshAll();
@@ -129,7 +97,7 @@ export function DoctorDashboard() {
   if (loading && encounters.length === 0) {
     return (
       <div className="space-y-6">
-        <div className="h-8 w-48 animate-pulse rounded bg-[#E2E8F0] dark:bg-[#334155]" />
+        <div className="h-8 w-48 animate-pulse rounded bg-slate-200 dark:bg-slate-800 dark:bg-[#334155]" />
         <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-5">
           {Array.from({ length: 5 }).map((_, i) => <CardSkeleton key={i} lines={2} />)}
         </div>
@@ -143,18 +111,14 @@ export function DoctorDashboard() {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-end justify-between gap-4">
-        <div>
-          <h1 className="font-sora text-2xl font-bold text-[var(--gray-900)]">Dashboard</h1>
-          <p className="mt-1 text-sm text-[var(--gray-500)]">At-a-glance clinical activity for your current shift.</p>
-        </div>
+      <div className="flex justify-end">
         <p className="text-xs text-[var(--gray-500)]">
           Last refreshed {lastRefreshedAt ? lastRefreshedAt.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }) : "—"}
         </p>
       </div>
 
       {error && (
-        <ErrorBanner message={error} onRetry={() => { setError(null); void refreshAll(); }} />
+        <ErrorBanner message={error} onRetry={() => { void refreshAll(); }} />
       )}
 
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-5">
@@ -239,7 +203,7 @@ export function DoctorDashboard() {
               {visibleAlerts.map((alert) => (
                 <div
                   key={alert.id}
-                  className="min-w-[260px] flex-1 rounded-lg border border-[var(--gray-300)] dark:border-[#334155] bg-[#F8FAFC] dark:bg-[#0F172A] p-3"
+                  className="min-w-[260px] flex-1 rounded-lg border border-[var(--gray-300)] dark:border-[#334155] bg-slate-50 dark:bg-slate-900 dark:bg-slate-900 dark:bg-slate-100 p-3"
                 >
                   <p className="text-sm font-semibold text-[var(--gray-900)]">{alert.patient_name}</p>
                   <p className="mt-1 text-xs text-[var(--gray-500)]">{alert.message}</p>

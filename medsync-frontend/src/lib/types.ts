@@ -26,6 +26,8 @@ export interface User {
   licence_verified?: boolean;
   hospital_name?: string;
   ward_name?: string;
+  totp_grace_period_expires?: string | null;
+  mfa_method?: string;
 }
 
 export interface AuthTokens {
@@ -141,6 +143,10 @@ export interface PaginatedResponse<T> {
   data: T[];
   next_cursor?: string;
   has_more: boolean;
+}
+
+export interface DetailResponse<T> {
+  data: T;
 }
 
 export interface ApiError {
@@ -339,3 +345,202 @@ export interface ShiftHandover {
   status: "pending" | "acknowledged";
   created_at: string;
 }
+
+// ---- PHARMACY INVENTORY ----
+
+export interface DrugStock {
+  id: string;
+  hospital: string;
+  hospital_name: string;
+  drug_name: string;
+  generic_name: string;
+  batch_number: string;
+  quantity: number;
+  unit: string;
+  reorder_level: number;
+  expiry_date: string;
+  supplier?: string;
+  cost_per_unit?: number;
+  stored_location?: string;
+  notes?: string;
+  is_low_stock: boolean;
+  is_expired: boolean;
+  days_until_expiry: number;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface Dispensation {
+  id: string;
+  prescription_id: string;
+  drug_stock: string;
+  drug_stock_name: string;
+  quantity_dispensed: number;
+  dispensed_by: string;
+  dispensed_by_name: string;
+  dispensed_at: string;
+  batch_notes?: string;
+}
+
+export interface StockMovement {
+  id: string;
+  drug_stock: string;
+  drug_stock_name: string;
+  movement_type: string;
+  movement_type_display: string;
+  quantity: number;
+  quantity_before: number;
+  quantity_after: number;
+  reason: string;
+  performed_by: string;
+  performed_by_name?: string;
+  dispensation?: string;
+  created_at: string;
+}
+
+export interface StockAlert {
+  id: string;
+  hospital: string;
+  hospital_name: string;
+  drug_stock: string;
+  drug_stock_name: string;
+  drug_batch: string;
+  alert_type: string;
+  alert_type_display: string;
+  message: string;
+  severity: "critical" | "warning" | "info";
+  severity_display: string;
+  status: "active" | "acknowledged" | "resolved";
+  status_display: string;
+  acknowledged_by?: string;
+  acknowledged_by_name?: string;
+  acknowledged_at?: string;
+  resolved_at?: string;
+  created_at: string;
+  updated_at: string;
+}
+
+// ---- PATIENT TIMELINE ----
+
+/** Event types that can appear on a patient timeline */
+export type TimelineEventType = "encounter" | "admission" | "lab_result" | "vital" | "prescription" | "alert";
+
+/** Lab result status indicating clinical interpretation */
+export type EventStatus = "normal" | "abnormal" | "critical";
+
+/** Timeline event for an Encounter */
+export interface TimelineEncounterEvent {
+  type: "encounter";
+  id: string;
+  date: string;
+  encounter: Encounter;
+  provider?: string;
+  severity?: never;
+}
+
+/** Timeline event for an Admission (hospital stay) */
+export interface TimelineAdmissionEvent {
+  type: "admission";
+  id: string;
+  date: string;
+  /** Admission start date */
+  admission_date: string;
+  /** Admission end date, if discharged */
+  discharge_date?: string | null;
+  ward_name?: string;
+  reason?: string;
+  provider?: string;
+  severity?: never;
+}
+
+/** Timeline event for a Lab Result */
+export interface TimelineLabResultEvent {
+  type: "lab_result";
+  id: string;
+  date: string;
+  lab_result: LabResult;
+  test_name: string;
+  result_value?: string;
+  reference_range?: string;
+  status: EventStatus;
+  provider?: string;
+  severity?: "normal" | "abnormal" | "critical";
+}
+
+/** Timeline event for Vital Signs */
+export interface TimelineVitalEvent {
+  type: "vital";
+  id: string;
+  date: string;
+  vital: Vital;
+  /** Summary text for vital signs (e.g., "BP: 120/80, HR: 72") */
+  summary: string;
+  provider?: string;
+  severity?: never;
+}
+
+/** Timeline event for a Prescription */
+export interface TimelinePrescriptionEvent {
+  type: "prescription";
+  id: string;
+  date: string;
+  prescription: Prescription;
+  drug_name: string;
+  dosage: string;
+  frequency: string;
+  dispense_status: "pending" | "dispensed" | "cancelled";
+  provider?: string;
+  severity?: never;
+}
+
+/** Timeline event for a Clinical Alert */
+export interface TimelineAlertEvent {
+  type: "alert";
+  id: string;
+  date: string;
+  alert: ClinicalAlert;
+  message: string;
+  provider?: never;
+  severity: "low" | "medium" | "high" | "critical";
+}
+
+/** Union type of all timeline events */
+export type TimelineEvent = 
+  | TimelineEncounterEvent
+  | TimelineAdmissionEvent
+  | TimelineLabResultEvent
+  | TimelineVitalEvent
+  | TimelinePrescriptionEvent
+  | TimelineAlertEvent;
+
+/** Simplified event card for display in timeline UI */
+export interface TimelineEventCard {
+  eventId: string;
+  eventType: TimelineEventType;
+  date: string;
+  summary: string;
+  provider?: string;
+  severity?: "low" | "medium" | "high" | "critical" | "normal" | "abnormal";
+  /** Metadata for styling and interaction */
+  metadata?: Record<string, unknown>;
+}
+
+/** Timeline data response from API or state */
+export interface TimelineData {
+  events: TimelineEvent[];
+  loading: boolean;
+  error: string | null;
+}
+
+/** Timeline filter state: which event types to show/hide */
+export interface TimelineFilters {
+  encounter: boolean;
+  admission: boolean;
+  lab_result: boolean;
+  vital: boolean;
+  prescription: boolean;
+  alert: boolean;
+}
+
+/** Timeline zoom level for date range filtering */
+export type TimelineZoom = "all" | "1y" | "6m" | "3m" | "30d";

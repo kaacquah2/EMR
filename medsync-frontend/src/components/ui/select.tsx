@@ -24,7 +24,7 @@ const Select = React.forwardRef<HTMLSelectElement, SelectProps>(
             id={id}
             aria-invalid={error ? "true" : undefined}
             aria-describedby={error ? `${id}-error` : undefined}
-            className={`h-11 w-full appearance-none rounded-lg border-[1.5px] border-[var(--gray-300)] bg-white dark:bg-[#0F172A] dark:border-[#334155] px-3 py-2 text-sm text-[var(--gray-900)] dark:text-[var(--gray-100)] focus:border-[var(--teal-500)] focus:outline-none focus:ring-[3px] focus:ring-[rgba(11,138,150,0.12)] disabled:cursor-not-allowed disabled:opacity-50 transition-all ${
+            className={`h-11 w-full appearance-none rounded-lg border-[1.5px] border-[var(--gray-300)] bg-white dark:bg-slate-900 dark:bg-slate-100 dark:border-[#334155] px-3 py-2 text-sm text-[var(--gray-900)] dark:text-[var(--gray-100)] focus:border-[var(--teal-500)] focus:outline-none focus:ring-[3px] focus:ring-[rgba(11,138,150,0.12)] disabled:cursor-not-allowed disabled:opacity-50 transition-all ${
               error ? "border-[var(--red-600)] focus:border-[var(--red-600)] focus:ring-[rgba(220,38,38,0.12)]" : ""
             } ${className}`}
             {...props}

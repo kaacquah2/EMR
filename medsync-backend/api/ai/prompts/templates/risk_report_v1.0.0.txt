@@ -1,0 +1,32 @@
+DISEASE RISK REPORT — Patient {patient_id}
+═══════════════════════════════════════════
+
+RISK ASSESSMENT SUMMARY:
+  Highest Risk: {top_disease} ({risk_score}%)
+  Risk Category: {risk_category}
+  Model Confidence: {confidence}
+
+CONTRIBUTING FACTORS:
+{contributing_factors}
+
+RISK BREAKDOWN:
+{risk_breakdown}
+
+CLINICAL RECOMMENDATIONS:
+Based on the identified risk profile:
+{recommendations}
+
+RISK MITIGATION STRATEGIES:
+1. Address modifiable risk factors (lifestyle, medication adherence)
+2. Schedule follow-up monitoring per risk category
+3. Consider specialist referral if risk exceeds 60%
+4. Document risk discussion with patient
+
+DATA PROVENANCE:
+  Model Version: {model_version}
+  Training Data: Synthetic Ghana cohort (NOT clinical data)
+  Validation: Internal cross-validation only
+
+⚠️ DISCLAIMER: Risk scores are generated from models trained on
+synthetic data. These scores do NOT represent validated clinical
+risk. Do NOT use for clinical decision-making.

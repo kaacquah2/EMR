@@ -8,6 +8,8 @@ import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import type { ReferralStatus } from "@/lib/types";
+import { EmptyState } from "@/components/ui/empty-state";
+import { ArrowRightLeft } from "lucide-react";
 
 const statusVariant: Record<ReferralStatus, "active" | "pending" | "default" | "critical"> = {
   PENDING: "pending",
@@ -32,7 +34,7 @@ export default function ReferralsPage() {
     if (canAccess) fetchIncoming();
   }, [fetchIncoming, canAccess]);
 
-  if (user && !canAccess) return <div className="flex min-h-[200px] items-center justify-center text-[#64748B]">Redirecting...</div>;
+  if (user && !canAccess) return <div className="flex min-h-[200px] items-center justify-center text-slate-500 dark:text-slate-500">Redirecting...</div>;
 
   const handleStatus = async (referralId: string, status: ReferralStatus) => {
     setUpdatingId(referralId);
@@ -46,21 +48,25 @@ export default function ReferralsPage() {
 
   return (
     <div className="space-y-6">
-      <h1 className="font-sora text-2xl font-bold text-[#0F172A]">
+      <h1 className="font-sora text-2xl font-bold text-slate-900 dark:text-slate-100">
         Incoming Referrals
       </h1>
 
       {error && <p className="text-sm text-[#DC2626]">{error}</p>}
 
       {loading && (
-        <div className="rounded-lg border border-[#CBD5E1] bg-white p-8 text-center text-[#64748B]">
+        <div className="rounded-lg border border-slate-300 dark:border-slate-700 bg-white p-8 text-center text-slate-500 dark:text-slate-500">
           Loading...
         </div>
       )}
 
       {!loading && incoming.length === 0 && (
-        <Card className="p-8 text-center">
-          <p className="text-[#64748B]">No incoming referrals.</p>
+        <Card className="p-0">
+          <EmptyState
+            icon={<ArrowRightLeft className="h-12 w-12" />}
+            title="No incoming referrals"
+            description="There are currently no patient referrals directed to your facility."
+          />
         </Card>
       )}
 
@@ -69,25 +75,25 @@ export default function ReferralsPage() {
           <div className="overflow-x-auto">
             <table className="w-full">
               <thead>
-                <tr className="border-b border-[#E2E8F0] bg-[#F8FAFC]">
-                  <th className="px-4 py-3 text-left text-xs font-semibold uppercase text-[#64748B]">Patient (ID)</th>
-                  <th className="px-4 py-3 text-left text-xs font-semibold uppercase text-[#64748B]">From facility</th>
-                  <th className="px-4 py-3 text-left text-xs font-semibold uppercase text-[#64748B]">Reason</th>
-                  <th className="px-4 py-3 text-left text-xs font-semibold uppercase text-[#64748B]">Status</th>
-                  <th className="px-4 py-3 text-left text-xs font-semibold uppercase text-[#64748B]">Date</th>
-                  <th className="px-4 py-3 text-left text-xs font-semibold uppercase text-[#64748B]">Actions</th>
+                <tr className="border-b border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-900">
+                  <th className="px-4 py-3 text-left text-xs font-semibold uppercase text-slate-500 dark:text-slate-500">Patient (ID)</th>
+                  <th className="px-4 py-3 text-left text-xs font-semibold uppercase text-slate-500 dark:text-slate-500">From facility</th>
+                  <th className="px-4 py-3 text-left text-xs font-semibold uppercase text-slate-500 dark:text-slate-500">Reason</th>
+                  <th className="px-4 py-3 text-left text-xs font-semibold uppercase text-slate-500 dark:text-slate-500">Status</th>
+                  <th className="px-4 py-3 text-left text-xs font-semibold uppercase text-slate-500 dark:text-slate-500">Date</th>
+                  <th className="px-4 py-3 text-left text-xs font-semibold uppercase text-slate-500 dark:text-slate-500">Actions</th>
                 </tr>
               </thead>
               <tbody>
                 {incoming.map((r) => (
-                  <tr key={r.referral_id} className="border-b border-[#E2E8F0] hover:bg-[#F8FAFC]">
-                    <td className="px-4 py-3 font-mono text-sm text-[#64748B]">{r.global_patient_id}</td>
-                    <td className="px-4 py-3 font-medium text-[#0F172A]">{r.from_facility_name}</td>
-                    <td className="px-4 py-3 text-sm text-[#64748B]">{r.reason}</td>
+                  <tr key={r.referral_id} className="border-b border-slate-200 dark:border-slate-800 hover:bg-slate-50 dark:bg-slate-900">
+                    <td className="px-4 py-3 font-mono text-sm text-slate-500 dark:text-slate-500">{r.global_patient_id}</td>
+                    <td className="px-4 py-3 font-medium text-slate-900 dark:text-slate-100">{r.from_facility_name}</td>
+                    <td className="px-4 py-3 text-sm text-slate-500 dark:text-slate-500">{r.reason}</td>
                     <td className="px-4 py-3">
                       <Badge variant={statusVariant[r.status]}>{r.status}</Badge>
                     </td>
-                    <td className="px-4 py-3 text-sm text-[#64748B]">{r.created_at}</td>
+                    <td className="px-4 py-3 text-sm text-slate-500 dark:text-slate-500">{r.created_at}</td>
                     <td className="px-4 py-3 flex gap-2">
                       {r.status === "PENDING" && (
                         <>

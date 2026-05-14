@@ -52,8 +52,8 @@ export function useCreateEncounter(patientId: string | null) {
       if (!patientId) throw new Error("Patient ID required");
       setLoading(true);
       try {
-        const data = await api.post<Encounter>(`/patients/${patientId}/encounters`, body);
-        return data;
+        const response = await api.post<{ data: Encounter }>(`/patients/${patientId}/encounters`, body);
+        return response.data;
       } finally {
         setLoading(false);
       }
@@ -73,11 +73,11 @@ export function useUpdateEncounter(patientId: string | null, encounterId: string
       if (!patientId || !encounterId) throw new Error("Patient ID and Encounter ID required");
       setLoading(true);
       try {
-        const data = await api.patch<Encounter>(
+        const response = await api.patch<{ data: Encounter }>(
           `/patients/${patientId}/encounters/${encounterId}`,
           body
         );
-        return data;
+        return response.data;
       } finally {
         setLoading(false);
       }

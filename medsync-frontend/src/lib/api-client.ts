@@ -140,7 +140,11 @@ async function request<T>(path: string, options: RequestOptions = {}): Promise<T
         abortCause: abortCause ?? "unknown",
       };
       timeoutErr.statusCode = 408;
+      if (typeof window !== "undefined") window.dispatchEvent(new Event("medsync:apierror"));
       throw timeoutErr;
+    }
+    if (typeof window !== "undefined" && e instanceof TypeError && e.message === "Failed to fetch") {
+      window.dispatchEvent(new Event("medsync:apierror"));
     }
     throw e;
   } finally {
@@ -249,7 +253,11 @@ async function requestBlob(path: string, options: RequestOptions = {}): Promise<
         abortCause: abortCause ?? "unknown",
       };
       timeoutErr.statusCode = 408;
+      if (typeof window !== "undefined") window.dispatchEvent(new Event("medsync:apierror"));
       throw timeoutErr;
+    }
+    if (typeof window !== "undefined" && e instanceof TypeError && e.message === "Failed to fetch") {
+      window.dispatchEvent(new Event("medsync:apierror"));
     }
     throw e;
   } finally {

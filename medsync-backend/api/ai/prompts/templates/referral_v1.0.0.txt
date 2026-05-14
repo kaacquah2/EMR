@@ -1,0 +1,29 @@
+REFERRAL RECOMMENDATION — Patient {patient_id}
+═══════════════════════════════════════════════
+
+REFERRING FROM: {source_hospital}
+SPECIALTY NEEDED: {specialty}
+
+CLINICAL JUSTIFICATION:
+  Primary Diagnosis: {primary_diagnosis}
+  Triage Level: {triage_level}
+  Urgency: {urgency}
+
+RECOMMENDED FACILITIES:
+{hospital_recommendations}
+
+SELECTION CRITERIA:
+  - Specialty match score
+  - Bed availability (real-time)
+  - Geographic proximity
+  - Historical success rates (when available)
+
+TRANSFER CONSIDERATIONS:
+  - Patient stability for transfer
+  - Required medications during transport
+  - Pre-transfer notifications to receiving facility
+  - Documentation to accompany patient
+
+⚠️ DISCLAIMER: AI-generated referral recommendations for demonstration
+only. Bed availability may not reflect real-time status. Always confirm
+with receiving facility directly.

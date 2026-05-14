@@ -101,7 +101,7 @@ def referral_create(request):
         request=request,
         extra_data={"global_patient_id": str(gp.id), "to_facility_id": str(to_facility.id)},
     )
-    return Response(ReferralSerializer(ref).data, status=status.HTTP_201_CREATED)
+    return Response({"data": ReferralSerializer(ref).data}, status=status.HTTP_201_CREATED)
 
 
 @api_view(["GET"])
@@ -183,7 +183,7 @@ def referral_update(request, pk):
         request=request,
         extra_data={"new_status": new_status, "global_patient_id": str(ref.global_patient_id)},
     )
-    return Response(ReferralSerializer(ref).data)
+    return Response({"data": ReferralSerializer(ref).data})
 
 
 # ============================================================================
@@ -276,7 +276,7 @@ def my_referrals(request):
     completed_count = next((item['count'] for item in all_referrals if item['status'] == 'COMPLETED'), 0)
     rejected_count = next((item['count'] for item in all_referrals if item['status'] == 'REJECTED'), 0)
     
-    return Response({
+    return Response({"data": {
         'summary': {
             'total': len(referrals_data),
             'outgoing': len([r for r in referrals_data if r['direction'] == 'outgoing']),
@@ -287,7 +287,7 @@ def my_referrals(request):
             'rejected': rejected_count,
         },
         'referrals': referrals_data,
-    })
+    }})
 
 
 @api_view(['POST'])
@@ -358,12 +358,12 @@ def accept_referral(request, pk):
         },
     )
     
-    return Response({
+    return Response({"data": {
         'id': str(referral.id),
         'status': referral.status,
         'message': 'Referral accepted successfully',
         'referral': ReferralSerializer(referral).data,
-    })
+    }})
 
 
 @api_view(['POST'])
@@ -433,9 +433,9 @@ def complete_referral(request, pk):
         },
     )
     
-    return Response({
+    return Response({"data": {
         'id': str(referral.id),
         'status': referral.status,
         'message': 'Referral marked as completed',
         'referral': ReferralSerializer(referral).data,
-    })
+    }})

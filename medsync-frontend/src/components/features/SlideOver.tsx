@@ -46,7 +46,7 @@ export function SlideOver({ open, onOpenChange, title, children }: SlideOverProp
         aria-modal="true"
         aria-label={title ?? "Panel"}
         tabIndex={-1}
-        className="fixed right-0 top-0 z-50 h-full w-full max-w-[480px] overflow-y-auto bg-white dark:bg-[#1E293B] shadow-xl focus:outline-none"
+        className="fixed right-0 top-0 z-50 h-full w-full max-w-[480px] overflow-y-auto bg-white dark:bg-slate-800 dark:bg-slate-200 shadow-xl focus:outline-none"
       >
         <div className="flex h-14 items-center justify-between border-b border-[var(--gray-300)] dark:border-[#334155] px-6">
           {title && (

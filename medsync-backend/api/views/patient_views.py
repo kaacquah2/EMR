@@ -36,8 +36,7 @@ from api.serializers import (
 
 
 
-def _paginated(data, request):
-    return {"data": data, "next_cursor": None, "has_more": False}
+
 
 
 @cache_control(max_age=30, private=True)
@@ -63,11 +62,14 @@ def patient_search(request):
     else:
         return Response({"data": [], "next_cursor": None, "has_more": False})
 
+    # Ensure consistent ordering for cursor pagination
+    qs = qs.order_by("-created_at", "-id")
+
     # N+1 Fix: prefetch allergies for PatientSerializer
     if user.role not in settings.NON_CLINICAL_PII_MASK_ROLES:
         qs = qs.prefetch_related("allergy_set")
 
-    items, next_cursor, has_more = paginate_queryset(qs, request)
+    items, next_cursor, has_more = paginate_queryset(qs, request, use_cursor=True)
     
     if user.role in settings.NON_CLINICAL_PII_MASK_ROLES:
         data = PatientDemographicsOnlySerializer(items, many=True).data
@@ -147,7 +149,7 @@ def patient_create(request):
                     )
             
             audit_log(request.user, "CREATE_PATIENT", resource_type="patient", resource_id=patient.id, hospital=hospital, request=request)
-            return Response(PatientSerializer(patient).data, status=status.HTTP_201_CREATED)
+            return Response({"data": PatientSerializer(patient).data}, status=status.HTTP_201_CREATED)
     except Exception as e:
         import logging
         logging.getLogger(__name__).error(f"Patient creation failed: {str(e)}")
@@ -158,7 +160,11 @@ def patient_create(request):
 @api_view(["GET", "PATCH"])
 @permission_classes([IsAuthenticated])
 def patient_detail(request, pk):
-    patient = get_patient_queryset(request.user, get_effective_hospital(request)).filter(id=pk).first()
+    qs = get_patient_queryset(request.user, get_effective_hospital(request))
+    if request.user.role not in settings.NON_CLINICAL_PII_MASK_ROLES:
+        qs = qs.prefetch_related("allergy_set")
+    
+    patient = qs.filter(id=pk).first()
     if not patient:
         return Response(
             {"message": "Patient not found"},
@@ -174,7 +180,7 @@ def patient_detail(request, pk):
             request=request,
         )
     if request.method == "GET" and request.user.role in settings.NON_CLINICAL_PII_MASK_ROLES:
-        return Response(PatientDemographicsOnlySerializer(patient).data)
+        return Response({"data": PatientDemographicsOnlySerializer(patient).data})
     if request.method == "PATCH":
         if request.user.role not in ("doctor", "hospital_admin", "super_admin"):
             return Response(
@@ -208,7 +214,7 @@ def patient_detail(request, pk):
                 "nhis_number",
                 "passport_number",
                 "blood_group"])
-    return Response(PatientSerializer(patient).data)
+    return Response({"data": PatientSerializer(patient).data})
 
 
 def _block_non_clinical_roles(request):
@@ -284,7 +290,12 @@ def patient_diagnoses(request, pk):
     diagnoses = Diagnosis.objects.filter(
         record_id__in=record_ids
     ).select_related("record").order_by("-record__created_at")
-    return Response({"data": DiagnosisSerializer(diagnoses, many=True).data})
+    page, next_cursor, has_more = paginate_queryset(diagnoses, request)
+    return Response({
+        "data": DiagnosisSerializer(page, many=True).data,
+        "next_cursor": next_cursor,
+        "has_more": has_more
+    })
 
 
 @api_view(["GET"])
@@ -310,7 +321,12 @@ def patient_prescriptions(request, pk):
     prescriptions = Prescription.objects.filter(
         record_id__in=record_ids
     ).select_related("record").order_by("-record__created_at")
-    return Response({"data": PrescriptionSerializer(prescriptions, many=True).data})
+    page, next_cursor, has_more = paginate_queryset(prescriptions, request)
+    return Response({
+        "data": PrescriptionSerializer(page, many=True).data,
+        "next_cursor": next_cursor,
+        "has_more": has_more
+    })
 
 
 @api_view(["GET"])
@@ -336,7 +352,12 @@ def patient_labs(request, pk):
     results = LabResult.objects.filter(
         record_id__in=record_ids
     ).select_related("record").order_by("-result_date")
-    return Response({"data": LabResultSerializer(results, many=True).data})
+    page, next_cursor, has_more = paginate_queryset(results, request)
+    return Response({
+        "data": LabResultSerializer(page, many=True).data,
+        "next_cursor": next_cursor,
+        "has_more": has_more
+    })
 
 
 @api_view(["GET"])
@@ -362,7 +383,12 @@ def patient_vitals(request, pk):
     vitals = Vital.objects.filter(
         record_id__in=record_ids
     ).select_related("record").order_by("-record__created_at")
-    return Response({"data": VitalSerializer(vitals, many=True).data})
+    page, next_cursor, has_more = paginate_queryset(vitals, request)
+    return Response({
+        "data": VitalSerializer(page, many=True).data,
+        "next_cursor": next_cursor,
+        "has_more": has_more
+    })
 
 
 @api_view(["GET"])
@@ -380,7 +406,12 @@ def patient_allergies(request, pk):
             status=status.HTTP_404_NOT_FOUND,
         )
     allergies = patient.allergy_set.all().order_by("-created_at")
-    return Response({"data": AllergySerializer(allergies, many=True).data})
+    page, next_cursor, has_more = paginate_queryset(allergies, request)
+    return Response({
+        "data": AllergySerializer(page, many=True).data,
+        "next_cursor": next_cursor,
+        "has_more": has_more
+    })
 
 
 @api_view(["GET"])

@@ -15,10 +15,10 @@ export interface BadgeProps extends React.HTMLAttributes<HTMLSpanElement> {
 const variantStyles: Record<BadgeVariant, string> = {
   active: "bg-[#D1FAE5] text-[#047857] dark:bg-[#047857]/20 dark:text-[#6EE7B7]",
   pending: "bg-[#FEF3C7] text-[#B45309] dark:bg-[#B45309]/20 dark:text-[#FDE68A]",
-  inactive: "bg-[#F1F5F9] text-[#64748B] dark:bg-[#334155] dark:text-[#94A3B8]",
+  inactive: "bg-slate-100 dark:bg-slate-900 text-slate-500 dark:text-slate-500 dark:bg-[#334155] dark:text-[#94A3B8]",
   critical: "bg-[#FEE2E2] text-[#B91C1C] dark:bg-[#B91C1C]/20 dark:text-[#FCA5A5]",
   success: "bg-[#D1FAE5] text-[#047857] dark:bg-[#047857]/20 dark:text-[#6EE7B7]",
-  default: "bg-[#F1F5F9] text-[#334155] dark:bg-[#334155] dark:text-[#CBD5E1]",
+  default: "bg-slate-100 dark:bg-slate-900 text-[#334155] dark:bg-[#334155] dark:text-slate-300 dark:text-slate-700",
 };
 
 /** MedSync Role Specs accent colours for role badge (sidebar/topbar). */

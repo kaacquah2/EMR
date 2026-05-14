@@ -21,3 +21,10 @@ node_modules/
 **/out/
 **/dist/
 *.egg-info/
+ 
+# Large data/seed files
+**/*.json
+!vercel.json
+!pyrightconfig.json
+!package.json
+!package-lock.json

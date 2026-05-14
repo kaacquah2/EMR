@@ -8,6 +8,7 @@
 
 import React from 'react';
 import { AlertCircle, TrendingUp } from 'lucide-react';
+import { DisclaimerBadge } from '@/components/ai/DisclaimerBadge';
 
 interface RiskScore {
   disease: string;
@@ -22,6 +23,8 @@ interface RiskScoresWidgetProps {
   topRiskScore: number;
   contributingFactors?: Array<{ factor: string; weight: string; value: string }>;
   isLoading?: boolean;
+  clinical_use_approved?: boolean;
+  model_version?: string;
 }
 
 export function RiskScoresWidget({
@@ -30,6 +33,8 @@ export function RiskScoresWidget({
   topRiskScore,
   contributingFactors = [],
   isLoading = false,
+  clinical_use_approved = false,
+  model_version,
 }: RiskScoresWidgetProps) {
   const getRiskColor = (score: number): string => {
     if (score >= 80) return 'bg-red-100 border-red-300';
@@ -65,7 +70,10 @@ export function RiskScoresWidget({
 
   return (
     <div className="bg-white rounded-lg border border-gray-200 p-6 space-y-4">
-      <h3 className="text-lg font-semibold text-gray-900">Disease Risk Predictions</h3>
+      <div className="flex justify-between items-center">
+        <h3 className="text-lg font-semibold text-gray-900">Disease Risk Predictions</h3>
+        <DisclaimerBadge clinical_use_approved={clinical_use_approved} version={model_version} />
+      </div>
 
       {/* Top Risk Alert */}
       {topRiskScore > 50 && (

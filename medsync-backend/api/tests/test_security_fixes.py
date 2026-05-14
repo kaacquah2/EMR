@@ -138,13 +138,15 @@ class TestCriticalFix3ServerSidePasswordChangeEnforcement(TestCase):
         refresh = RefreshToken.for_user(self.user)
         access_token = str(refresh.access_token)
 
-        # Try to access patient endpoint without changing password
+        # Try to access search endpoint without changing password
         self.client.credentials(HTTP_AUTHORIZATION=f'Bearer {access_token}')
-        response = self.client.get('/api/v1/patients/')
+        response = self.client.get('/api/v1/patients/search')
 
         # Should be rejected with 403
         assert response.status_code == 403
-        assert "PASSWORD_CHANGE_REQUIRED" in str(response.data)
+        # Safely check for message in response
+        resp_data = response.data if hasattr(response, 'data') else json.loads(response.content)
+        assert "PASSWORD_CHANGE_REQUIRED" in str(resp_data)
 
     def test_can_access_password_change_endpoint(self):
         """Verify that user CAN access password change endpoint."""
@@ -348,6 +350,10 @@ class TestMediumFix2MFAUserThrottleExtraction(TestCase):
 
 
 # Integration test combining all fixes
+from unittest.mock import patch
+from api.rate_limiting import check_rate_limit
+
+
 @pytest.mark.django_db
 class TestSecurityFixesIntegration(TestCase):
     """Integration test verifying all security fixes work together."""
@@ -373,5 +379,58 @@ class TestSecurityFixesIntegration(TestCase):
         })
         assert response.status_code == 200
         assert 'mfa_required' in response.data
+
+    def test_forced_password_change_blocks_api(self):
+        """Verify that must_change_password_on_login=True blocks non-auth API calls."""
+        self.user.must_change_password_on_login = True
+        self.user.save()
+
+        from rest_framework_simplejwt.tokens import RefreshToken
+        refresh = RefreshToken.for_user(self.user)
+        self.client.credentials(HTTP_AUTHORIZATION=f'Bearer {refresh.access_token}')
+
+        # 1. Accessing search should be forbidden
+        response = self.client.get('/api/v1/patients/search')
+        assert response.status_code == 403
+
+        # 2. Accessing /me should be allowed
+        response = self.client.get('/api/v1/auth/me')
+        assert response.status_code == 200
+
+        # 3. Changing password should be allowed
+        response = self.client.post('/api/v1/auth/change-password-on-login', {
+            'password': 'NewSecurePassword123!@#'
+        })
+        assert response.status_code == 200
+
+        # 4. Now search should be accessible
+        response = self.client.get('/api/v1/patients/search')
+        assert response.status_code == 200
+
+
+@pytest.mark.django_db
+class TestRateLimitFailClosed(TestCase):
+    """Test that rate limiting fails closed when cache is down."""
+
+    @patch('api.rate_limiting.cache.get')
+    def test_check_rate_limit_fails_closed_on_error(self, mock_get):
+        """Verify that check_rate_limit returns False if cache.get raises Exception."""
+        mock_get.side_effect = Exception("Redis connection failed")
+        
+        allowed, remaining, retry_after = check_rate_limit("test_key", 5, 60)
+        
+        assert allowed is False
+        assert remaining == 0
+        assert retry_after == 60
+
+    @patch('api.rate_limiting.cache.get')
+    def test_check_rate_limit_fails_closed_on_none(self, mock_get):
+        """Verify that check_rate_limit returns False if cache.get returns None (unexpected)."""
+        mock_get.return_value = None
+        
+        allowed, remaining, retry_after = check_rate_limit("test_key", 5, 60)
+        
+        assert allowed is False
+        assert remaining == 0
 
 

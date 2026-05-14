@@ -218,7 +218,13 @@ class User(AbstractBaseUser, PermissionsMixin):
     )
     activated_at = models.DateTimeField(null=True, blank=True)
     is_mfa_enabled = models.BooleanField(default=False)
+    mfa_method = models.CharField(
+        max_length=20, 
+        default="email", 
+        choices=[("email", "Email"), ("totp", "Authenticator App"), ("passkey", "Passkey")]
+    )
     totp_secret = encrypt(models.CharField(max_length=32, blank=True, null=True))
+    totp_grace_period_expires = models.DateTimeField(null=True, blank=True)
     mfa_backup_codes = encrypt(models.TextField(blank=True, null=True))
     gmdc_licence_number = models.CharField(max_length=30, blank=True, null=True)
     licence_verified = models.BooleanField(default=False)

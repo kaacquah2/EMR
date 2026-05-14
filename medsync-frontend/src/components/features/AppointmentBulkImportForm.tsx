@@ -271,14 +271,14 @@ export default function AppointmentBulkImportForm({ onSuccess }: AppointmentBulk
         <Card className="p-6">
           <div className="space-y-4">
             <div>
-              <h3 className="font-medium text-[#0F172A] mb-2">Upload Appointment CSV</h3>
-              <p className="text-sm text-[#64748B] mb-4">
+              <h3 className="font-medium text-slate-900 dark:text-slate-100 mb-2">Upload Appointment CSV</h3>
+              <p className="text-sm text-slate-500 dark:text-slate-500 mb-4">
                 Required columns: <code className="bg-gray-100 px-1">patient_id</code>,{" "}
                 <code className="bg-gray-100 px-1">scheduled_at</code> (YYYY-MM-DD HH:MM)
               </p>
 
-              <div className="border-2 border-dashed border-[#CBD5E1] rounded-lg p-8 text-center">
-                <Upload className="h-8 w-8 text-[#64748B] mx-auto mb-2" />
+              <div className="border-2 border-dashed border-slate-300 dark:border-slate-700 rounded-lg p-8 text-center">
+                <Upload className="h-8 w-8 text-slate-500 dark:text-slate-500 mx-auto mb-2" />
                 <input
                   ref={fileInputRef}
                   type="file"
@@ -293,7 +293,7 @@ export default function AppointmentBulkImportForm({ onSuccess }: AppointmentBulk
                 >
                   Click to upload
                 </button>
-                <p className="text-sm text-[#64748B] mt-2">or drag and drop</p>
+                <p className="text-sm text-slate-500 dark:text-slate-500 mt-2">or drag and drop</p>
                 {selectedFile && (
                   <p className="text-sm text-green-600 mt-2">
                     ✓ {selectedFile.name} ({selectedFile.size} bytes)
@@ -306,7 +306,7 @@ export default function AppointmentBulkImportForm({ onSuccess }: AppointmentBulk
               <button
                 type="button"
                 onClick={downloadTemplate}
-                className="flex items-center gap-2 px-4 py-2 border border-[#CBD5E1] rounded hover:bg-[#F8FAFC] text-sm font-medium"
+                className="flex items-center gap-2 px-4 py-2 border border-slate-300 dark:border-slate-700 rounded hover:bg-slate-50 dark:bg-slate-900 text-sm font-medium"
               >
                 <Download className="h-4 w-4" />
                 Download template
@@ -321,14 +321,14 @@ export default function AppointmentBulkImportForm({ onSuccess }: AppointmentBulk
         <Card className="p-6">
           <div className="space-y-4">
             <div>
-              <h3 className="font-medium text-[#0F172A]">Preview</h3>
-              <p className="text-sm text-[#64748B]">Showing first 10 rows of {csvData.length} rows</p>
+              <h3 className="font-medium text-slate-900 dark:text-slate-100">Preview</h3>
+              <p className="text-sm text-slate-500 dark:text-slate-500">Showing first 10 rows of {csvData.length} rows</p>
             </div>
 
             <div className="overflow-x-auto">
               <table className="w-full text-sm">
                 <thead>
-                  <tr className="border-b border-[#CBD5E1]">
+                  <tr className="border-b border-slate-300 dark:border-slate-700">
                     <th className="text-left py-2 px-2 font-medium">Row</th>
                     <th className="text-left py-2 px-2 font-medium">Patient ID</th>
                     <th className="text-left py-2 px-2 font-medium">Scheduled At</th>
@@ -339,12 +339,12 @@ export default function AppointmentBulkImportForm({ onSuccess }: AppointmentBulk
                 </thead>
                 <tbody>
                   {previewRows.map((row) => (
-                    <tr key={row.rowNum} className="border-b border-[#E2E8F0] hover:bg-[#F8FAFC]">
-                      <td className="py-2 px-2 text-[#64748B]">{row.rowNum}</td>
+                    <tr key={row.rowNum} className="border-b border-slate-200 dark:border-slate-800 hover:bg-slate-50 dark:bg-slate-900">
+                      <td className="py-2 px-2 text-slate-500 dark:text-slate-500">{row.rowNum}</td>
                       <td className="py-2 px-2 font-mono text-xs">{row.patient_id.slice(0, 8)}...</td>
                       <td className="py-2 px-2">{row.scheduled_at}</td>
-                      <td className="py-2 px-2 text-[#64748B]">{row.department_id ? row.department_id.slice(0, 8) : "—"}</td>
-                      <td className="py-2 px-2 text-[#64748B]">{row.doctor_id ? row.doctor_id.slice(0, 8) : "—"}</td>
+                      <td className="py-2 px-2 text-slate-500 dark:text-slate-500">{row.department_id ? row.department_id.slice(0, 8) : "—"}</td>
+                      <td className="py-2 px-2 text-slate-500 dark:text-slate-500">{row.doctor_id ? row.doctor_id.slice(0, 8) : "—"}</td>
                       <td className="py-2 px-2">{row.appointment_type || "—"}</td>
                     </tr>
                   ))}
@@ -366,7 +366,7 @@ export default function AppointmentBulkImportForm({ onSuccess }: AppointmentBulk
                 type="button"
                 onClick={resetForm}
                 disabled={submitting}
-                className="px-4 py-2 border border-[#CBD5E1] rounded hover:bg-[#F8FAFC] disabled:opacity-50"
+                className="px-4 py-2 border border-slate-300 dark:border-slate-700 rounded hover:bg-slate-50 dark:bg-slate-900 disabled:opacity-50"
               >
                 Cancel
               </button>

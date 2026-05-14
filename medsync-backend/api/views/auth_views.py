@@ -8,6 +8,7 @@ from django.core.mail import send_mail
 from django.core.exceptions import ValidationError
 from django.core.validators import EmailValidator
 from django.utils import timezone
+from datetime import timedelta
 from django.db.models import F
 from django.db import transaction
 from rest_framework import status
@@ -198,6 +199,32 @@ def login(request):
             }
         )
 
+    # ==================== GRITICAL FIX #5: TOTP Grace Period Check ====================
+    # If user is in grace period, allow Email OTP as fallback.
+    # If grace period has expired, block login until TOTP setup.
+    in_grace_period = (
+        user.totp_grace_period_expires and 
+        user.totp_grace_period_expires > timezone.now()
+    )
+    grace_period_expired = (
+        user.totp_grace_period_expires and 
+        user.totp_grace_period_expires <= timezone.now()
+    )
+
+    if grace_period_expired:
+        audit_log(user, "LOGIN_FAILED", extra_data={"reason": "TOTP_GRACE_EXPIRED"}, request=request)
+        return Response(
+            {
+                "message": "Your 24-hour grace period for TOTP setup has expired. Your account is locked until setup is completed. Please contact your hospital administrator.",
+                "account_locked_mfa": True,
+                "grace_expired": True
+            },
+            status=status.HTTP_403_FORBIDDEN,
+        )
+
+    # Force email channel if in grace period
+    mfa_channel_override = "email" if in_grace_period else None
+
     otp_plain = f"{secrets.randbelow(1_000_000):06d}"
     otp_hash = hashlib.sha256(otp_plain.encode()).hexdigest()
     MFASession.objects.create(
@@ -213,6 +240,11 @@ def login(request):
         f"Your one-time sign-in code is: {otp_plain}\n\n"
         "It expires in 5 minutes. If you did not try to sign in, ignore this email."
     )
+    
+    # If in grace period, add a warning to the email
+    if in_grace_period:
+        body += f"\n\n⚠️ IMPORTANT: You are using a temporary login code. Please set up your authenticator app before {user.totp_grace_period_expires.strftime('%Y-%m-%d %H:%M:%S')} UTC to maintain access."
+
     try:
         send_mail(
             subject,
@@ -239,7 +271,9 @@ def login(request):
         {
             "mfa_required": True,
             "mfa_token": mfa_token,
-            "mfa_channel": "email",
+            "mfa_channel": mfa_channel_override or "email",
+            "in_grace_period": in_grace_period,
+            "grace_expires_at": user.totp_grace_period_expires.isoformat() if in_grace_period else None
         }
     )
 
@@ -252,6 +286,7 @@ def _generate_backup_codes(count=8):
 @api_view(["POST"])
 @permission_classes([AllowAny])
 @throttle_classes([MFAThrottle, MFAUserThrottle])
+@transaction.atomic
 def mfa_verify(request):
     mfa_token = request.data.get("mfa_token")
     code = str(request.data.get("code", "")).strip()
@@ -269,7 +304,8 @@ def mfa_verify(request):
 
     # PHASE 1: Use database-backed MFASession instead of cache (Task 5)
     try:
-        mfa_session = MFASession.objects.get(token=mfa_token)
+        # HIGH Fix: Use select_for_update to prevent race conditions on failed_attempts
+        mfa_session = MFASession.objects.select_for_update().get(token=mfa_token)
     except MFASession.DoesNotExist:
         return Response(
             {"message": "Session expired. Please login again."},
@@ -339,8 +375,11 @@ def mfa_verify(request):
 
         stored = json.loads(user_locked.mfa_backup_codes or "[]")
         code_hash = hashlib.sha256(backup_code.encode()).hexdigest()
-        # HIGH-1 FIX: Use constant-time comparison to prevent timing attack
-        verified = any(secrets.compare_digest(code_hash, stored_hash) for stored_hash in stored)
+        # HIGH-1 FIX: Use list comprehension to ensure all comparisons are performed,
+        # preventing timing attack that leaks which code matched or where it is in the list.
+        # secrets.compare_digest is constant-time for strings of equal length.
+        results = [secrets.compare_digest(code_hash, stored_hash) for stored_hash in stored]
+        verified = any(results)
 
         if verified:
             # Log consumption as a sensitive operation
@@ -496,6 +535,9 @@ def activate_setup(request):
     return Response({
         "totp_secret": user.totp_secret,
         "provisioning_url": provisioning_url,
+        "role": user.role,
+        "mfa_method": user.mfa_method,
+        "totp_grace_period_expires": user.totp_grace_period_expires.isoformat() if user.totp_grace_period_expires else None,
     })
 
 
@@ -540,6 +582,46 @@ def activate(request):
     ok, msg = check_password_reuse(user, password)
     if not ok:
         return Response({"message": msg}, status=status.HTTP_400_BAD_REQUEST)
+    # ==================== TOTP Grace Period Check ====================
+    # If totp_confirmation is missing, check if role allows grace period.
+    is_admin = user.role in ("super_admin", "hospital_admin")
+    
+    if not totp_code:
+        if is_admin:
+            return Response(
+                {"message": "Administrators MUST set up TOTP immediately. Confirmation code required."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        
+        # Non-admins: Grant 24-hour grace period
+        raw_codes, hashed = _generate_backup_codes()
+        user.mfa_backup_codes = json.dumps(hashed)
+        if user.password:
+            record_password_history(user, user.password)
+        user.set_password(password)
+        user.account_status = "active"
+        user.is_mfa_enabled = True
+        user.mfa_method = "totp" # They will be required to set up TOTP
+        user.totp_grace_period_expires = timezone.now() + timedelta(hours=24)
+        user.invitation_token = None
+        user.invitation_expires_at = None
+        user.activated_at = timezone.now()
+        user.save()
+        
+        audit_log(user, "ACCOUNT_ACTIVATED", extra_data={"mfa_grace_period": True}, request=request)
+        refresh = RefreshToken.for_user(user)
+        return Response({
+            "access_token": str(refresh.access_token),
+            "refresh_token": str(refresh),
+            "role": user.role,
+            "hospital_id": str(user.hospital_id) if user.hospital_id else None,
+            "user_profile": _user_to_dict(user),
+            "requires_totp_setup": True,
+            "grace_expires_at": user.totp_grace_period_expires.isoformat(),
+            "backup_codes": raw_codes,
+        })
+
+    # If totp_code is provided, verify it as normal
     totp = pyotp.TOTP(user.totp_secret)
     if not totp.verify(totp_code, valid_window=1):
         return Response(
@@ -553,6 +635,8 @@ def activate(request):
     user.set_password(password)
     user.account_status = "active"
     user.is_mfa_enabled = True
+    user.mfa_method = "totp"
+    user.totp_grace_period_expires = None # Cleared if they set it up successfully
     user.invitation_token = None
     user.invitation_expires_at = None
     user.activated_at = timezone.now()
@@ -786,7 +870,7 @@ def reset_password(request):
 
 @api_view(["POST"])
 @permission_classes([AllowAny])
-@throttle_classes([LoginThrottle])
+@throttle_classes([LoginThrottle, MFAUserThrottle])
 def login_with_temp_password(request):
     """
     TIER 2: Login with temporary password generated by admin.
@@ -819,7 +903,12 @@ def login_with_temp_password(request):
 
     # Verify temp password is valid (use constant-time comparison to prevent timing attack)
     import secrets
-    if not user.temp_password or not secrets.compare_digest(str(temp_password), str(user.temp_password)):
+    stored_temp = user.temp_password or "DUMMY_NOT_SET_VALUE_FOR_CONSTANT_TIME"
+    # CRITICAL: Always perform the comparison to prevent early-exit timing leaks
+    # Even if user.temp_password is None, we spend the same time comparing.
+    passwords_match = secrets.compare_digest(str(temp_password), str(stored_temp))
+
+    if not user.temp_password or not passwords_match:
         return Response(
             {"message": "Invalid email or temp password"},
             status=status.HTTP_401_UNAUTHORIZED,
@@ -1667,3 +1756,44 @@ def admin_reset_user_passkeys(request, user_id):
             {"message": "Failed to reset user passkeys"},
             status=status.HTTP_500_INTERNAL_SERVER_ERROR,
         )
+@api_view(["POST"])
+@permission_classes([IsAuthenticated])
+def setup_totp(request):
+    """
+    POST /api/v1/auth/setup-totp/
+    Endpoint for users to complete TOTP setup after login (e.g. during grace period).
+    Requires a valid TOTP code to confirm the setup.
+    """
+    user = request.user
+    totp_code = request.data.get("totp_confirmation", "").strip()
+    
+    if not totp_code:
+        return Response(
+            {"message": "TOTP confirmation code required"},
+            status=status.HTTP_400_BAD_REQUEST,
+        )
+        
+    if not user.totp_secret:
+        return Response(
+            {"message": "TOTP secret not initialized. Contact support."},
+            status=status.HTTP_400_BAD_REQUEST,
+        )
+        
+    totp = pyotp.TOTP(user.totp_secret)
+    if not totp.verify(totp_code, valid_window=1):
+        return Response(
+            {"message": "Invalid TOTP code. Your app may be out of sync."},
+            status=status.HTTP_400_BAD_REQUEST,
+        )
+        
+    # Success: Clear grace period and confirm setup
+    user.totp_grace_period_expires = None
+    user.mfa_method = "totp"
+    user.save()
+    
+    audit_log(user, "UPDATE", resource_type="TOTP_SETUP_COMPLETE", request=request)
+    
+    return Response({
+        "message": "TOTP setup successfully completed.",
+        "user_profile": _user_to_dict(user)
+    })

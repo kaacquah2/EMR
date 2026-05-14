@@ -1,5 +1,5 @@
 """
-Multi-Agent Orchestrator using CrewAI.
+Multi-Agent Orchestrator for MedSync AI.
 
 Coordinates 7 AI agents to perform complete patient analysis:
 1. Data Agent - Fetches and cleans patient EMR data
@@ -10,7 +10,8 @@ Coordinates 7 AI agents to perform complete patient analysis:
 6. Referral Agent - Recommends hospitals
 7. Summary Agent - Synthesizes all outputs
 
-CrewAI provides agent framework, tools, and task orchestration.
+Implementation: Native Python with ThreadPoolExecutor-based parallel execution.
+No external orchestration framework required.
 """
 
 import asyncio
@@ -22,6 +23,7 @@ from datetime import datetime
 
 from api.ai.prompts.prompt_manager import get_prompt_manager
 from api.ai.model_registry import get_model_registry
+from api.ai.clinical_validation import get_clinical_disclaimer
 
 logger = logging.getLogger(__name__)
 
@@ -30,7 +32,9 @@ class AIOrchestrator:
     """
     Multi-agent orchestrator for comprehensive patient analysis.
 
-    This is a placeholder implementation. In production, this would use CrewAI.
+    Uses ThreadPoolExecutor for parallel agent execution. Each agent
+    wraps a specialized ML model or service from the api.ai.ml_models
+    and api.ai.services packages.
     """
 
     def __init__(self):
@@ -41,9 +45,10 @@ class AIOrchestrator:
         self.model_metadata = {
             'version': '1.1.0-hardened',
             'created_at': datetime.now().isoformat(),
-            'orchestrator': 'CrewAI-Parallel',
+            'orchestrator': 'ThreadPoolExecutor-Parallel',
             'num_agents': 7,
             'execution_mode': 'hybrid_parallel',
+            'clinical_readiness': 'DEMONSTRATION_ONLY',
         }
         logger.info("AI Orchestrator initialized (Hardened/Parallel)")
 
@@ -145,6 +150,9 @@ class AIOrchestrator:
                 'recommended_actions': summary_result['actions'],
                 'alerts': alerts,
                 'confidence_score': confidence,
+                'demo_mode': True,
+                'disclaimer': get_clinical_disclaimer(),
+                'clinical_validation_status': 'NONE',
                 'metrics': {
                     'total_duration_ms': round(total_duration, 2),
                     'phase_0_ms': round(p0_duration, 2),
@@ -283,6 +291,9 @@ class AIOrchestrator:
                 'recommended_actions': summary_result['actions'],
                 'alerts': alerts,
                 'confidence_score': confidence,
+                'demo_mode': True,
+                'disclaimer': get_clinical_disclaimer(),
+                'clinical_validation_status': 'NONE',
             }
 
             logger.info(f"Comprehensive analysis complete for patient {patient_id}")

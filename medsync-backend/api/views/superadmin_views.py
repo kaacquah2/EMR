@@ -163,13 +163,13 @@ def system_health(request):
     # Get circuit breaker status
     circuit_statuses = get_all_circuit_statuses()
 
-    return Response({
+    return Response({"data": {
         "uptime": "ok",
         "database": "ok",
         "hospitals_count": Hospital.objects.count(),
         "users_count": User.objects.count(),
         "circuit_breakers": circuit_statuses,
-    })
+    }})
 
 
 @api_view(["GET"])
@@ -236,7 +236,7 @@ def break_glass_mark_reviewed(request, break_glass_id):
     log.reviewed_at = timezone.now()
     log.reviewed_by = request.user
     log.save(update_fields=["reviewed", "reviewed_at", "reviewed_by"])
-    return Response({"status": "ok", "break_glass_id": str(log.id), "reviewed": True})
+    return Response({"data": {"status": "ok", "break_glass_id": str(log.id), "reviewed": True}})
 
 
 @api_view(["POST"])
@@ -251,7 +251,7 @@ def break_glass_flag_abuse(request, break_glass_id):
 
     log.excessive_usage = True
     log.save(update_fields=["excessive_usage"])
-    return Response({"status": "ok", "break_glass_id": str(log.id), "excessive_usage": True})
+    return Response({"data": {"status": "ok", "break_glass_id": str(log.id), "excessive_usage": True}})
 
 
 @api_view(["GET"])
@@ -309,7 +309,7 @@ def onboard_hospital(request):
         onboarded_by=request.user,
     )
     return Response(
-        {"hospital_id": str(hospital.id), "name": hospital.name, "message": "Hospital created"},
+        {"data": {"hospital_id": str(hospital.id), "name": hospital.name, "message": "Hospital created"}},
         status=status.HTTP_201_CREATED,
     )
 
@@ -348,12 +348,12 @@ def grant_hospital_access(request):
         extra_data={"super_admin_id": str(super_admin.id), "created": created},
     )
     return Response(
-        {
+        {"data": {
             "super_admin_id": str(super_admin.id),
             "hospital_id": str(hospital.id),
             "granted": True,
             "created": created,
-        },
+        }},
         status=status.HTTP_201_CREATED if created else status.HTTP_200_OK,
     )
 
@@ -403,12 +403,12 @@ def hospital_onboarding_dashboard(request):
             }
         })
 
-    return Response({
+    return Response({"data": {
         "hospitals": data,
         "total_hospitals": len(data),
         "total_active": sum(bool(h["is_active"])
                         for h in data),
-    })
+    }})
 
 
 @api_view(["POST"])
@@ -496,7 +496,7 @@ def bulk_import_staff(request, hospital_id):    # sourcery skip: low-code-qualit
             except Exception as e:
                 errors.append(f"Row {idx}: {str(e)}")
 
-        return Response({
+        return Response({"data": {
             "created": created,
             "errors": errors,
             "summary": {
@@ -504,7 +504,7 @@ def bulk_import_staff(request, hospital_id):    # sourcery skip: low-code-qualit
                 "created_count": len(created),
                 "error_count": len(errors),
             }
-        })
+        }})
 
     except Exception as e:
         return Response(
@@ -552,7 +552,7 @@ def hospital_interop_connectivity(request, hospital_id):
         created_at__gte=timezone.now() - timedelta(days=30)
     ).count()
 
-    return Response({
+    return Response({"data": {
         "hospital_id": str(hospital.id),
         "hospital_name": hospital.name,
         "connectivity": {
@@ -563,7 +563,7 @@ def hospital_interop_connectivity(request, hospital_id):
             "break_glass_last_30_days": break_glass_count,
         },
         "status": "connected" if (incoming_consents > 0 or outgoing_patients > 0) else "isolated",
-    })
+    }})
 
 
 @api_view(["GET"])
@@ -600,7 +600,7 @@ def cross_facility_activity_log(request):
         'accessed_by__full_name', 'reason'
     ).order_by('-created_at')[:100]
 
-    return Response({
+    return Response({"data": {
         "consents": list(consents),
         "referrals": list(referrals),
         "break_glass_events": list(break_glass),
@@ -610,7 +610,7 @@ def cross_facility_activity_log(request):
             "total_referrals": Referral.objects.filter(created_at__gte=cutoff).count(),
             "total_break_glass": BreakGlassLog.objects.filter(created_at__gte=cutoff).count(),
         }
-    })
+    }})
 
 
 @api_view(["GET"])
@@ -621,7 +621,7 @@ def audit_chain_integrity_status(request):
     # Fast-ish bounded validation for dashboard display
     try:
         out = compute_audit_chain_status(max_users=200, max_logs_per_user=500)
-        return Response({k: out.get(k) for k in ("status", "last_checked_at", "message")})
+        return Response({"data": {k: out.get(k) for k in ("status", "last_checked_at", "message")}})
     except Exception as e:
         return Response({"status": "unknown", "last_checked_at": None, "message": str(e)})
 
@@ -634,7 +634,7 @@ def audit_chain_integrity_validate(request):
     # Deeper bounded validation (still bounded to avoid request timeouts)
     try:
         out = compute_audit_chain_status(max_users=500, max_logs_per_user=2000)
-        return Response({k: out.get(k) for k in ("status", "last_checked_at", "message")})
+        return Response({"data": {k: out.get(k) for k in ("status", "last_checked_at", "message")}})
     except Exception as e:
         return Response({"status": "unknown", "last_checked_at": None, "message": str(e)})
 
@@ -664,11 +664,11 @@ def hospital_onboarding_status(request):
     done = [name for (name, ok) in checks if ok]
     missing = [name for (name, ok) in checks if not ok]
     completion = int(round((len(done) / len(checks)) * 100))
-    return Response({
+    return Response({"data": {
         "hospital_id": str(hospital.id),
         "completion_pct": completion,
         "missing_items": missing,
-    })
+    }})
 
 
 def _compliance_alerts_data():

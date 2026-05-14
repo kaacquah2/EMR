@@ -102,8 +102,8 @@ export function useCreateFacility() {
       setLoading(true);
       setError(null);
       try {
-        const data = await api.post<{ facility_id: string; name: string; region: string; nhis_code: string }>("/facilities", body);
-        return data;
+        const response = await api.post<{ data: { facility_id: string; name: string; region: string; nhis_code: string } }>("/facilities", body);
+        return response.data;
       } catch (err) {
         setError(err instanceof Error ? err.message : "Failed to create facility");
         throw err;
@@ -130,11 +130,11 @@ export function useUpdateFacility() {
       setLoading(true);
       setError(null);
       try {
-        const data = await api.patch<{ facility_id: string; name: string; region: string; nhis_code: string; is_active: boolean }>(
+        const response = await api.patch<{ data: { facility_id: string; name: string; region: string; nhis_code: string; is_active: boolean } }>(
           `/facilities/${facilityId}`,
           body
         );
-        return data;
+        return response.data;
       } catch (err) {
         const message = err instanceof Error ? err.message : "Failed to update facility";
         setError(message);
@@ -159,8 +159,8 @@ export function useLinkFacilityPatient() {
       setLoading(true);
       setError(null);
       try {
-        const res = await api.post<FacilityPatient>("/facility-patients/link", body);
-        return res;
+        const response = await api.post<{ data: FacilityPatient }>("/facility-patients/link", body);
+        return response.data;
       } catch (err) {
         setError(err instanceof Error ? err.message : "Link failed");
         throw err;
@@ -198,7 +198,8 @@ export function useReferrals() {
     async (body: { global_patient_id: string; to_facility_id: string; reason: string }) => {
       setError(null);
       try {
-        return await api.post<Referral>("/referrals", body);
+        const response = await api.post<{ data: Referral }>("/referrals", body);
+        return response.data;
       } catch (err) {
         setError(err instanceof Error ? err.message : "Create referral failed");
         throw err;
@@ -211,7 +212,8 @@ export function useReferrals() {
     async (referralId: string, status: Referral["status"]) => {
       setError(null);
       try {
-        return await api.patch<Referral>(`/referrals/${referralId}`, { status });
+        const response = await api.patch<{ data: Referral }>(`/referrals/${referralId}`, { status });
+        return response.data;
       } catch (err) {
         setError(err instanceof Error ? err.message : "Update failed");
         throw err;
@@ -257,7 +259,8 @@ export function useConsents() {
     }) => {
       setError(null);
       try {
-        return await api.post<Consent>("/consents", body);
+        const response = await api.post<{ data: Consent }>("/consents", body);
+        return response.data;
       } catch (err) {
         setError(err instanceof Error ? err.message : "Grant consent failed");
         throw err;
@@ -270,7 +273,8 @@ export function useConsents() {
     async (consentId: string) => {
       setError(null);
       try {
-        const updated = await api.patch<Consent>(`/consents/${consentId}`, {});
+        const response = await api.patch<{ data: Consent }>(`/consents/${consentId}`, {});
+        const updated = response.data;
         setList((prev) =>
           prev.map((c) => (c.consent_id === consentId ? { ...c, ...updated, is_active: false } : c))
         );
@@ -296,7 +300,8 @@ export function useBreakGlass() {
       setLoading(true);
       setError(null);
       try {
-        return await api.post<BreakGlassLog>("/break-glass", body);
+        const response = await api.post<{ data: BreakGlassLog }>("/break-glass", body);
+        return response.data;
       } catch (err) {
         setError(err instanceof Error ? err.message : "Break-glass failed");
         throw err;
@@ -350,11 +355,11 @@ export function useCrossFacilityRecords() {
       setError(null);
       setData(null);
       try {
-        const res = await api.get<CrossFacilityRecordsResponse>(
+        const response = await api.get<{ data: CrossFacilityRecordsResponse }>(
           `/cross-facility-records/${globalPatientId}`
         );
-        setData(res);
-        return res;
+        setData(response.data);
+        return response.data;
       } catch (err) {
         setError(err instanceof Error ? err.message : "Failed to load records");
         setData(null);

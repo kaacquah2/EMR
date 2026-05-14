@@ -1,1 +1,22 @@
-Patient {patient_id}: {triage_level} urgency. Differential diagnosis suggests {top_diagnosis} as most likely. Risk assessment indicates {risk_score}% risk of {top_disease}. Recommend further evaluation and testing as outlined in action items.
+CLINICAL SUMMARY — Patient {patient_id}
+══════════════════════════════════════
+
+URGENCY: {triage_level}
+
+ASSESSMENT:
+Differential diagnosis suggests {top_diagnosis} as most likely.
+Risk assessment indicates {risk_score}% risk of {top_disease}.
+
+CLINICAL IMPRESSION:
+Based on available data, this patient presents with findings consistent
+with {top_diagnosis}. The {risk_score}% risk score for {top_disease}
+warrants attention and further evaluation.
+
+RECOMMENDED PLAN:
+1. Confirm diagnosis with appropriate laboratory and imaging studies.
+2. Address identified risk factors for {top_disease}.
+3. Follow up as indicated by urgency level ({triage_level}).
+
+⚠️ DISCLAIMER: This summary is AI-generated for demonstration purposes
+only. Models are trained on synthetic data and have NOT been clinically
+validated. Do NOT use for clinical decision-making.

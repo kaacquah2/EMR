@@ -12,11 +12,11 @@ from rest_framework import status
 
 from core.models import User, Hospital, AuditLog
 from interop.models import GlobalPatient, BreakGlassLog
-from api.middleware import AnomalyDetectionMiddleware
+from api.middleware import BreakGlassExpiryMiddleware
 
 
 class BreakGlassExpiryMiddlewareTestCase(TestCase):
-    """Test AnomalyDetectionMiddleware enforces break-glass time-window expiry."""
+    """Test BreakGlassExpiryMiddleware enforces break-glass time-window expiry."""
 
     def setUp(self):
         """Create test fixtures."""
