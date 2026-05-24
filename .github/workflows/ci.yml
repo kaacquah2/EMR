@@ -47,6 +47,7 @@ jobs:
         with:
           python-version: "3.12"
           cache: pip
+          cache-dependency-path: medsync-backend/requirements-local.txt
       - name: Install dependencies
         run: pip install -r requirements-local.txt
       - name: Run migration linter
@@ -70,6 +71,7 @@ jobs:
         with:
           python-version: "3.12"
           cache: pip
+          cache-dependency-path: medsync-backend/requirements-local.txt
       - name: Install dependencies
         run: pip install -r requirements-local.txt
       - name: Pytest
