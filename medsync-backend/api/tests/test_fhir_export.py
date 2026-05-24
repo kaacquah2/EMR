@@ -276,7 +276,7 @@ class TestFhirEverythingBundle:
         # Check Content-Disposition header for download
         assert 'Content-Disposition' in response
         assert 'attachment' in response['Content-Disposition']
-        assert patient.id in response['Content-Disposition']
+        assert str(patient.id) in response['Content-Disposition']
 
     def test_everything_bundle_contains_all_resources(self, client, doctor1, patient_with_data):
         """Bundle contains all patient's clinical data."""

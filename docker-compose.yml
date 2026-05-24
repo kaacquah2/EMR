@@ -1,0 +1,90 @@
+services:
+  db:
+    image: postgres:16-alpine
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    environment:
+      - POSTGRES_DB=medsync
+      - POSTGRES_USER=postgres
+      - POSTGRES_PASSWORD=postgres
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  redis:
+    image: redis:7-alpine
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  backend:
+    build:
+      context: ./medsync-backend
+    volumes:
+      - ./medsync-backend:/app
+    environment:
+      - DEBUG=True
+      - SECRET_KEY=django-insecure-dev-key
+      - DATABASE_URL=postgresql://postgres:postgres@db:5432/medsync
+      - REDIS_URL=redis://redis:6379/0
+      - CELERY_BROKER_URL=redis://redis:6379/0
+      - FIELD_ENCRYPTION_KEY=ci-test-encryption-key-32-chars-long-at-least
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    ports:
+      - "8000:8000"
+    command: python manage.py runserver 0.0.0.0:8000
+
+  celery:
+    build:
+      context: ./medsync-backend
+    environment:
+      - DEBUG=True
+      - SECRET_KEY=django-insecure-dev-key
+      - DATABASE_URL=postgresql://postgres:postgres@db:5432/medsync
+      - REDIS_URL=redis://redis:6379/0
+      - CELERY_BROKER_URL=redis://redis:6379/0
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    command: celery -A medsync_backend worker --loglevel=info
+
+  flower:
+    build:
+      context: ./medsync-backend
+    environment:
+      - DEBUG=True
+      - CELERY_BROKER_URL=redis://redis:6379/0
+    ports:
+      - "5555:5555"
+    depends_on:
+      redis:
+        condition: service_healthy
+    command: celery -A medsync_backend flower --port=5555
+
+  frontend:
+    build:
+      context: ./medsync-frontend
+    volumes:
+      - ./medsync-frontend:/app
+      - /app/node_modules
+      - /app/.next
+    environment:
+      - NEXT_PUBLIC_API_URL=http://localhost:8000
+    depends_on:
+      - backend
+    ports:
+      - "3000:3000"
+    command: npm run dev
+
+volumes:
+  postgres_data:

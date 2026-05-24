@@ -5,7 +5,10 @@ export type UserRole =
   | "nurse"
   | "receptionist"
   | "lab_technician"
-  | "pharmacy_technician";
+  | "pharmacy_technician"
+  | "radiology_technician"
+  | "billing_staff"
+  | "ward_clerk";
 
 export type AccountStatus = "pending" | "active" | "inactive";
 
@@ -53,6 +56,13 @@ export interface Patient {
   allergies?: Allergy[];
   /** Set when this patient is linked to a global patient (interop). */
   global_patient_id?: string | null;
+  /** UI specific derived fields or joined data */
+  id: string;
+  age: number;
+  admission_status?: "admitted" | "outpatient" | "emergency";
+  ward_name?: string;
+  bed_code?: string;
+  photo_url?: string;
 }
 
 export interface Allergy {
@@ -159,11 +169,12 @@ export interface ApiError {
 
 export type ConsentScope = "SUMMARY" | "FULL_RECORD";
 
-export type ReferralStatus = "PENDING" | "ACCEPTED" | "REJECTED" | "COMPLETED";
+export type ReferralStatus = "PENDING" | "ACCEPTED" | "REJECTED" | "COMPLETED" | "CANCELLED";
 
 export interface GlobalPatient {
   global_patient_id: string;
   national_id: string | null;
+  ghana_health_id?: string | null;
   first_name: string;
   last_name: string;
   full_name: string;
@@ -285,12 +296,34 @@ export interface Referral {
   updated_at: string;
 }
 
+/** Enriched referral row from GET /referrals/mine */
+export interface ReferralListItem {
+  id: string;
+  direction: "incoming" | "outgoing";
+  patient: {
+    id: string;
+    name: string;
+    ghana_health_id?: string | null;
+    date_of_birth?: string | null;
+  };
+  from_facility: { id: string; name: string };
+  to_facility: { id: string; name: string };
+  reason: string;
+  status: ReferralStatus;
+  consent_granted?: boolean;
+  created_at: string;
+  updated_at?: string | null;
+  record_ids_to_share?: string[];
+}
+
 export interface BreakGlassLog {
   break_glass_id: string;
   global_patient_id: string;
   facility_id: string;
   accessed_by_user_id: string;
+  reason_code: string;
   reason: string;
+  expires_at: string;
   created_at: string;
 }
 
@@ -300,6 +333,7 @@ export interface CrossFacilityRecordsResponse {
   facilities: { facility_id: string; name: string }[];
   records: MedicalRecord[];
   read_only: boolean;
+  expires_at: string | null;
 }
 
 // ---- AI Async Analysis (Celery) ----
@@ -544,3 +578,17 @@ export interface TimelineFilters {
 
 /** Timeline zoom level for date range filtering */
 export type TimelineZoom = "all" | "1y" | "6m" | "3m" | "30d";
+
+export interface MedicationSchedule {
+  id: string;
+  prescription_id: string;
+  drug_name: string;
+  dosage: string;
+  scheduled_time: string;
+  actual_time?: string;
+  status: "scheduled" | "administered" | "missed" | "held" | "refused";
+  administered_by?: string;
+  administered_by_name?: string;
+  notes?: string;
+}
+

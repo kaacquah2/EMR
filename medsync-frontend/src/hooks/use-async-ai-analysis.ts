@@ -33,6 +33,7 @@ export function useAsyncAIAnalysis(patientId: string | null) {
   });
 
   const intervalIdRef = useRef<NodeJS.Timeout | null>(null);
+  const lastPolledJobIdRef = useRef<string | null>(null);
   const apiRef = useRef(createApiClient(() => auth.getAccessToken()));
 
   // Calculate exponential backoff interval
@@ -214,8 +215,11 @@ export function useAsyncAIAnalysis(patientId: string | null) {
       }
     };
 
-    // Initial poll immediately
-    poll();
+    // Initial poll immediately only if we haven't polled this jobId yet
+    if (jobId !== lastPolledJobIdRef.current) {
+      poll();
+      lastPolledJobIdRef.current = jobId;
+    }
 
     // Set up interval for subsequent polls
     intervalIdRef.current = setInterval(() => {

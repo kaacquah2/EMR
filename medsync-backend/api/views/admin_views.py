@@ -16,6 +16,7 @@ from rest_framework.parsers import MultiPartParser, FormParser
 from rest_framework.response import Response
 from core.models import User, Hospital, Ward, Department, LabUnit, AuditLog, Bed
 from patients.models import PatientAdmission
+from records.models import Equipment
 from api.serializers import UserSerializer, WardSerializer
 from api.utils import get_request_hospital, audit_log, get_effective_hospital
 from api.pagination import paginate_queryset
@@ -422,13 +423,19 @@ def audit_logs(request):
             dt = datetime.strptime(date_from, "%Y-%m-%d")
             qs = qs.filter(timestamp__date__gte=dt.date())
         except ValueError:
-            pass
+            return Response(
+                {"message": "Invalid date_from format. Use YYYY-MM-DD."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
     if date_to:
         try:
             dt = datetime.strptime(date_to, "%Y-%m-%d")
             qs = qs.filter(timestamp__date__lte=dt.date())
         except ValueError:
-            pass
+            return Response(
+                {"message": "Invalid date_to format. Use YYYY-MM-DD."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
 
     qs = qs.order_by("-timestamp")
     page, next_cursor, has_more = paginate_queryset(qs, request, page_size=50, max_page_size=200)
@@ -638,7 +645,10 @@ def user_update(request, pk):
                 try:
                     target.hospital = Hospital.objects.get(id=data["hospital_id"])
                 except Hospital.DoesNotExist:
-                    pass
+                    return Response(
+                        {"message": "Hospital does not exist"},
+                        status=status.HTTP_400_BAD_REQUEST,
+                    )
         if requested_role in (
             "super_admin",
             "hospital_admin",
@@ -692,7 +702,10 @@ def user_update(request, pk):
             try:
                 target.ward = Ward.objects.get(id=data["ward_id"], hospital=target.hospital)
             except Ward.DoesNotExist:
-                pass
+                return Response(
+                    {"message": "Ward does not exist or does not match the user's hospital context"},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
         else:
             target.ward = None
     if "gmdc_licence_number" in data and target.role == "doctor":
@@ -1590,7 +1603,7 @@ def bed_management_dashboard(request):
             'bed',
             filter=Q(
                 bed__is_active=True,
-                bed__is_occupied=True,
+                bed__status='occupied',
             )
         ),
     ).select_related('hospital')
@@ -1693,28 +1706,28 @@ def patient_transfer(request, admission_id):
     except Ward.DoesNotExist:
         return Response({'message': 'Target ward not found'}, status=status.HTTP_404_NOT_FOUND)
     
-    to_bed = None
-    if to_bed_id:
-        try:
-            to_bed = Bed.objects.get(id=to_bed_id, ward=to_ward, is_active=True, is_occupied=False)
-        except Bed.DoesNotExist:
-            return Response({'message': 'Target bed not found or occupied'}, status=status.HTTP_404_NOT_FOUND)
-    
-    # Release old bed
-    old_ward = admission.ward
-    old_bed = admission.bed
-    if old_bed:
-        old_bed.is_occupied = False
-        old_bed.save(update_fields=['is_occupied'])
-    
-    # Assign new ward/bed
-    admission.ward = to_ward
-    admission.bed = to_bed
-    if to_bed:
-        to_bed.is_occupied = True
-        to_bed.save(update_fields=['is_occupied'])
-    
-    admission.save(update_fields=['ward', 'bed'])
+    try:
+        with transaction.atomic():
+            # Release old bed
+            old_ward = admission.ward
+            old_bed = admission.bed
+            if old_bed:
+                old_bed.status = 'available'
+                old_bed.save(update_fields=['status'])
+            
+            to_bed = None
+            if to_bed_id:
+                updated = Bed.objects.filter(id=to_bed_id, ward=to_ward, is_active=True, status='available').update(status='occupied')
+                if not updated:
+                    raise ValueError('Target bed not found, not active, or already occupied')
+                to_bed = Bed.objects.get(id=to_bed_id)
+            
+            # Assign new ward/bed
+            admission.ward = to_ward
+            admission.bed = to_bed
+            admission.save(update_fields=['ward', 'bed'])
+    except ValueError as e:
+        return Response({'message': str(e)}, status=status.HTTP_400_BAD_REQUEST)
     
     # Audit
     audit_log(
@@ -2026,3 +2039,36 @@ def gpid_duplicates(request):
         'potential_duplicates': len(results),
         'duplicates': results,
     })
+
+@api_view(["GET", "POST"])
+@permission_classes([IsAuthenticated])
+def hospital_equipment(request):
+    if request.user.role not in ("hospital_admin", "doctor", "nurse"):
+        return Response({"message": "Permission denied"}, status=status.HTTP_403_FORBIDDEN)
+    hospital = get_request_hospital(request)
+    if not hospital:
+        return Response({"message": "No hospital assigned"}, status=status.HTTP_400_BAD_REQUEST)
+    
+    if request.method == "GET":
+        from api.serializers import EquipmentSerializer
+        qs = Equipment.objects.filter(hospital=hospital)
+        category = request.GET.get("category")
+        if category:
+            qs = qs.filter(category=category)
+        return Response({"data": EquipmentSerializer(qs, many=True).data})
+    
+    if request.method == "POST":
+        if request.user.role != "hospital_admin":
+            return Response({"message": "Permission denied"}, status=status.HTTP_403_FORBIDDEN)
+        data = request.data
+        from api.serializers import EquipmentSerializer
+        eq = Equipment.objects.create(
+            hospital=hospital,
+            name=data.get("name"),
+            serial_number=data.get("serial_number"),
+            category=data.get("category"),
+            status=data.get("status", "available"),
+            current_ward_id=data.get("ward_id"),
+        )
+        return Response(EquipmentSerializer(eq).data, status=status.HTTP_201_CREATED)
+

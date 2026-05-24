@@ -85,8 +85,8 @@ def enable_clinical_ai(request: Request) -> Response:
                 status=status.HTTP_400_BAD_REQUEST
             )
 
-        # Create deployment log
-        deployment = AIDeploymentLog.objects.create(
+        # Instantiate unsaved deployment log for validation
+        deployment = AIDeploymentLog(
             hospital=hospital,
             enabled_by=request.user,
             enabled=True,
@@ -95,12 +95,9 @@ def enable_clinical_ai(request: Request) -> Response:
             approval_notes=approval_notes
         )
 
-        # Validate metrics
+        # Validate metrics before database persistence
         is_valid, message = deployment.validate_metrics()
         if not is_valid:
-            # Disable if metrics don't meet thresholds
-            deployment.enabled = False
-            deployment.save()
             return Response(
                 {
                     'error': 'Validation metrics do not meet clinical thresholds',
@@ -113,6 +110,9 @@ def enable_clinical_ai(request: Request) -> Response:
                 },
                 status=status.HTTP_400_BAD_REQUEST
             )
+
+        # Save to database only after validation succeeds
+        deployment.save()
 
         # Audit log
         AuditLog.objects.create(

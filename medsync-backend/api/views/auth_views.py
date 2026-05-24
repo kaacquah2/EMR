@@ -32,22 +32,33 @@ _logger = logging.getLogger(__name__)
 def _detect_platform(user_agent: str) -> str:
     """
     Detect platform from user agent string.
-    
-    MedSync supports Windows (Hello biometric) and macOS (Touch ID/Face ID) only.
-    Other platforms are rejected during passkey registration.
     """
     ua = (user_agent or "").lower()
     if 'windows' in ua:
         return 'windows'
-    # macOS detection (must check for 'mac' after iOS check, but iOS not supported)
+    if 'iphone' in ua or 'ipad' in ua or 'ipod' in ua:
+        return 'ios'
+    if 'android' in ua:
+        return 'android'
     if 'macintosh' in ua or 'mac os x' in ua:
         return 'macos'
-    # Reject all other platforms
-    return 'unsupported'
+    if 'linux' in ua:
+        return 'linux'
+    return 'unknown'
 
 
 def _mfa_dev_authenticator_emails():
     return frozenset(getattr(settings, "DEV_PERMISSION_BYPASS_EMAILS", None) or [])
+
+
+def get_tokens_for_user(user, request=None):
+    refresh = RefreshToken.for_user(user)
+    if request:
+        client_ip = get_client_ip(request)
+        user_agent = request.META.get('HTTP_USER_AGENT', '')[:255]
+        refresh['client_ip'] = client_ip
+        refresh['user_agent'] = user_agent
+    return refresh
 
 
 def _mfa_use_authenticator_only(email: str) -> bool:
@@ -159,7 +170,7 @@ def login(request):
         # User has a passkey registered → issue JWT directly, no MFA
         audit_log(user, "LOGIN", resource_type="PASSWORD", request=request,
                   extra_data={"has_passkey": True, "skipped_mfa": True})
-        refresh = RefreshToken.for_user(user)
+        refresh = get_tokens_for_user(user, request)
         return Response({
             "access_token": str(refresh.access_token),
             "refresh_token": str(refresh),
@@ -462,7 +473,7 @@ def mfa_verify(request):
         )
 
     mfa_session.delete()
-    refresh = RefreshToken.for_user(user)
+    refresh = get_tokens_for_user(user, request)
     audit_log(user, "LOGIN", request=request)
     return Response({
         "access_token": str(refresh.access_token),
@@ -609,7 +620,7 @@ def activate(request):
         user.save()
         
         audit_log(user, "ACCOUNT_ACTIVATED", extra_data={"mfa_grace_period": True}, request=request)
-        refresh = RefreshToken.for_user(user)
+        refresh = get_tokens_for_user(user, request)
         return Response({
             "access_token": str(refresh.access_token),
             "refresh_token": str(refresh),
@@ -642,7 +653,7 @@ def activate(request):
     user.activated_at = timezone.now()
     user.save()
     audit_log(user, "ACCOUNT_ACTIVATED", request=request)
-    refresh = RefreshToken.for_user(user)
+    refresh = get_tokens_for_user(user, request)
     return Response({
         "access_token": str(refresh.access_token),
         "refresh_token": str(refresh),
@@ -684,11 +695,11 @@ def forgot_password(request):
             status=status.HTTP_400_BAD_REQUEST,
         )
 
-    # HIGH-5 FIX: Per-email rate limiting (10 attempts per 15 minutes) using database-backed model
+    # HIGH-5 FIX: Per-email rate limiting (5 attempts per hour) using database-backed model
     allowed, remaining = PasswordResetAttempt.check_and_record(
         email=email,
-        max_attempts=10,
-        window_minutes=15,
+        max_attempts=5,
+        window_minutes=60,
         ip_address=get_client_ip(request),
     )
 
@@ -856,7 +867,7 @@ def reset_password(request):
     audit_log(user, "UPDATE", resource_type="PASSWORD_RESET", request=request)
 
     # Generate new tokens (invalidates old ones automatically via JWT expiry)
-    refresh = RefreshToken.for_user(user)
+    refresh = get_tokens_for_user(user, request)
 
     return Response({
         "message": "Password reset successful. You can now log in with your new password.",
@@ -930,7 +941,7 @@ def login_with_temp_password(request):
     user.save()
 
     # Return access token - frontend will enforce password change
-    refresh = RefreshToken.for_user(user)
+    refresh = get_tokens_for_user(user, request)
     audit_log(user, "LOGIN", request=request)
 
     return Response({
@@ -1001,14 +1012,69 @@ def refresh(request):
             status=status.HTTP_400_BAD_REQUEST,
         )
     try:
-        serializer = TokenRefreshSerializer(data={"refresh": refresh_token})
-        serializer.is_valid(raise_exception=True)
-        data = serializer.validated_data
+        token = RefreshToken(refresh_token)
+        from django.contrib.auth import get_user_model
+        User = get_user_model()
+        user_id = token.payload.get('user_id')
+        user = User.objects.get(id=user_id)
+        
+        # Check for concurrent use from different IP or user agent
+        client_ip = get_client_ip(request)
+        user_agent = request.META.get('HTTP_USER_AGENT', '')[:255]
+        
+        token_ip = token.payload.get('client_ip')
+        token_ua = token.payload.get('user_agent')
+        
+        if token_ip and token_ua:
+            if token_ip != client_ip or token_ua != user_agent:
+                # Token theft / concurrent use from different client detected!
+                # Invalidate the entire family (force re-login by blacklisting all user's tokens)
+                try:
+                    from rest_framework_simplejwt.token_blacklist.models import OutstandingToken, BlacklistedToken
+                    outstanding = OutstandingToken.objects.filter(user=user)
+                    for ot in outstanding:
+                        BlacklistedToken.objects.get_or_create(token=ot)
+                except Exception as e:
+                    _logger.error(f"Error invalidating token family: {e}")
+                
+                try:
+                    token.blacklist()
+                except Exception:
+                    pass
+                
+                # Log critical security event
+                audit_log(
+                    user,
+                    "SECURITY_ALERT",
+                    resource_type="REFRESH_TOKEN",
+                    resource_id=token.payload.get("jti"),
+                    extra_data={
+                        "reason": "Concurrent refresh token use / IP mismatch",
+                        "original_ip": token_ip,
+                        "current_ip": client_ip,
+                        "original_ua": token_ua,
+                        "current_ua": user_agent,
+                    },
+                    request=request
+                )
+                return Response(
+                    {"message": "Security alert: session terminated due to concurrent access"},
+                    status=status.HTTP_401_UNAUTHORIZED,
+                )
+
+        new_refresh = get_tokens_for_user(user, request)
+        
+        # Blacklist the old one since it has been rotated
+        try:
+            token.blacklist()
+        except Exception:
+            pass
+            
         return Response({
-            "access_token": str(data["access"]),
-            "refresh_token": str(data.get("refresh", refresh_token)),
+            "access_token": str(new_refresh.access_token),
+            "refresh_token": str(new_refresh),
         })
-    except InvalidToken:
+    except (InvalidToken, Exception) as e:
         return Response(
             {"message": "Invalid or expired refresh token"},
             status=status.HTTP_401_UNAUTHORIZED,
@@ -1148,12 +1214,10 @@ def passkey_register_complete(request):
         
         platform = _detect_platform(request.META.get('HTTP_USER_AGENT', ''))
         
-        # MedSync is desktop-only: support Windows Hello and macOS biometrics only
-        if platform not in ('windows', 'macos'):
+        if platform not in ('windows', 'macos', 'linux', 'android', 'ios', 'unknown'):
             return Response(
                 {
-                    "message": "Passkey registration is only supported on Windows (with Hello) and macOS (with Touch ID/Face ID). "
-                               "Please use a Windows laptop or MacBook to register a passkey."
+                    "message": "Passkey registration is not supported on your platform."
                 },
                 status=status.HTTP_403_FORBIDDEN,
             )
@@ -1271,11 +1335,10 @@ def passkey_auth_begin(request):
     
     # Validate desktop platform
     platform = _detect_platform(request.META.get('HTTP_USER_AGENT', ''))
-    if platform not in ('windows', 'macos'):
+    if platform not in ('windows', 'macos', 'linux', 'android', 'ios', 'unknown'):
         return Response(
             {
-                "message": "MedSync requires a Windows laptop or MacBook. "
-                           "Mobile devices are not supported. Please use a desktop computer."
+                "message": "Passkey authentication is not supported on your platform."
             },
             status=status.HTTP_403_FORBIDDEN,
         )
@@ -1373,11 +1436,10 @@ def passkey_auth_complete(request):
     
     # Validate desktop platform
     platform = _detect_platform(request.META.get('HTTP_USER_AGENT', ''))
-    if platform not in ('windows', 'macos'):
+    if platform not in ('windows', 'macos', 'linux', 'android', 'ios', 'unknown'):
         return Response(
             {
-                "message": "MedSync requires a Windows laptop or MacBook. "
-                           "Mobile devices are not supported. Please use a desktop computer."
+                "message": "Passkey authentication is not supported on your platform."
             },
             status=status.HTTP_403_FORBIDDEN,
         )
@@ -1469,7 +1531,7 @@ def passkey_auth_complete(request):
         passkey.save(update_fields=['sign_count', 'last_used_at', 'last_ip_address'])
         
         # Issue JWT tokens
-        refresh = RefreshToken.for_user(user)
+        refresh = get_tokens_for_user(user, request)
         
         # Clear session
         del request.session['passkey_auth_challenge']

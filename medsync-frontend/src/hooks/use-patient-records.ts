@@ -8,6 +8,7 @@ import type {
   Prescription,
   LabResult,
   Vital,
+  MedicationSchedule,
 } from "@/lib/types";
 
 export function usePatientRecords(patientId: string | null) {
@@ -17,6 +18,7 @@ export function usePatientRecords(patientId: string | null) {
   const [prescriptions, setPrescriptions] = useState<Prescription[]>([]);
   const [labs, setLabs] = useState<LabResult[]>([]);
   const [vitals, setVitals] = useState<Vital[]>([]);
+  const [marSchedules, setMarSchedules] = useState<MedicationSchedule[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -89,6 +91,19 @@ export function usePatientRecords(patientId: string | null) {
     }
   }, [api, patientId]);
 
+  const fetchMarSchedules = useCallback(async () => {
+    if (!patientId) return;
+    try {
+      const data = await api.get<{ data: MedicationSchedule[] }>(
+        `/mar/patient/${patientId}/schedule`
+      );
+      setMarSchedules(data.data || []);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to load MAR schedules");
+      setMarSchedules([]);
+    }
+  }, [api, patientId]);
+
   const fetchAll = useCallback(async (silent = false) => {
     if (!patientId) return;
     if (!silent) {
@@ -96,18 +111,20 @@ export function usePatientRecords(patientId: string | null) {
       setError(null);
     }
     try {
-      const [recRes, diagRes, rxRes, labRes, vitRes] = await Promise.all([
+      const [recRes, diagRes, rxRes, labRes, vitRes, marRes] = await Promise.all([
         api.get<{ data: MedicalRecord[] }>(`/patients/${patientId}/records`),
         api.get<{ data: Diagnosis[] }>(`/patients/${patientId}/diagnoses`),
         api.get<{ data: Prescription[] }>(`/patients/${patientId}/prescriptions`),
         api.get<{ data: LabResult[] }>(`/patients/${patientId}/labs`),
         api.get<{ data: Vital[] }>(`/patients/${patientId}/vitals`),
+        api.get<{ data: MedicationSchedule[] }>(`/mar/patient/${patientId}/schedule`),
       ]);
       setRecords(recRes.data || []);
       setDiagnoses(diagRes.data || []);
       setPrescriptions(rxRes.data || []);
       setLabs(labRes.data || []);
       setVitals(vitRes.data || []);
+      setMarSchedules(marRes.data || []);
     } catch (err) {
       if (!silent) setError(err instanceof Error ? err.message : "Failed to load records");
     } finally {
@@ -121,6 +138,7 @@ export function usePatientRecords(patientId: string | null) {
     prescriptions,
     labs,
     vitals,
+    marSchedules,
     loading,
     error,
     fetchRecords,
@@ -128,6 +146,7 @@ export function usePatientRecords(patientId: string | null) {
     fetchPrescriptions,
     fetchLabs,
     fetchVitals,
+    fetchMarSchedules,
     fetchAll,
   };
 }

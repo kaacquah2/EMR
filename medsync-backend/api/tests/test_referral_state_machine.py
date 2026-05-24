@@ -372,7 +372,7 @@ class TestReferralAuditLogging:
             resource_type="Referral",
             resource_id=str(referral.id),
             hospital=doctor.hospital,
-            details={"status": "ACCEPTED", "from_status": "PENDING"},
+            extra_data={"status": "ACCEPTED", "from_status": "PENDING"},
         )
         
         # Verify audit log was created
@@ -391,14 +391,14 @@ class TestReferralAuditLogging:
             resource_type="Referral",
             resource_id=str(referral.id),
             hospital=doctor.hospital,
-            details={"status": "REJECTED", "reason": "Cannot handle patient"},
+            extra_data={"status": "REJECTED", "reason": "Cannot handle patient"},
         )
         
         logs = AuditLog.objects.filter(resource_id=str(referral.id))
         assert logs.exists()
         log = logs.first()
         assert log.action == "REFERRAL_REJECTED"
-        assert "reason" in log.details
+        assert "reason" in log.extra_data
 
     def test_referral_audit_log_completion(self, setup):
         """Test that referral completion is logged."""
@@ -411,7 +411,7 @@ class TestReferralAuditLogging:
             resource_type="Referral",
             resource_id=str(referral.id),
             hospital=doctor.hospital,
-            details={"status": "ACCEPTED"},
+            extra_data={"status": "ACCEPTED"},
         )
         
         # Then complete
@@ -421,10 +421,10 @@ class TestReferralAuditLogging:
             resource_type="Referral",
             resource_id=str(referral.id),
             hospital=doctor.hospital,
-            details={"status": "COMPLETED"},
+            extra_data={"status": "COMPLETED"},
         )
         
-        logs = AuditLog.objects.filter(resource_id=str(referral.id)).order_by("created_at")
+        logs = AuditLog.objects.filter(resource_id=str(referral.id)).order_by("timestamp")
         assert logs.count() == 2
         assert list(logs.values_list("action", flat=True)) == [
             "REFERRAL_ACCEPTED",

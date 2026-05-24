@@ -177,6 +177,8 @@ class CeleryFallbackTestCase(TestCase):
         result = execute_task_sync_or_async(
             comprehensive_analysis_task,
             valid_uuid,
+            str(uuid.uuid4()),
+            str(uuid.uuid4()),
             timeout=10
         )
 

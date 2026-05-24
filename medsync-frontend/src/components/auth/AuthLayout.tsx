@@ -42,12 +42,17 @@ export function AuthLayout({ children, title, subtitle }: AuthLayoutProps) {
                 <br />
                 Every hospital.
               </h2>
-              <p
-                className="mt-4 max-w-sm text-sm leading-relaxed"
-                style={{ textShadow: "0 1px 3px rgba(0,0,0,0.4)" }}
-              >
-                Ghana Inter-Hospital Electronic Medical Records. Secure, interoperable care across facilities.
-              </p>
+              <div className="mt-6 rounded-xl border border-white/20 bg-white/10 p-4 backdrop-blur-md">
+                <p
+                  className="text-base font-medium leading-relaxed text-white"
+                  style={{ textShadow: "0 1px 2px rgba(0,0,0,0.3)" }}
+                >
+                  Ghana Inter-Hospital Electronic Medical Records.
+                  <span className="mt-1 block text-sm font-normal text-white/90">
+                    Secure, interoperable care across facilities.
+                  </span>
+                </p>
+              </div>
             </div>
             <div
               className="flex flex-wrap gap-6 text-xs font-medium uppercase tracking-wider"

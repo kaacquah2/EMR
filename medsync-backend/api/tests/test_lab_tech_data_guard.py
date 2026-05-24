@@ -15,7 +15,6 @@ They should only see:
 - Patient demographics only (name, age, gender, GHA ID)
 """
 
-from django.test import Client
 from rest_framework.test import APITestCase
 from rest_framework import status
 from django.contrib.auth import get_user_model
@@ -77,7 +76,7 @@ class LabTechDataVisibilityTest(APITestCase):
         self.diagnosis = Diagnosis.objects.create(
             record=self.record,
             icd10_code="I10",
-            diagnosis_name="Essential hypertension",
+            icd10_description="Essential hypertension",
             severity="moderate",
         )
 
@@ -100,21 +99,21 @@ class LabTechDataVisibilityTest(APITestCase):
             lab_tech=self.lab_tech,
         )
 
-        self.client = Client()
+
 
     def test_lab_tech_can_list_lab_orders(self):
         """Lab tech should be able to list lab orders."""
         self.client.force_authenticate(user=self.lab_tech)
-        response = self.client.get("/api/v1/lab/orders/")
+        response = self.client.get("/api/v1/lab/orders")
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.assertIn("data", response.json())
 
     def test_lab_tech_can_view_lab_order_detail(self):
         """Lab tech should be able to view lab order details."""
         self.client.force_authenticate(user=self.lab_tech)
-        response = self.client.get(f"/api/v1/lab/orders/{self.lab_order.id}/")
+        response = self.client.get(f"/api/v1/lab/orders/{self.lab_order.id}")
         self.assertEqual(response.status_code, status.HTTP_200_OK)
-        data = response.json()
+        data = response.json()["data"]
 
         # Should have lab-specific fields
         self.assertIn("test_name", data)
@@ -130,9 +129,9 @@ class LabTechDataVisibilityTest(APITestCase):
     def test_lab_tech_cannot_see_diagnosis_in_order(self):
         """Lab tech should NOT see diagnoses linked to lab order."""
         self.client.force_authenticate(user=self.lab_tech)
-        response = self.client.get(f"/api/v1/lab/orders/{self.lab_order.id}/")
+        response = self.client.get(f"/api/v1/lab/orders/{self.lab_order.id}")
         self.assertEqual(response.status_code, status.HTTP_200_OK)
-        data = response.json()
+        data = response.json()["data"]
 
         # Should NOT include diagnosis data
         self.assertNotIn("diagnoses", data)
@@ -141,9 +140,9 @@ class LabTechDataVisibilityTest(APITestCase):
     def test_lab_tech_cannot_see_prescriptions_in_order(self):
         """Lab tech should NOT see prescriptions linked to lab order."""
         self.client.force_authenticate(user=self.lab_tech)
-        response = self.client.get(f"/api/v1/lab/orders/{self.lab_order.id}/")
+        response = self.client.get(f"/api/v1/lab/orders/{self.lab_order.id}")
         self.assertEqual(response.status_code, status.HTTP_200_OK)
-        data = response.json()
+        data = response.json()["data"]
 
         # Should NOT include prescription data
         self.assertNotIn("prescriptions", data)
@@ -152,9 +151,9 @@ class LabTechDataVisibilityTest(APITestCase):
     def test_lab_tech_cannot_see_vitals_in_order(self):
         """Lab tech should NOT see vitals linked to lab order."""
         self.client.force_authenticate(user=self.lab_tech)
-        response = self.client.get(f"/api/v1/lab/orders/{self.lab_order.id}/")
+        response = self.client.get(f"/api/v1/lab/orders/{self.lab_order.id}")
         self.assertEqual(response.status_code, status.HTTP_200_OK)
-        data = response.json()
+        data = response.json()["data"]
 
         # Should NOT include vital signs
         self.assertNotIn("vitals", data)
@@ -230,7 +229,7 @@ class LabTechDataVisibilityTest(APITestCase):
     def test_doctor_can_see_full_order_data(self):
         """Doctor should see full order data with clinical context."""
         self.client.force_authenticate(user=self.doctor)
-        response = self.client.get(f"/api/v1/lab/orders/{self.lab_order.id}/")
+        response = self.client.get(f"/api/v1/lab/orders/{self.lab_order.id}")
 
         # If doctor has access, they should see more fields
         if response.status_code == status.HTTP_200_OK:
@@ -244,7 +243,7 @@ class LabTechDataVisibilityTest(APITestCase):
         """Lab tech list endpoint should enforce role check."""
         # Non-lab-tech should not access lab order list
         self.client.force_authenticate(user=self.doctor)
-        response = self.client.get("/api/v1/lab/orders/")
+        response = self.client.get("/api/v1/lab/orders")
 
         # Doctor role shouldn't have access
         self.assertIn(response.status_code, [status.HTTP_403_FORBIDDEN])
@@ -253,7 +252,7 @@ class LabTechDataVisibilityTest(APITestCase):
         """Lab tech detail endpoint should enforce role check."""
         # Non-lab-tech should not access lab order detail
         self.client.force_authenticate(user=self.doctor)
-        response = self.client.get(f"/api/v1/lab/orders/{self.lab_order.id}/")
+        response = self.client.get(f"/api/v1/lab/orders/{self.lab_order.id}")
 
         # Doctor role shouldn't have access
         self.assertIn(response.status_code, [status.HTTP_403_FORBIDDEN])

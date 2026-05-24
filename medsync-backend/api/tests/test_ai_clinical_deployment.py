@@ -98,7 +98,7 @@ class AIDeploymentLogModelTests(TestCase):
         deployment = AIDeploymentLog.objects.create(
             hospital=self.hospital,
             enabled_by=self.admin_user,
-            enabled=True,
+            enabled=False,
             model_version="1.0.0-mimic-iv",
             validation_metrics=metrics,
         )
@@ -106,6 +106,17 @@ class AIDeploymentLogModelTests(TestCase):
         is_valid, message = deployment.validate_metrics()
         self.assertFalse(is_valid)
         self.assertIn("AUC-ROC", message)
+
+        # Test model-level save validation raises exception
+        from django.core.exceptions import ValidationError
+        with self.assertRaises(ValidationError):
+            AIDeploymentLog.objects.create(
+                hospital=self.hospital,
+                enabled_by=self.admin_user,
+                enabled=True,
+                model_version="1.0.0-mimic-iv",
+                validation_metrics=metrics,
+            )
 
     def test_validate_metrics_sensitivity_too_low(self):
         """Test metrics validation fails when sensitivity is below threshold."""
@@ -118,7 +129,7 @@ class AIDeploymentLogModelTests(TestCase):
         deployment = AIDeploymentLog.objects.create(
             hospital=self.hospital,
             enabled_by=self.admin_user,
-            enabled=True,
+            enabled=False,
             model_version="1.0.0-mimic-iv",
             validation_metrics=metrics,
         )
@@ -126,6 +137,17 @@ class AIDeploymentLogModelTests(TestCase):
         is_valid, message = deployment.validate_metrics()
         self.assertFalse(is_valid)
         self.assertIn("Sensitivity", message)
+
+        # Test model-level save validation raises exception
+        from django.core.exceptions import ValidationError
+        with self.assertRaises(ValidationError):
+            AIDeploymentLog.objects.create(
+                hospital=self.hospital,
+                enabled_by=self.admin_user,
+                enabled=True,
+                model_version="1.0.0-mimic-iv",
+                validation_metrics=metrics,
+            )
 
     def test_validate_metrics_specificity_too_low(self):
         """Test metrics validation fails when specificity is below threshold."""
@@ -138,7 +160,7 @@ class AIDeploymentLogModelTests(TestCase):
         deployment = AIDeploymentLog.objects.create(
             hospital=self.hospital,
             enabled_by=self.admin_user,
-            enabled=True,
+            enabled=False,
             model_version="1.0.0-mimic-iv",
             validation_metrics=metrics,
         )
@@ -147,12 +169,23 @@ class AIDeploymentLogModelTests(TestCase):
         self.assertFalse(is_valid)
         self.assertIn("Specificity", message)
 
+        # Test model-level save validation raises exception
+        from django.core.exceptions import ValidationError
+        with self.assertRaises(ValidationError):
+            AIDeploymentLog.objects.create(
+                hospital=self.hospital,
+                enabled_by=self.admin_user,
+                enabled=True,
+                model_version="1.0.0-mimic-iv",
+                validation_metrics=metrics,
+            )
+
     def test_validate_metrics_no_metrics(self):
         """Test metrics validation fails when metrics are missing."""
         deployment = AIDeploymentLog.objects.create(
             hospital=self.hospital,
             enabled_by=self.admin_user,
-            enabled=True,
+            enabled=False,
             model_version="1.0.0-mimic-iv",
             validation_metrics={},
         )
@@ -160,6 +193,17 @@ class AIDeploymentLogModelTests(TestCase):
         is_valid, message = deployment.validate_metrics()
         self.assertFalse(is_valid)
         self.assertIn("No validation metrics", message)
+
+        # Test model-level save validation raises exception
+        from django.core.exceptions import ValidationError
+        with self.assertRaises(ValidationError):
+            AIDeploymentLog.objects.create(
+                hospital=self.hospital,
+                enabled_by=self.admin_user,
+                enabled=True,
+                model_version="1.0.0-mimic-iv",
+                validation_metrics={},
+            )
 
     def test_get_latest_for_hospital(self):
         """Test retrieving the latest deployment for a hospital."""
@@ -285,7 +329,7 @@ class AIDeploymentAPITests(TestCase):
         )
 
         self.assertEqual(response.status_code, 201)
-        data = response.json()
+        data = response.json()["data"]
         self.assertEqual(data["deployment"]["hospital"], "Test Hospital")
         self.assertTrue(data["deployment"]["enabled"])
 
@@ -354,7 +398,7 @@ class AIDeploymentAPITests(TestCase):
         response = self.client.get("/api/v1/admin/ai/status")
 
         self.assertEqual(response.status_code, 200)
-        data = response.json()
+        data = response.json()["data"]
         self.assertTrue(data["enabled"])
         self.assertEqual(data["model_version"], "1.0.0-mimic-iv")
 
@@ -395,7 +439,7 @@ class AIDeploymentAPITests(TestCase):
         )
 
         self.assertEqual(response.status_code, 200)
-        data = response.json()
+        data = response.json()["data"]
         self.assertIn("disabled", data["message"].lower())
 
         # Verify it's actually disabled
@@ -433,7 +477,7 @@ class AIDeploymentAPITests(TestCase):
         response = self.client.get("/api/v1/admin/ai/history")
 
         self.assertEqual(response.status_code, 200)
-        data = response.json()
+        data = response.json()["data"]
         self.assertEqual(len(data["history"]), 2)
 
     def test_doctor_cannot_enable_ai(self):

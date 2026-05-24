@@ -231,7 +231,7 @@ def super_admin_with_hospital(db, hospital_a):
 # ============================================================================
 
 @pytest.fixture
-def patient_a(db, hospital_a):
+def patient_a(db, hospital_a, doctor_a):
     """Create Patient in Hospital A."""
     return Patient.objects.create(
         ghana_health_id="GHI_A_001",
@@ -239,11 +239,12 @@ def patient_a(db, hospital_a):
         full_name="John Doe",
         date_of_birth="1990-01-15",
         gender="male",
+        created_by=doctor_a,
     )
 
 
 @pytest.fixture
-def patient_a2(db, hospital_a):
+def patient_a2(db, hospital_a, doctor_a):
     """Create second Patient in Hospital A."""
     return Patient.objects.create(
         ghana_health_id="GHI_A_002",
@@ -251,11 +252,12 @@ def patient_a2(db, hospital_a):
         full_name="Jane Smith",
         date_of_birth="1985-06-20",
         gender="female",
+        created_by=doctor_a,
     )
 
 
 @pytest.fixture
-def patient_b(db, hospital_b):
+def patient_b(db, hospital_b, doctor_b):
     """Create Patient in Hospital B."""
     return Patient.objects.create(
         ghana_health_id="GHI_B_001",
@@ -263,6 +265,7 @@ def patient_b(db, hospital_b):
         full_name="Alice Johnson",
         date_of_birth="1995-03-10",
         gender="female",
+        created_by=doctor_b,
     )
 
 

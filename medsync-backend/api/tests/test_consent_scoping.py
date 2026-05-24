@@ -95,13 +95,13 @@ class TestConsentScoping:
 
         # Create local patient record
         self.patient = Patient.objects.create(
-            hospital=self.hospital_a,
+            registered_at=self.hospital_a,
             ghana_health_id="GHI-001",
-            first_name="John",
-            last_name="Consent",
+            full_name="John Consent",
             date_of_birth="1990-01-01",
             gender="male",
             phone="+233501234567",
+            created_by=self.doctor_a,
         )
         self.facility_patient.patient = self.patient
         self.facility_patient.save()
@@ -113,14 +113,12 @@ class TestConsentScoping:
             hospital=self.hospital_a,
             patient=self.patient,
             record_type="lab",
-            provider=self.doctor_a,
+            created_by=self.doctor_a,
         )
         lab_result = LabResult.objects.create(
-            hospital=self.hospital_a,
-            medical_record=medical_record,
+            record=medical_record,
             test_name="Blood Glucose",
             result_value="120",
-            unit="mg/dL",
         )
 
         # Create SUMMARY consent
@@ -148,13 +146,13 @@ class TestConsentScoping:
             hospital=self.hospital_a,
             patient=self.patient,
             record_type="diagnosis",
-            provider=self.doctor_a,
+            created_by=self.doctor_a,
         )
         diagnosis = Diagnosis.objects.create(
-            hospital=self.hospital_a,
-            medical_record=medical_record,
-            icd_code="E11",
-            description="Type 2 Diabetes",
+            record=medical_record,
+            icd10_code="E11",
+            icd10_description="Type 2 Diabetes",
+            severity="moderate",
         )
 
         # Create SUMMARY consent
@@ -180,40 +178,38 @@ class TestConsentScoping:
             hospital=self.hospital_a,
             patient=self.patient,
             record_type="diagnosis",
-            provider=self.doctor_a,
+            created_by=self.doctor_a,
         )
         Diagnosis.objects.create(
-            hospital=self.hospital_a,
-            medical_record=diag_record,
-            icd_code="E11",
-            description="Type 2 Diabetes",
+            record=diag_record,
+            icd10_code="E11",
+            icd10_description="Type 2 Diabetes",
+            severity="moderate",
         )
 
         lab_record = MedicalRecord.objects.create(
             hospital=self.hospital_a,
             patient=self.patient,
             record_type="lab",
-            provider=self.doctor_a,
+            created_by=self.doctor_a,
         )
         LabResult.objects.create(
-            hospital=self.hospital_a,
-            medical_record=lab_record,
+            record=lab_record,
             test_name="Glucose",
             result_value="120",
-            unit="mg/dL",
         )
 
         vital_record = MedicalRecord.objects.create(
             hospital=self.hospital_a,
             patient=self.patient,
             record_type="vital",
-            provider=self.doctor_a,
+            created_by=self.doctor_a,
         )
         Vital.objects.create(
-            hospital=self.hospital_a,
-            medical_record=vital_record,
-            vital_type="blood_pressure",
-            value="120/80",
+            record=vital_record,
+            bp_systolic=120,
+            bp_diastolic=80,
+            recorded_by=self.doctor_a,
         )
 
         # Create FULL_RECORD consent
@@ -237,7 +233,7 @@ class TestConsentScoping:
             granted_to_facility=self.hospital_b,
             granted_by=self.doctor_a,
             scope=Consent.SCOPE_FULL_RECORD,
-            account_status="active",
+            is_active=True,
         )
 
         assert consent.is_active is True
@@ -259,12 +255,11 @@ class TestConsentScoping:
             granted_by=self.doctor_a,
             scope=Consent.SCOPE_FULL_RECORD,
             expires_at=past_expiry,
-            account_status="active",
+            is_active=True,
         )
 
         # Check expiration logic
-        is_expired = consent.expires_at and timezone.now() > consent.expires_at
-        assert is_expired is True
+        assert consent.is_expired() is True
         # API layer should deny access when is_expired is True
 
     def test_consent_not_yet_expired_allows_access(self):
@@ -277,12 +272,11 @@ class TestConsentScoping:
             granted_by=self.doctor_a,
             scope=Consent.SCOPE_FULL_RECORD,
             expires_at=future_expiry,
-            account_status="active",
+            is_active=True,
         )
 
         # Check expiration logic
-        is_expired = consent.expires_at and timezone.now() > consent.expires_at
-        assert is_expired is False
+        assert consent.is_expired() is False
         # API layer should allow access when is_expired is False
 
     def test_consent_no_expiry_never_expires(self):
@@ -294,12 +288,11 @@ class TestConsentScoping:
             granted_by=self.doctor_a,
             scope=Consent.SCOPE_FULL_RECORD,
             expires_at=None,
-            account_status="active",
+            is_active=True,
         )
 
         # Check expiration logic: None never expires
-        is_expired = consent.expires_at and timezone.now() > consent.expires_at
-        assert is_expired is False
+        assert consent.is_expired() is False
         # Consent remains valid indefinitely
 
 
@@ -343,7 +336,7 @@ class TestConsentRevocation:
             granted_to_facility=hospital_b,
             granted_by=doctor_a,
             scope=Consent.SCOPE_FULL_RECORD,
-            account_status="active",
+            is_active=True,
         )
         return consent, doctor_b, hospital_b, global_patient
 
@@ -378,7 +371,7 @@ class TestConsentRevocation:
             resource_type="Consent",
             resource_id=str(consent.id),
             hospital=hospital_b,
-            details={"global_patient_id": str(global_patient.id)},
+            extra_data={"global_patient_id": str(global_patient.id)},
         )
 
         # Verify audit log
@@ -400,7 +393,7 @@ class TestConsentRevocation:
         valid_consent = Consent.objects.filter(
             global_patient=global_patient,
             granted_to_facility=hospital_b,
-            account_status="active",
+            is_active=True,
         ).first()
 
         # No valid consent found after revocation
@@ -454,7 +447,7 @@ class TestMultipleConsentsAndPriority:
             granted_to_facility=hospital_b,
             granted_by=doctor_a,
             scope=Consent.SCOPE_SUMMARY,
-            account_status="active",
+            is_active=True,
         )
 
         # Later, create FULL_RECORD consent (updated consent)
@@ -463,19 +456,20 @@ class TestMultipleConsentsAndPriority:
             granted_to_facility=hospital_b,
             granted_by=doctor_a,
             scope=Consent.SCOPE_FULL_RECORD,
-            account_status="active",
+            is_active=True,
         )
 
         # Query active consents (API should pick highest scope)
         active_consents = Consent.objects.filter(
             global_patient=global_patient,
             granted_to_facility=hospital_b,
-            account_status="active",
+            is_active=True,
         )
 
         # Both exist; API logic should use FULL_RECORD
         assert active_consents.count() == 2
-        max_scope = max(c.scope for c in active_consents)
+        scope_priority = {Consent.SCOPE_SUMMARY: 1, Consent.SCOPE_FULL_RECORD: 2}
+        max_scope = max(active_consents, key=lambda c: scope_priority[c.scope]).scope
         assert max_scope == Consent.SCOPE_FULL_RECORD
 
     def test_revoked_older_consent_doesnt_affect_newer(self, setup):
@@ -488,7 +482,7 @@ class TestMultipleConsentsAndPriority:
             granted_to_facility=hospital_b,
             granted_by=doctor_a,
             scope=Consent.SCOPE_SUMMARY,
-            account_status="active",
+            is_active=True,
         )
 
         # Create second (updated) consent
@@ -497,7 +491,7 @@ class TestMultipleConsentsAndPriority:
             granted_to_facility=hospital_b,
             granted_by=doctor_a,
             scope=Consent.SCOPE_FULL_RECORD,
-            account_status="active",
+            is_active=True,
         )
 
         # Revoke the first one

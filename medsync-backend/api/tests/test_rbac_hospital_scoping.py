@@ -35,8 +35,7 @@ class HospitalScopingTests(APITestCase):
             id=uuid4(),
             name="Hospital A",
             nhis_code="HA001",
-            region="Ashanti",
-            account_status="active"
+            region="Ashanti"
         )
 
         # Hospital B
@@ -44,8 +43,7 @@ class HospitalScopingTests(APITestCase):
             id=uuid4(),
             name="Hospital B",
             nhis_code="HB001",
-            region="Central",
-            account_status="active"
+            region="Central"
         )
 
         # Doctor in Hospital A
@@ -115,7 +113,7 @@ class HospitalScopingTests(APITestCase):
         self.client.force_authenticate(user=self.doctor_a)
         response = self.client.get(f'/api/v1/patients/{self.patient_a.id}/')
         assert response.status_code == status.HTTP_200_OK
-        assert response.data['ghana_health_id'] == 'GH001'
+        assert response.data['data']['ghana_health_id'] == 'GH001'
 
     def test_doctor_a_cannot_see_hospital_b_patient(self):
         """Doctor from Hospital A cannot see Hospital B's patient."""
@@ -165,16 +163,14 @@ class AIFeaturesScopingTests(APITestCase):
             id=uuid4(),
             name="Hospital A",
             nhis_code="HA001",
-            region="Ashanti",
-            account_status="active"
+            region="Ashanti"
         )
 
         self.hospital_b = Hospital.objects.create(
             id=uuid4(),
             name="Hospital B",
             nhis_code="HB001",
-            region="Central",
-            account_status="active"
+            region="Central"
         )
 
         self.doctor_a = User.objects.create_user(
@@ -227,17 +223,18 @@ class AIFeaturesScopingTests(APITestCase):
             patient=self.patient_a,
             hospital=self.hospital_a,
             encounter_type='outpatient',
-            encounter_status='completed',
-            chief_complaint='Headache'
+            status='completed',
+            chief_complaint='Headache',
+            created_by=self.doctor_a
         )
 
         response = self.client.post(
-            f'/api/v1/ai/analyze-patient/{self.patient_a.id}/',
+            f'/api/v1/ai/async-analysis/{self.patient_a.id}',
             data={'chief_complaint': 'Headache'}
         )
 
         # Should succeed (or return 503 if AI service not running, but not 403)
-        assert response.status_code in [status.HTTP_200_OK, status.HTTP_503_SERVICE_UNAVAILABLE]
+        assert response.status_code in [status.HTTP_202_ACCEPTED, status.HTTP_200_OK, status.HTTP_503_SERVICE_UNAVAILABLE]
         assert response.status_code != status.HTTP_403_FORBIDDEN
 
     def test_ai_analyze_different_hospital_patient_denied(self):
@@ -246,7 +243,7 @@ class AIFeaturesScopingTests(APITestCase):
 
         # Try to analyze Hospital B's patient
         response = self.client.post(
-            f'/api/v1/ai/analyze-patient/{self.patient_b.id}/',
+            f'/api/v1/ai/async-analysis/{self.patient_b.id}',
             data={'chief_complaint': 'Headache'}
         )
 
@@ -263,8 +260,7 @@ class RoleBasedFeatureAccessTests(APITestCase):
             id=uuid4(),
             name="Test Hospital",
             nhis_code="TH001",
-            region="Test",
-            account_status="active"
+            region="Test"
         )
 
         self.doctor = User.objects.create_user(
@@ -306,7 +302,8 @@ class RoleBasedFeatureAccessTests(APITestCase):
             date_of_birth="1990-01-01",
             gender="male",
             blood_group="O+",
-            registered_at=self.hospital
+            registered_at=self.hospital,
+            created_by=self.doctor
         )
 
         self.client = APIClient()
@@ -385,8 +382,7 @@ class ReceptionistSerializerTests(APITestCase):
             id=uuid4(),
             name="Test Hospital",
             nhis_code="TH002",
-            region="Test",
-            account_status="active"
+            region="Test"
         )
 
         self.receptionist = User.objects.create_user(
@@ -414,24 +410,25 @@ class ReceptionistSerializerTests(APITestCase):
             blood_group="O+",
             phone="0123456789",
             national_id="GHA123456789",
-            registered_at=self.hospital
+            registered_at=self.hospital,
+            created_by=self.doctor
         )
 
         # Create a diagnosis so doctor sees it but receptionist shouldn't
-        diagnosis = Diagnosis.objects.create(
-            id=uuid4(),
-            icd10_code="J44.0",
-            icd10_description="COPD",
-            severity="moderate"
-        )
-
-        MedicalRecord.objects.create(
+        record = MedicalRecord.objects.create(
             id=uuid4(),
             patient=self.patient,
             hospital=self.hospital,
             record_type="diagnosis",
-            diagnosis=diagnosis,
             created_by=self.doctor
+        )
+
+        Diagnosis.objects.create(
+            id=uuid4(),
+            record=record,
+            icd10_code="J44.0",
+            icd10_description="COPD",
+            severity="moderate"
         )
 
         self.client = APIClient()
@@ -481,16 +478,14 @@ class CrossFacilityAccessTests(APITestCase):
             id=uuid4(),
             name="Hospital A",
             nhis_code="HA002",
-            region="Ashanti",
-            account_status="active"
+            region="Ashanti"
         )
 
         self.hospital_b = Hospital.objects.create(
             id=uuid4(),
             name="Hospital B",
             nhis_code="HB002",
-            region="Central",
-            account_status="active"
+            region="Central"
         )
 
         self.doctor_a = User.objects.create_user(
@@ -539,7 +534,7 @@ class CrossFacilityAccessTests(APITestCase):
             granted_by=self.doctor_a,
             granted_to_facility=self.hospital_b,
             scope=Consent.SCOPE_FULL_RECORD,
-            account_status="active"
+            is_active=True
         )
 
         self.client.force_authenticate(user=self.doctor_b)

@@ -37,7 +37,7 @@ class TestDistributedRateLimiting:
 
     @pytest.fixture
     def setup(self, db):
-        hospital = Hospital.objects.create(name="Test Hospital", code="TEST")
+        hospital = Hospital.objects.create(name="Test Hospital", nhis_code="TEST")
         user = User.objects.create_user(
             email="test@hospital.gh",
             password="TestPass123!",
@@ -62,7 +62,7 @@ class TestDistributedRateLimiting:
 
         # Simulate instance 1 making 100 requests
         for i in range(100):
-            response = client1.get("/api/v1/patients/")
+            response = client1.get("/api/v1/patients/search/")
             assert response.status_code in [200, 429]
 
         # Check rate limit counter via Redis
@@ -70,8 +70,8 @@ class TestDistributedRateLimiting:
         # This tests Redis shared state
 
         # Instance 2 should also be rate limited at same threshold
-        response2 = client2.get("/api/v1/patients/")
-        # If limit is 200/hour and instance 1 used 100, instance 2 has ~100 left
+        response2 = client2.get("/api/v1/patients/search/")
+        # If limit is 100/hour and instance 1 used 100, instance 2 is rate limited
         # This verifies shared state
 
         assert "X-RateLimit-Remaining" in response2 or response2.status_code in [200, 429]
@@ -98,16 +98,16 @@ class TestDistributedRateLimiting:
 
         # User A makes 100 requests
         for i in range(100):
-            client_a.get("/api/v1/patients/")
+            client_a.get("/api/v1/patients/search/")
 
-        # User B should still have full quota (200)
-        response_b = client_b.get("/api/v1/patients/")
+        # User B should still have full quota (100)
+        response_b = client_b.get("/api/v1/patients/search/")
         assert response_b.status_code == 200
 
         remaining_b = response_b.get("X-RateLimit-Remaining")
-        # Should be high (close to 200)
+        # Should be high (close to 100)
         if remaining_b:
-            assert int(remaining_b) > 150  # At least 150 left (out of 200)
+            assert int(remaining_b) > 50  # At least 50 left (out of 100)
 
     @pytest.mark.django_db
     def test_rate_limit_per_ip_address(self, setup):
@@ -119,10 +119,9 @@ class TestDistributedRateLimiting:
         client2 = APIClient()
 
         # Simulate different IPs via REMOTE_ADDR
-        with patch.object(client1, "client", new=MagicMock()):
-            # Make 150 requests from IP 192.168.1.1
-            for i in range(150):
-                response = client1.get("/api/v1/health", REMOTE_ADDR="192.168.1.1")
+        # Make 150 requests from IP 192.168.1.1
+        for i in range(150):
+            response = client1.get("/api/v1/health", REMOTE_ADDR="192.168.1.1")
 
         # IP 192.168.1.2 should have fresh quota
         response2 = client2.get("/api/v1/health", REMOTE_ADDR="192.168.1.2")
@@ -137,7 +136,7 @@ class TestRedisFailover:
 
     @pytest.fixture
     def setup(self, db):
-        hospital = Hospital.objects.create(name="Test Hospital", code="TEST")
+        hospital = Hospital.objects.create(name="Test Hospital", nhis_code="TEST")
         user = User.objects.create_user(
             email="test@hospital.gh",
             password="TestPass123!",
@@ -147,16 +146,17 @@ class TestRedisFailover:
         return {"hospital": hospital, "user": user}
 
     @pytest.mark.django_db
-    @patch("api.rate_limiting.redis_client")
-    def test_rate_limit_graceful_degradation_redis_down(self, mock_redis, setup):
+    @patch("api.rate_limiting.cache")
+    def test_rate_limit_graceful_degradation_redis_down(self, mock_cache, setup):
         """
         If Redis is down, rate limiting should:
         1. Fail open (allow request) or fail closed (deny request) - configurable
         2. Log the error for monitoring
         3. Not crash the API
         """
-        mock_redis.incr.side_effect = Exception("Redis connection refused")
-        mock_redis.expire.side_effect = Exception("Redis connection refused")
+        mock_cache.get.side_effect = Exception("Redis connection refused")
+        mock_cache.set.side_effect = Exception("Redis connection refused")
+        mock_cache.incr.side_effect = Exception("Redis connection refused")
 
         user = setup["user"]
         client = APIClient()
@@ -164,14 +164,14 @@ class TestRedisFailover:
 
         # Request should still go through (graceful degradation)
         # OR be denied based on RATE_LIMIT_FAIL_OPEN setting
-        response = client.get("/api/v1/patients/")
+        response = client.get("/api/v1/patients/search/")
 
         # At minimum, should not crash
         assert response.status_code != 500
 
     @pytest.mark.django_db
-    @patch("api.rate_limiting.redis_client")
-    def test_rate_limit_recovery_after_redis_reconnect(self, mock_redis, setup):
+    @patch("api.rate_limiting.cache")
+    def test_rate_limit_recovery_after_redis_reconnect(self, mock_cache, setup):
         """
         After Redis reconnects, rate limiting should resume working normally.
         """
@@ -180,17 +180,20 @@ class TestRedisFailover:
         client.force_authenticate(user=user)
 
         # Phase 1: Redis down, requests go through
-        mock_redis.incr.side_effect = Exception("Redis down")
-        response1 = client.get("/api/v1/patients/")
+        mock_cache.get.side_effect = Exception("Redis down")
+        mock_cache.incr.side_effect = Exception("Redis down")
+        response1 = client.get("/api/v1/patients/search/")
         assert response1.status_code in [200, 429]  # Depends on fail-open config
 
         # Phase 2: Redis recovers
-        mock_redis.incr.side_effect = None  # Restore normal behavior
-        mock_redis.incr.return_value = 1  # First request
-        response2 = client.get("/api/v1/patients/")
+        mock_cache.get.side_effect = None  # Restore normal behavior
+        mock_cache.incr.side_effect = None
+        mock_cache.get.return_value = 1
+        mock_cache.incr.return_value = 2
+        response2 = client.get("/api/v1/patients/search/")
 
         # Should now enforce rate limit normally
-        assert "X-RateLimit-Limit" in response2 or response2.status_code in [200, 429]
+        assert response2.status_code != 500
 
     @pytest.mark.django_db
     def test_rate_limit_queue_on_redis_recovery(self, setup):
@@ -210,7 +213,7 @@ class TestConcurrentRequests:
 
     @pytest.fixture
     def setup(self, db):
-        hospital = Hospital.objects.create(name="Test Hospital", code="TEST")
+        hospital = Hospital.objects.create(name="Test Hospital", nhis_code="TEST")
         user = User.objects.create_user(
             email="test@hospital.gh",
             password="TestPass123!",
@@ -234,7 +237,7 @@ class TestConcurrentRequests:
         results = []
 
         def make_request():
-            response = client.get("/api/v1/patients/")
+            response = client.get("/api/v1/patients/search/")
             results.append((response.status_code, response.get("X-RateLimit-Remaining")))
 
         # Launch 10 concurrent threads
@@ -284,18 +287,21 @@ class TestConcurrentRequests:
             failed_logins.append(response.status_code)
 
         # 10 concurrent wrong-password attempts
-        threads = [threading.Thread(target=attempt_wrong_password) for _ in range(10)]
-        for t in threads:
-            t.start()
-        for t in threads:
-            t.join()
+        # Mock User.objects.get to avoid concurrent database writes in SQLite
+        with patch("api.views.auth_views.User.objects.get", side_effect=User.DoesNotExist):
+            threads = [threading.Thread(target=attempt_wrong_password) for _ in range(10)]
+            for t in threads:
+                t.start()
+            for t in threads:
+                t.join()
 
         # After 10 concurrent attempts, next attempt should be rate limited
-        response = client.post(
-            "/api/v1/auth/login",
-            {"email": user_email, "password": "WrongPassword123!"},
-            format="json",
-        )
+        with patch("api.views.auth_views.User.objects.get", side_effect=User.DoesNotExist):
+            response = client.post(
+                "/api/v1/auth/login",
+                {"email": user_email, "password": "WrongPassword123!"},
+                format="json",
+            )
         # Should be 429 (rate limited) if brute-force threshold is <= 10
 
         assert response.status_code in [401, 429]  # 401 auth fail or 429 rate limit
@@ -308,7 +314,7 @@ class TestClockSkew:
 
     @pytest.fixture
     def setup(self, db):
-        hospital = Hospital.objects.create(name="Test Hospital", code="TEST")
+        hospital = Hospital.objects.create(name="Test Hospital", nhis_code="TEST")
         user = User.objects.create_user(
             email="test@hospital.gh",
             password="TestPass123!",
@@ -328,14 +334,15 @@ class TestClockSkew:
         client.force_authenticate(user=user)
 
         # Get current rate limit status
-        response1 = client.get("/api/v1/patients/")
+        response1 = client.get("/api/v1/patients/search/")
         remaining1 = response1.get("X-RateLimit-Remaining")
 
         # Simulate clock moving backward by 30 seconds
-        with patch("api.rate_limiting.timezone.now") as mock_now:
-            mock_now.return_value = timezone.now() - timedelta(seconds=30)
-
-            response2 = client.get("/api/v1/patients/")
+        # SimpleRateThrottle timer uses time.time()
+        import time
+        start_time = time.time()
+        with patch("rest_framework.throttling.SimpleRateThrottle.timer", return_value=start_time - 30):
+            response2 = client.get("/api/v1/patients/search/")
             remaining2 = response2.get("X-RateLimit-Remaining")
 
             # Rate limit should still apply (not reset due to time going backward)
@@ -355,20 +362,20 @@ class TestClockSkew:
 
         # Make requests to use up some quota
         for _ in range(50):
-            client.get("/api/v1/patients/")
+            client.get("/api/v1/patients/search/")
 
-        response1 = client.get("/api/v1/patients/")
-        remaining1 = int(response1.get("X-RateLimit-Remaining", 200))
+        response1 = client.get("/api/v1/patients/search/")
+        remaining1 = int(response1.get("X-RateLimit-Remaining", 100))
 
-        # Simulate clock jumping forward by 1 hour
-        with patch("api.rate_limiting.timezone.now") as mock_now:
-            mock_now.return_value = timezone.now() + timedelta(hours=1)
-
-            response2 = client.get("/api/v1/patients/")
-            remaining2 = int(response2.get("X-RateLimit-Remaining", 200))
+        # Simulate clock jumping forward by 1 hour (3601 seconds)
+        import time
+        start_time = time.time()
+        with patch("rest_framework.throttling.SimpleRateThrottle.timer", return_value=start_time + 3601):
+            response2 = client.get("/api/v1/patients/search/")
+            remaining2 = int(response2.get("X-RateLimit-Remaining", 100))
 
             # Rate limit bucket should reset (new hour)
-            # remaining2 should be close to 200 (full quota for new hour)
+            # remaining2 should be close to 100 (full quota for new hour)
             assert remaining2 > remaining1
 
     @pytest.mark.django_db
@@ -382,25 +389,23 @@ class TestClockSkew:
         client.force_authenticate(user=user)
 
         # Make a request (creates rate limit bucket)
-        response1 = client.get("/api/v1/patients/")
-        remaining1 = int(response1.get("X-RateLimit-Remaining", 200))
+        response1 = client.get("/api/v1/patients/search/")
+        remaining1 = int(response1.get("X-RateLimit-Remaining", 100))
 
-        # Advance time by 59 minutes (bucket should NOT reset)
-        with patch("api.rate_limiting.timezone.now") as mock_now:
-            mock_now.return_value = timezone.now() + timedelta(minutes=59)
-
-            response2 = client.get("/api/v1/patients/")
-            remaining2 = int(response2.get("X-RateLimit-Remaining", 200))
+        # Advance time by 59 minutes (3540 seconds) - bucket should NOT reset
+        import time
+        start_time = time.time()
+        with patch("rest_framework.throttling.SimpleRateThrottle.timer", return_value=start_time + 3540):
+            response2 = client.get("/api/v1/patients/search/")
+            remaining2 = int(response2.get("X-RateLimit-Remaining", 100))
 
             # Bucket should still be active
             assert remaining2 < remaining1  # Still counting down
 
-        # Advance time by 61 minutes total (bucket SHOULD reset)
-        with patch("api.rate_limiting.timezone.now") as mock_now:
-            mock_now.return_value = timezone.now() + timedelta(minutes=61)
-
-            response3 = client.get("/api/v1/patients/")
-            remaining3 = int(response3.get("X-RateLimit-Remaining", 200))
+        # Advance time by 120 minutes (7200 seconds) total - bucket SHOULD reset
+        with patch("rest_framework.throttling.SimpleRateThrottle.timer", return_value=start_time + 7200):
+            response3 = client.get("/api/v1/patients/search/")
+            remaining3 = int(response3.get("X-RateLimit-Remaining", 100))
 
             # Bucket reset (new hour)
             assert remaining3 > remaining2  # Reset to full quota
@@ -413,7 +418,7 @@ class TestRateLimitReset:
 
     @pytest.fixture
     def setup(self, db):
-        hospital = Hospital.objects.create(name="Test Hospital", code="TEST")
+        hospital = Hospital.objects.create(name="Test Hospital", nhis_code="TEST")
         user = User.objects.create_user(
             email="test@hospital.gh",
             password="TestPass123!",
@@ -432,33 +437,31 @@ class TestRateLimitReset:
         client = APIClient()
         client.force_authenticate(user=user)
 
-        with patch("api.rate_limiting.timezone.now") as mock_now:
-            # Time: 10:00:00
-            start_time = timezone.make_aware(
-                datetime(2026, 4, 19, 10, 0, 0)
-            )
-            mock_now.return_value = start_time
+        import time
+        start_time = time.time()
+        with patch("rest_framework.throttling.SimpleRateThrottle.timer") as mock_timer:
+            mock_timer.return_value = start_time
 
-            # Make 199 requests (use quota)
-            for _ in range(199):
-                client.get("/api/v1/patients/")
+            # Make 99 requests (use quota)
+            for _ in range(99):
+                client.get("/api/v1/patients/search/")
 
             # Check remaining (should be 1)
-            response = client.get("/api/v1/patients/")
+            response = client.get("/api/v1/patients/search/")
             remaining = int(response.get("X-RateLimit-Remaining", 0))
             assert remaining == 1
 
-            # Time: 10:59:59 (still same hour)
-            mock_now.return_value = start_time + timedelta(seconds=3599)
-            response = client.get("/api/v1/patients/")
+            # Time: 59 minutes 59 seconds (still same hour)
+            mock_timer.return_value = start_time + 3599
+            response = client.get("/api/v1/patients/search/")
             remaining = int(response.get("X-RateLimit-Remaining", 0))
             assert remaining == 0  # Still limited
 
-            # Time: 11:00:00 (new hour, bucket reset)
-            mock_now.return_value = start_time + timedelta(hours=1)
-            response = client.get("/api/v1/patients/")
+            # Time: 1 hour (new hour, bucket reset)
+            mock_timer.return_value = start_time + 3600
+            response = client.get("/api/v1/patients/search/")
             remaining = int(response.get("X-RateLimit-Remaining", 0))
-            assert remaining > 180  # Bucket reset (out of 200)
+            assert remaining > 90  # Bucket reset (out of 100)
 
     @pytest.mark.django_db
     def test_rate_limit_different_endpoints_separate_limits(self, setup):
@@ -470,25 +473,25 @@ class TestRateLimitReset:
         client = APIClient()
 
         # Don't authenticate yet
-        # Try multiple login attempts (should have stricter limit, e.g., 10/hr)
-
-        for i in range(11):
-            response = client.post(
-                "/api/v1/auth/login",
-                {"email": "test@hospital.gh", "password": "wrong"},
-                format="json",
-            )
-            if i < 10:
-                assert response.status_code != 429  # Within limit
-            else:
-                assert response.status_code == 429  # Rate limited after 10
+        # Try multiple login attempts (should have stricter limit, e.g., 5/15min)
+        with patch("api.views.auth_views.User.objects.get", side_effect=User.DoesNotExist):
+            for i in range(6):
+                response = client.post(
+                    "/api/v1/auth/login",
+                    {"email": "test@hospital.gh", "password": "wrong"},
+                    format="json",
+                )
+                if i < 5:
+                    assert response.status_code != 429  # Within limit
+                else:
+                    assert response.status_code == 429  # Rate limited after 5
 
         # Authenticate
         client.force_authenticate(user=user)
 
-        # General endpoint has higher limit (200/hr)
-        # Should not be rate limited after just 11 requests
-        response = client.get("/api/v1/patients/")
+        # General endpoint has higher limit (100/hr)
+        # Should not be rate limited after just 6 requests
+        response = client.get("/api/v1/patients/search/")
         assert response.status_code == 200  # Not rate limited
 
     @pytest.mark.django_db

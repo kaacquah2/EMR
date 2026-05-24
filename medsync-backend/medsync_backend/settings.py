@@ -1,8 +1,17 @@
 import os
 from pathlib import Path
+from typing import cast
+
 from decouple import config
 import dj_database_url
+import sentry_sdk  # type: ignore[import-untyped]
+from sentry_sdk.integrations.django import DjangoIntegration  # type: ignore[import-untyped]
 from celery.schedules import crontab
+
+
+def _str_config(key: str, default: str = "") -> str:
+    """String env lookup with stable typing for static analysis."""
+    return str(config(key, default=default))
 
 BASE_DIR = Path(__file__).resolve().parent.parent
 
@@ -23,9 +32,11 @@ def _resolve_secret_key():
         if raw is not None and str(raw).strip():
             return str(raw).strip()
     cfg = config("SECRET_KEY", default=None)
-    if cfg is not None and str(cfg).strip():
-        return str(cfg).strip()
-    return None
+    return (
+        str(cfg).strip()
+        if cfg is not None and str(cfg).strip()
+        else None
+    )
 
 
 _SECRET_KEY = _resolve_secret_key()
@@ -38,7 +49,7 @@ if _SECRET_KEY is None:
     )
 SECRET_KEY = _SECRET_KEY
 
-_db_url_configured = bool(config("DATABASE_URL", default=""))
+_db_url_configured = bool(_str_config("DATABASE_URL"))
 if DEBUG and _db_url_configured:
     import warnings
     warnings.warn(
@@ -47,11 +58,25 @@ if DEBUG and _db_url_configured:
         stacklevel=2,
     )
 # Production: never run with DEBUG=True. Set ENV=production (or use a dedicated flag) to enforce.
-if config("ENV", default="").lower() == "production" and DEBUG:
+if _str_config("ENV").lower() == "production" and DEBUG:
     from django.core.exceptions import ImproperlyConfigured
     raise ImproperlyConfigured("Production must not run with DEBUG=True. Set DEBUG=False.")
 
-ALLOWED_HOSTS = [h.strip() for h in config("ALLOWED_HOSTS", default="localhost,127.0.0.1,testserver").split(",") if h.strip()]
+# Sentry Monitoring (Task 7)
+if _SENTRY_DSN := _str_config("SENTRY_DSN") or None:
+    sentry_sdk.init(
+        dsn=_SENTRY_DSN,
+        integrations=[DjangoIntegration()],
+        traces_sample_rate=0.1,
+        send_default_pii=False,  # PHI SAFETY: Never send PII to Sentry
+        environment=config("ENV", default="development"),
+    )
+
+ALLOWED_HOSTS = [
+    h.strip()
+    for h in _str_config("ALLOWED_HOSTS", "localhost,127.0.0.1,testserver").split(",")
+    if h.strip()
+]
 if _VERCEL:
     # Vercel deployment hostnames (*.vercel.app); override via ALLOWED_HOSTS if using a custom domain.
     ALLOWED_HOSTS = list({*ALLOWED_HOSTS, ".vercel.app"})
@@ -59,16 +84,15 @@ if _VERCEL:
 # host, requests to *.up.railway.app return HTTP 400 (DisallowedHost) before any view runs.
 if os.environ.get("RAILWAY_PROJECT_ID") or os.environ.get("RAILWAY_PUBLIC_DOMAIN"):
     ALLOWED_HOSTS = list({*ALLOWED_HOSTS, ".up.railway.app"})
-    _railway_pub = (os.environ.get("RAILWAY_PUBLIC_DOMAIN") or "").strip()
-    if _railway_pub:
+    if _railway_pub := (os.environ.get("RAILWAY_PUBLIC_DOMAIN") or "").strip():
         ALLOWED_HOSTS = list({*ALLOWED_HOSTS, _railway_pub})
 
 def _has_pkg(name):
     try:
         __import__(name)
-        return True
     except ImportError:
         return False
+    return True
 _HAS_DAPHNE = _has_pkg("daphne")
 _HAS_CHANNELS = _has_pkg("channels")
 
@@ -93,17 +117,14 @@ INSTALLED_APPS = [
     "interop",
     "shared.apps.SharedConfig",
     "api",
+    "django_migration_linter",
 ]
 if _HAS_DAPHNE:
     INSTALLED_APPS.insert(0, "daphne")
 if _HAS_CHANNELS:
     INSTALLED_APPS.insert(INSTALLED_APPS.index("rest_framework"), "channels")
-if DEBUG:
-    try:
-        import debug_toolbar
-        INSTALLED_APPS += ["debug_toolbar"]
-    except ImportError:
-        pass
+if DEBUG and _has_pkg("debug_toolbar"):
+    INSTALLED_APPS += ["debug_toolbar"]
 
 MIDDLEWARE = [
     "django.middleware.security.SecurityMiddleware",
@@ -122,16 +143,13 @@ MIDDLEWARE = [
     "django.contrib.messages.middleware.MessageMiddleware",
     "django.middleware.clickjacking.XFrameOptionsMiddleware",
     "api.middleware.CSPMiddleware",
+    "api.middleware.RateLimitHeaderMiddleware",
 ]
-if DEBUG:
-    try:
-        import debug_toolbar
-        MIDDLEWARE.insert(
-            MIDDLEWARE.index("django.middleware.gzip.GZipMiddleware") + 1,
-            "debug_toolbar.middleware.DebugToolbarMiddleware",
-        )
-    except ImportError:
-        pass
+if DEBUG and _has_pkg("debug_toolbar"):
+    MIDDLEWARE.insert(
+        MIDDLEWARE.index("django.middleware.gzip.GZipMiddleware") + 1,
+        "debug_toolbar.middleware.DebugToolbarMiddleware",
+    )
 
 ROOT_URLCONF = "medsync_backend.urls"
 WSGI_APPLICATION = "medsync_backend.wsgi.application"
@@ -139,7 +157,7 @@ if _HAS_CHANNELS:
     ASGI_APPLICATION = "medsync_backend.asgi.application"
 # Production: set REDIS_URL so real-time alerts (WebSocket) are broadcast across ASGI workers.
 # InMemoryChannelLayer is single-process only; Redis is required for multi-worker deployments.
-_redis_url = config("REDIS_URL", default="")
+_redis_url = _str_config("REDIS_URL")
 if _HAS_CHANNELS:
     if _redis_url:
         CHANNEL_LAYERS = {
@@ -159,43 +177,42 @@ if _HAS_CHANNELS:
 
 # Database: Postgres (Neon) required for production (pgcrypto, RLS, concurrent writes).
 # SQLite used only when DEBUG=True and DATABASE_URL is unset (local dev only).
-_db_url = config("DATABASE_URL", default="")
-if _db_url:
+if _db_url := _str_config("DATABASE_URL"):
     _db_config = dj_database_url.parse(_db_url)
     if _db_config.get("ENGINE") == "django.db.backends.postgresql":
         _db_config.setdefault("OPTIONS", {})["sslmode"] = "require"
         _db_config["ENGINE"] = "api.db"
     _db_config.setdefault("CONN_MAX_AGE", 600)
     DATABASES = {"default": _db_config}
-else:
-    if not DEBUG:
-        if _VERCEL:
-            import warnings
-
-            DATABASES = {
-                "default": {
-                    "ENGINE": "django.db.backends.sqlite3",
-                    "NAME": ":memory:",
-                }
-            }
-            warnings.warn(
-                "DATABASE_URL unset on Vercel; using in-memory SQLite for build/bootstrap only. "
-                "Set DATABASE_URL (e.g. Neon) for a real deployment.",
-                RuntimeWarning,
-                stacklevel=2,
-            )
-        else:
-            from django.core.exceptions import ImproperlyConfigured
-            raise ImproperlyConfigured(
-                "DATABASE_URL is required in production. SQLite does not support pgcrypto, RLS, or safe concurrent writes. Use Neon (PostgreSQL) and set DATABASE_URL."
-            )
-    else:
-        DATABASES = {
-            "default": {
-                "ENGINE": "django.db.backends.sqlite3",
-                "NAME": BASE_DIR / "db.sqlite3",
-            }
+elif DEBUG:
+    DATABASES = {
+        "default": {
+            "ENGINE": "django.db.backends.sqlite3",
+            "NAME": BASE_DIR / "db.sqlite3",
         }
+    }
+elif _VERCEL:
+    import warnings
+
+    DATABASES = {
+        "default": {
+            "ENGINE": "django.db.backends.sqlite3",
+            "NAME": ":memory:",
+        }
+    }
+    warnings.warn(
+        "DATABASE_URL unset on Vercel; using in-memory SQLite for build/bootstrap only. "
+        "Set DATABASE_URL (e.g. Neon) for a real deployment.",
+        RuntimeWarning,
+        stacklevel=2,
+    )
+else:
+    from django.core.exceptions import ImproperlyConfigured
+
+    raise ImproperlyConfigured(
+        "DATABASE_URL is required in production. SQLite does not support pgcrypto, RLS, "
+        "or safe concurrent writes. Use Neon (PostgreSQL) and set DATABASE_URL."
+    )
 # Database cache so MFA token survives runserver restarts (login -> mfa-verify). Run once: python manage.py createcachetable
 # Vercel: no stable DB + no migrate for cache table — use in-memory cache (MFA may not survive cold starts).
 if _VERCEL:
@@ -261,9 +278,10 @@ def _validate_rbac_coverage_at_startup():
         logger = logging.getLogger("medsync.rbac")
         
         # Import and run the coverage test
-        from api.tests.test_rbac_coverage import TestAllRoutesHavePermissions
-        test = TestAllRoutesHavePermissions()
-        test.test_every_url_has_permission_entry()
+        from api.tests.test_rbac_coverage import TestRBACCoverageForward
+
+        test = TestRBACCoverageForward()
+        test.test_all_registered_urls_have_permission_entry()
         
         logger.info("✅ RBAC coverage 100% validated - fail-closed mode active")
     except AssertionError as e:
@@ -280,7 +298,7 @@ def _validate_rbac_coverage_at_startup():
             raise RuntimeError(
                 "Production deployment blocked: RBAC coverage incomplete. "
                 "See logs for details. Set PERMISSION_FAIL_CLOSED_UNKNOWN_ENDPOINTS=False to debug."
-            )
+            ) from e
     except Exception as e:
         # Fail safely: don't crash startup due to test infrastructure issues
         import logging
@@ -299,6 +317,36 @@ if not FIELD_ENCRYPTION_KEY and not DEBUG:
     raise ImproperlyConfigured("FIELD_ENCRYPTION_KEY is required in production.")
 CRYPTOGRAPHY_KEY = FIELD_ENCRYPTION_KEY
 
+# ============================================================================
+# GHANA NHIS INTEGRATION SETTINGS
+# ============================================================================
+# National Health Insurance Authority (NHIA) API credentials.
+# Set these in your .env file or secrets manager for production.
+# Leaving NHIS_API_BASE_URL or NHIS_API_KEY empty enables offline/mock mode.
+#
+# NHIS_API_BASE_URL      — NHIA REST API base (e.g. https://api.nhia.gov.gh/v2)
+# NHIS_API_KEY           — Facility API key from NHIA portal
+# NHIS_FACILITY_CODE     — Your facility's NHIS code (same as Hospital.nhis_code)
+# NHIS_TIMEOUT_SECONDS   — HTTP request timeout in seconds
+# NHIS_MAX_RETRIES       — Max retry attempts on transient errors
+# NHIS_CIRCUIT_BREAKER_THRESHOLD — Failures before circuit opens (prevents thundering herd)
+NHIS_API_BASE_URL = config("NHIS_API_BASE_URL", default="")
+NHIS_API_KEY = config("NHIS_API_KEY", default="")
+NHIS_FACILITY_CODE = config("NHIS_FACILITY_CODE", default="")
+NHIS_TIMEOUT_SECONDS = config("NHIS_TIMEOUT_SECONDS", default=10, cast=int)
+NHIS_MAX_RETRIES = config("NHIS_MAX_RETRIES", default=3, cast=int)
+NHIS_CIRCUIT_BREAKER_THRESHOLD = config("NHIS_CIRCUIT_BREAKER_THRESHOLD", default=5, cast=int)
+
+# ============================================================================
+# CDS RULES CACHE (Redis)
+# ============================================================================
+# TTL in seconds for the CDS rules cache (cds:active_rules:all key).
+# On ClinicalRule save, the cache is immediately invalidated via signal.
+# Default: 3600 (1 hour) — increase in production if rules rarely change.
+CDS_RULES_CACHE_TTL = config("CDS_RULES_CACHE_TTL", default=3600, cast=int)
+
+
+
 # Dev-only permission bypass (comma-separated emails). Guarded by DEBUG in middleware.
 # Same list: MFA login uses TOTP/authenticator only (no email OTP)—those addresses are not real inboxes.
 # All other users receive a one-time code by email after password login.
@@ -306,9 +354,16 @@ CRYPTOGRAPHY_KEY = FIELD_ENCRYPTION_KEY
 # DEV_PERMISSION_BYPASS_EMAILS=admin@medsync.gh,doctor@medsync.gh,hospital_admin@medsync.gh,nurse@medsync.gh,receptionist@medsync.gh,lab_technician@medsync.gh,doctor2@medsync.gh
 DEV_PERMISSION_BYPASS_EMAILS = [
     e.strip().lower()
-    for e in config("DEV_PERMISSION_BYPASS_EMAILS", default="").split(",")
+    for e in _str_config("DEV_PERMISSION_BYPASS_EMAILS").split(",")
     if e.strip()
 ]
+# CRITICAL SECURITY: Dev bypass must NEVER be non-empty in production (DEBUG=False)
+if DEV_PERMISSION_BYPASS_EMAILS and not DEBUG:
+    from django.core.exceptions import ImproperlyConfigured
+    raise ImproperlyConfigured(
+        "CRITICAL SECURITY RISK: DEV_PERMISSION_BYPASS_EMAILS is set while DEBUG is False. "
+        "RBAC bypass is only allowed in development mode. Clear this setting for production."
+    )
 
 REST_FRAMEWORK = {
     "DEFAULT_AUTHENTICATION_CLASSES": [
@@ -355,6 +410,12 @@ SIMPLE_JWT = {
     "ALGORITHM": "HS256",  # ✅ EXPLICIT: Symmetric key for single-backend verification (not cross-hospital)
 }
 
+# SECURITY ASSERTION: Prevent accidental disabling of rotation in production
+if not DEBUG:
+    assert SIMPLE_JWT["ROTATE_REFRESH_TOKENS"] is True, "ROTATE_REFRESH_TOKENS must be True in production"
+    assert SIMPLE_JWT["BLACKLIST_AFTER_ROTATION"] is True, "BLACKLIST_AFTER_ROTATION must be True in production"
+    assert "rest_framework_simplejwt.token_blacklist" in INSTALLED_APPS, "token_blacklist app required for rotation safety"
+
 # WebAuthn/Passkey Configuration
 # WEBAUTHN_RP_ID: Your domain (e.g. "medsync.gh" in production, "localhost" for dev)
 #   - Must NOT include protocol (http://, https://) or trailing slash
@@ -363,14 +424,14 @@ SIMPLE_JWT = {
 #   - Must be HTTPS in production (except localhost for dev)
 #   - Must match browser's origin exactly (scheme://host:port)
 # WEBAUTHN_ENABLED: Master switch to enable/disable passkey auth entirely
-_WEBAUTHN_RP_ID = config("WEBAUTHN_RP_ID", default="localhost")
-_WEBAUTHN_ORIGIN = config("WEBAUTHN_ORIGIN", default="http://localhost:3000")
+_WEBAUTHN_RP_ID = _str_config("WEBAUTHN_RP_ID", "localhost")
+_WEBAUTHN_ORIGIN = _str_config("WEBAUTHN_ORIGIN", "http://localhost:3000")
 
 # Validate WebAuthn configuration
 def _validate_webauthn_config():
     """Validate WebAuthn RP ID and Origin configuration at startup."""
-    import re
-    
+    from django.core.exceptions import ImproperlyConfigured
+
     # RP ID validation: no protocol, no trailing slash
     if "://" in _WEBAUTHN_RP_ID:
         raise ImproperlyConfigured(
@@ -416,7 +477,7 @@ WEBAUTHN_CHALLENGE_TTL = 300  # 5 minutes
 # AI/ML model paths (MEDIUM-4: environment-aware model locations)
 # Default points at api/ai/models/*.joblib (written by api/ai/train_models.py).
 _ai_models_dir = Path(
-    config("MEDSYNC_AI_MODELS_DIR", default=str(BASE_DIR / "api" / "ai" / "models"))
+    _str_config("MEDSYNC_AI_MODELS_DIR", str(BASE_DIR / "api" / "ai" / "models"))
 ).resolve()
 
 MODEL_PATHS = {
@@ -442,7 +503,7 @@ AI_CONFIDENCE_THRESHOLD_CLINICAL = config("AI_CONFIDENCE_THRESHOLD_CLINICAL", de
 AI_CONFIDENCE_THRESHOLD_DEV = config("AI_CONFIDENCE_THRESHOLD_DEV", default=0.75, cast=float)
 
 # Use clinical threshold in production, dev threshold otherwise
-AI_CONFIDENCE_THRESHOLD = AI_CONFIDENCE_THRESHOLD_CLINICAL if not DEBUG else AI_CONFIDENCE_THRESHOLD_DEV
+AI_CONFIDENCE_THRESHOLD = AI_CONFIDENCE_THRESHOLD_DEV if DEBUG else AI_CONFIDENCE_THRESHOLD_CLINICAL
 
 # Model training and validation tracking
 # Phase 3 Complete: Using trained hybrid models (synthetic Ghana data + UCI readmission data)
@@ -469,10 +530,11 @@ _cors_default = (
     if _VERCEL
     else "http://localhost:3000,http://127.0.0.1:3000"
 )
-CORS_ALLOWED_ORIGINS = [o.strip() for o in config(
-    "CORS_ALLOWED_ORIGINS",
-    default=_cors_default,
-).split(",") if o.strip()]
+CORS_ALLOWED_ORIGINS = [
+    o.strip()
+    for o in _str_config("CORS_ALLOWED_ORIGINS", _cors_default).split(",")
+    if o.strip()
+]
 # Production: use explicit origins only. Wildcard (*) with credentials is insecure.
 # HIGH PRIORITY FIX #1: Prevent internal network exposure (192.168.x.x, 10.0.x.x, etc.)
 _internal_network_patterns = ['192.168.', '10.0.', '172.16.', 'localhost', '127.0.0.1', '::1']
@@ -483,12 +545,16 @@ _has_internal_origin = any(
 )
 if not DEBUG and (_has_internal_origin or "*" in CORS_ALLOWED_ORIGINS or not CORS_ALLOWED_ORIGINS):
     from django.core.exceptions import ImproperlyConfigured
-    error_msg = "Production must set CORS_ALLOWED_ORIGINS to explicit HTTPS origins (e.g. https://app.example.com). "
-    if _has_internal_origin:
-        error_msg += "No internal network addresses (192.168.x.x, 10.0.x.x, etc.)."
-    else:
-        error_msg += "No wildcard (*) or HTTP origins."
-    raise ImproperlyConfigured(error_msg)
+
+    raise ImproperlyConfigured(
+        "Production must set CORS_ALLOWED_ORIGINS to explicit HTTPS origins "
+        "(e.g. https://app.example.com). "
+        + (
+            "No internal network addresses (192.168.x.x, 10.0.x.x, etc.)."
+            if _has_internal_origin
+            else "No wildcard (*) or HTTP origins."
+        )
+    )
 
 TEMPLATES = [
     {
@@ -516,11 +582,11 @@ MEDIA_ROOT = BASE_DIR / "media"
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 
 # Email (console backend for dev). Production (Railway, etc.): set SMTP env vars — see .env.example.
-_email_backend_requested = config(
+_email_backend_requested = _str_config(
     "EMAIL_BACKEND",
-    default="django.core.mail.backends.console.EmailBackend",
+    "django.core.mail.backends.console.EmailBackend",
 )
-EMAIL_HOST = config("EMAIL_HOST", default="localhost")
+EMAIL_HOST = _str_config("EMAIL_HOST", "localhost")
 EMAIL_PORT = config("EMAIL_PORT", default=25, cast=int)
 EMAIL_USE_TLS = config("EMAIL_USE_TLS", default=False, cast=bool)
 EMAIL_USE_SSL = config("EMAIL_USE_SSL", default=False, cast=bool)
@@ -552,9 +618,9 @@ else:
 _email_deploy_context = bool(
     os.environ.get("RAILWAY_PROJECT_ID")
     or os.environ.get("VERCEL") == "1"
-    or config("ENV", default="").lower() == "production"
+    or _str_config("ENV").lower() == "production"
 )
-if _email_deploy_context and "console.EmailBackend" in EMAIL_BACKEND:
+if _email_deploy_context and "console.EmailBackend" in cast(str, EMAIL_BACKEND):
     import warnings
 
     warnings.warn(
@@ -565,7 +631,9 @@ if _email_deploy_context and "console.EmailBackend" in EMAIL_BACKEND:
         stacklevel=2,
     )
 # Break-glass: notify these emails (comma-separated); if empty, notifies hospital admins for the facility
-BREAK_GLASS_NOTIFY_EMAILS = [e.strip() for e in config("BREAK_GLASS_NOTIFY_EMAILS", default="").split(",") if e.strip()]
+BREAK_GLASS_NOTIFY_EMAILS = [
+    e.strip() for e in _str_config("BREAK_GLASS_NOTIFY_EMAILS").split(",") if e.strip()
+]
 # Break-glass time window in minutes (15 minutes is the standard)
 BREAK_GLASS_WINDOW_MINUTES = config("BREAK_GLASS_WINDOW_MINUTES", default=15, cast=int)
 
@@ -625,7 +693,7 @@ if _SECURE_HTTPS:
     # TASK 2 REMEDIATION (Mar 2025): Removed 'unsafe-inline' from script-src for XSS protection
     # Kept in style-src only as Tailwind CSS v4 requires inline styles
     # SECURITY_FIX_CORS_CSP_T4: Ensure CSP includes frontend origin for API communication
-    _frontend_origin = config("FRONTEND_URL", default="https://medsync.example.com")
+    _frontend_origin = _str_config("FRONTEND_URL", "https://medsync.example.com")
     _csp_connect_src = ["'self'", _frontend_origin]
     
     SECURE_CONTENT_SECURITY_POLICY = {
@@ -655,7 +723,9 @@ CSRF_COOKIE_SECURE = _SECURE_HTTPS if DEBUG else True
 CSRF_COOKIE_HTTPONLY = True  # FIXED: Now HttpOnly to prevent XSS cookie theft
 CSRF_COOKIE_SAMESITE = "Strict"  # FIXED: Changed from Lax to Strict
 CSRF_HEADER_NAME = "HTTP_X_CSRFTOKEN"  # Frontend sends CSRF token via X-CSRFToken header
-CSRF_TRUSTED_ORIGINS = [o.strip() for o in config("CSRF_TRUSTED_ORIGINS", default="").split(",") if o.strip()]
+CSRF_TRUSTED_ORIGINS = [
+    o.strip() for o in _str_config("CSRF_TRUSTED_ORIGINS").split(",") if o.strip()
+]
 
 # Django Debug Toolbar (DEBUG only): N+1 and query optimization
 if DEBUG:
@@ -681,6 +751,26 @@ CELERY_BROKER_CONNECTION_RETRY_ON_STARTUP = True
 CELERY_TASK_SOFT_TIME_LIMIT = 5 * 60  # 5 minutes soft limit (gives tasks time to cleanup)
 CELERY_TASK_ACKS_LATE = True  # Acknowledge after task completion (prevents task loss)
 CELERY_WORKER_PREFETCH_MULTIPLIER = 1  # Process one task at a time
+
+# TASK ROUTING & DEAD-LETTER QUEUE (DLQ)
+# Critical clinical tasks are routed to a dedicated queue.
+# Failed tasks are routed to the DLQ for manual inspection.
+from kombu import Queue, Exchange
+
+CELERY_TASK_DEFAULT_QUEUE = "default"
+CELERY_TASK_DEFAULT_EXCHANGE = "default"
+CELERY_TASK_DEFAULT_ROUTING_KEY = "default"
+
+CELERY_TASK_QUEUES = (
+    Queue("default", Exchange("default"), routing_key="default"),
+    Queue("clinical", Exchange("clinical"), routing_key="clinical"),
+    Queue("dlq", Exchange("dlq"), routing_key="dlq"),
+)
+
+CELERY_TASK_ROUTES = {
+    "api.tasks.appointment_tasks.*": {"queue": "clinical"},
+    "api.tasks.ai_tasks.*": {"queue": "clinical"},
+}
 
 # Retry policy for failed tasks
 CELERY_TASK_MAX_RETRIES = 3
@@ -718,12 +808,9 @@ CELERY_RESULT_EXPIRES = 3600  # Results expire after 1 hour
 # - ping_timeout: Time to wait for pong response before closing connection (seconds).
 # 
 # See: https://daphne.readthedocs.io/en/latest/
-if DEBUG:
-    # Development: longer timeout to allow requests to finish during reload
-    DAPHNE_APPLICATION_CLOSE_TIMEOUT = 5
-else:
-    # Production: shorter timeout (hard kill after 2 seconds if not graceful)
-    DAPHNE_APPLICATION_CLOSE_TIMEOUT = 2
+# Development: longer timeout to allow requests to finish during reload
+# Production: shorter timeout (hard kill after 2 seconds if not graceful)
+DAPHNE_APPLICATION_CLOSE_TIMEOUT = 5 if DEBUG else 2
 
 # ============================================================================
 # RBAC-18: Fail-closed mode for unknown API endpoints

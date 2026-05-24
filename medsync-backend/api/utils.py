@@ -335,12 +335,11 @@ def can_access_cross_facility(
 
     # 3) Recent break-glass by this user for this patient (FULL_RECORD)
     if allow_break_glass:
-        cutoff = now - timedelta(minutes=BREAK_GLASS_VALID_MINUTES)
         if BreakGlassLog.objects.filter(
             global_patient=gp,
             facility=facility,
             accessed_by=user,
-            created_at__gte=cutoff,
+            expires_at__gt=now,
         ).exists():
             return True, Consent.SCOPE_FULL_RECORD
 

@@ -140,7 +140,7 @@ class TestCriticalFix3ServerSidePasswordChangeEnforcement(TestCase):
 
         # Try to access search endpoint without changing password
         self.client.credentials(HTTP_AUTHORIZATION=f'Bearer {access_token}')
-        response = self.client.get('/api/v1/patients/search')
+        response = self.client.get('/api/v1/patients/search/')
 
         # Should be rejected with 403
         assert response.status_code == 403
@@ -390,7 +390,7 @@ class TestSecurityFixesIntegration(TestCase):
         self.client.credentials(HTTP_AUTHORIZATION=f'Bearer {refresh.access_token}')
 
         # 1. Accessing search should be forbidden
-        response = self.client.get('/api/v1/patients/search')
+        response = self.client.get('/api/v1/patients/search/')
         assert response.status_code == 403
 
         # 2. Accessing /me should be allowed
@@ -404,7 +404,7 @@ class TestSecurityFixesIntegration(TestCase):
         assert response.status_code == 200
 
         # 4. Now search should be accessible
-        response = self.client.get('/api/v1/patients/search')
+        response = self.client.get('/api/v1/patients/search/')
         assert response.status_code == 200
 
 

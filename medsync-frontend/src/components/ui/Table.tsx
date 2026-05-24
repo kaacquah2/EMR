@@ -23,21 +23,25 @@ interface TableSectionProps {
  * Props for TableHead (header cell)
  */
 interface TableHeadProps {
-  children: React.ReactNode;
+  children?: React.ReactNode;
   sortable?: boolean;
   onSort?: () => void;
   sortOrder?: 'asc' | 'desc' | 'none';
   align?: 'left' | 'center' | 'right';
   className?: string;
+  colSpan?: number;
+  rowSpan?: number;
 }
 
 /**
  * Props for TableCell (body cell)
  */
 interface TableCellProps {
-  children: React.ReactNode;
+  children?: React.ReactNode;
   align?: 'left' | 'center' | 'right';
   className?: string;
+  colSpan?: number;
+  rowSpan?: number;
 }
 
 /**
@@ -180,6 +184,8 @@ const TableHead = forwardRef<HTMLTableCellElement, TableHeadProps>(
       sortOrder = 'none',
       align = 'left',
       className,
+      colSpan,
+      rowSpan,
     },
     ref
   ) => {
@@ -215,6 +221,8 @@ const TableHead = forwardRef<HTMLTableCellElement, TableHeadProps>(
           ${isSortable ? 'cursor-pointer select-none hover:bg-gray-100 dark:hover:bg-gray-800' : ''}
           ${className || ''}
         `}
+        colSpan={colSpan}
+        rowSpan={rowSpan}
       >
         <div className="flex items-center gap-2">
           <span>{children}</span>
@@ -233,7 +241,7 @@ TableHead.displayName = 'TableHead';
  * Renders body cells with alignment support
  */
 const TableCell = forwardRef<HTMLTableCellElement, TableCellProps>(
-  ({ children, align = 'left', className }, ref) => {
+  ({ children, align = 'left', className, colSpan, rowSpan }, ref) => {
     const alignClasses = {
       left: 'text-left',
       center: 'text-center',
@@ -248,6 +256,8 @@ const TableCell = forwardRef<HTMLTableCellElement, TableCellProps>(
           ${alignClasses[align]}
           ${className || ''}
         `}
+        colSpan={colSpan}
+        rowSpan={rowSpan}
       >
         {children}
       </td>

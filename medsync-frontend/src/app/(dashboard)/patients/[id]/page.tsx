@@ -11,7 +11,6 @@ import { useApi } from "@/hooks/use-api";
 import { useConsents, useBreakGlassList, useFacilities, useReferrals } from "@/hooks/use-interop";
 import dynamic from 'next/dynamic';
 const DischargeSummaryForm = dynamic(() => import("@/components/features/DischargeSummaryForm").then(mod => mod.DischargeSummaryForm), { ssr: false });
-const AllergyBanner = dynamic(() => import("@/components/features/AllergyBanner").then(mod => mod.AllergyBanner), { ssr: false });
 import { Button } from "@/components/ui/button";
 import { SlideOver } from "@/components/features/SlideOver";
 const RecordTimelineCard = dynamic(() => import("@/components/features/RecordTimelineCard").then(mod => mod.RecordTimelineCard), { ssr: false });
@@ -37,10 +36,13 @@ import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { useAsyncAIAnalysis } from "@/hooks/use-async-ai-analysis";
 import { AIAnalysisProgress } from "@/components/features/ai/ai-analysis-progress";
 import { AIDisclaimer } from "@/components/ui/AIDisclaimer";
+import { VitalsTrendChart } from "@/components/features/clinical/VitalsTrendChart";
+import { MarChart } from "@/components/features/nurse/MarChart";
+import { ReferralSuggestions } from "@/components/features/ai/ReferralSuggestions";
 
 const PATIENT_LABS_POLL_MS = 45_000;
 
-type Tab = "overview" | "encounters" | "diagnoses" | "prescriptions" | "labs" | "vitals" | "amendments" | "ai_history" | "ai_analysis" | "timeline";
+type Tab = "overview" | "encounters" | "diagnoses" | "prescriptions" | "labs" | "vitals" | "amendments" | "ai_history" | "ai_analysis" | "timeline" | "mar";
 
 /** Roles that see only demographics + appointments (no clinical records). */
 const RESTRICTED_PATIENT_VIEW_ROLES: Role[] = [
@@ -153,7 +155,9 @@ export default function PatientPage() {
     prescriptions,
     labs,
     vitals,
+    marSchedules,
     fetchAll,
+    fetchMarSchedules,
   } = usePatientRecords(id);
   const api = useApi();
   const { encounters, loading: encountersLoading, fetch: fetchEncounters } = useEncounters(id);
@@ -175,6 +179,17 @@ export default function PatientPage() {
   const [referralReason, setReferralReason] = useState("");
   const [consentSuccess, setConsentSuccess] = useState<string | null>(null);
   const [referralSuccess, setReferralSuccess] = useState(false);
+  const [aiReferralLoading, setAiReferralLoading] = useState(false);
+  const [aiRecommendations, setAiRecommendations] = useState<
+    {
+      hospital_name: string;
+      hospital_id: string;
+      specialty_match: number;
+      bed_availability: number;
+      distance_km?: number;
+      reason: string;
+    }[]
+  >([]);
   const [amendRecord, setAmendRecord] = useState<MedicalRecord | null>(null);
   const [exportPdfLoading, setExportPdfLoading] = useState(false);
   const [addRecordInitialType, setAddRecordInitialType] = useState<"vital_signs" | "nursing_note" | null>(null);
@@ -250,6 +265,36 @@ export default function PatientPage() {
     };
   }, [api, id]);
 
+  useEffect(() => {
+    if (referralModalOpen && id) {
+      setAiReferralLoading(true);
+      api
+        .post<{
+          data: {
+            recommended_hospitals: {
+              hospital_name: string;
+              hospital_id: string;
+              specialty_match: number;
+              bed_availability: number;
+              distance_km?: number;
+              reason: string;
+            }[];
+          };
+        }>(`/ai/referral-recommendation/${id}`, {})
+        .then((res) => {
+          setAiRecommendations(res.data?.recommended_hospitals ?? []);
+        })
+        .catch(() => {
+          setAiRecommendations([]);
+        })
+        .finally(() => {
+          setAiReferralLoading(false);
+        });
+    } else {
+      setAiRecommendations([]);
+    }
+  }, [referralModalOpen, id, api]);
+
   const globalPatientId = patient?.global_patient_id ?? null;
 
   useEffect(() => {
@@ -300,6 +345,11 @@ export default function PatientPage() {
     { id: "ai_analysis", label: "AI Analysis" },
     { id: "ai_history", label: "AI History" },
   ];
+
+  if (user?.role === "nurse" || user?.role === "doctor") {
+    tabs.splice(1, 0, { id: "mar", label: "MAR" });
+  }
+
   if (user?.role !== "nurse") {
     tabs.splice(2, 0, { id: "diagnoses", label: "Diagnoses" });
   }
@@ -322,59 +372,44 @@ export default function PatientPage() {
 
   return (
     <div className="space-y-8">
-      <div className="sticky top-0 z-10 -mx-8 -mt-8 bg-[#F5F3EE] px-8 pb-4 pt-8">
-        <div className="flex flex-wrap items-start justify-between gap-4">
-          <div className="flex items-center gap-4">
-            <div className="h-16 w-16 rounded-full bg-[#0EAFBE] flex items-center justify-center text-2xl font-bold text-white">
-              {patient.full_name?.charAt(0) || "?"}
-            </div>
-            <div>
-              <h1 className="font-sora text-2xl font-bold text-slate-900 dark:text-slate-100">
-                {patient.full_name}
-              </h1>
-              <p className="font-mono text-sm text-slate-500 dark:text-slate-500">
-                {patient.ghana_health_id}
-              </p>
-              <p className="mt-1 text-sm text-slate-500 dark:text-slate-500">
-                DOB: {patient.date_of_birth} | {patient.gender} | Blood: {patient.blood_group}
-              </p>
-            </div>
-          </div>
-          <div className="flex gap-2">
-            {canExportPdf && (
-              <Button variant="secondary" onClick={handleExportPdf} disabled={exportPdfLoading}>
-                {exportPdfLoading ? "Exporting..." : "Export PDF"}
-              </Button>
-            )}
-            {canAddEncounter && (
-              <Link href={`/patients/${id}/encounters/new`}>
-                <Button variant="secondary">Add Encounter</Button>
-              </Link>
-            )}
-            {showFullAddRecordFAB && (
-              <Button onClick={() => { setAddRecordInitialType(null); setAddOpen(true); }}>Add Record</Button>
-            )}
-            {isNurse && (
-              <>
-                <Button onClick={() => { setAddRecordInitialType("vital_signs"); setAddOpen(true); }}>Add Vitals</Button>
-                <Button variant="secondary" onClick={() => { setAddRecordInitialType("nursing_note"); setAddOpen(true); }}>Add Nursing Note</Button>
-              </>
-            )}
-            {canInterop && (
-              <>
-                <Button variant="secondary" onClick={() => { setConsentSuccess(null); setConsentModalOpen(true); }}>
-                  Manage sharing
-                </Button>
-                <Button variant="secondary" onClick={() => { setReferralSuccess(false); setReferralModalOpen(true); }}>
-                  Create referral
-                </Button>
-              </>
-            )}
-          </div>
+      {/* Clinical Actions Toolbar */}
+      <div className="flex flex-wrap items-center justify-between gap-4 bg-slate-50 dark:bg-slate-900/50 p-4 rounded-xl border border-slate-200 dark:border-slate-800">
+        <div className="flex items-center gap-2">
+          <h3 className="text-sm font-semibold text-slate-700 dark:text-slate-300 uppercase tracking-wider">Clinical Actions</h3>
         </div>
-
-        <AllergyBanner allergies={patient.allergies || []} />
+        <div className="flex flex-wrap gap-2">
+          {canExportPdf && (
+            <Button variant="secondary" size="sm" onClick={handleExportPdf} disabled={exportPdfLoading}>
+              {exportPdfLoading ? "Exporting..." : "Export PDF"}
+            </Button>
+          )}
+          {canAddEncounter && (
+            <Link href={`/patients/${id}/encounters/new`}>
+              <Button variant="secondary" size="sm">Add Encounter</Button>
+            </Link>
+          )}
+          {showFullAddRecordFAB && (
+            <Button size="sm" onClick={() => { setAddRecordInitialType(null); setAddOpen(true); }}>Add Record</Button>
+          )}
+          {isNurse && (
+            <>
+              <Button size="sm" onClick={() => { setAddRecordInitialType("vital_signs"); setAddOpen(true); }}>Add Vitals</Button>
+              <Button variant="secondary" size="sm" onClick={() => { setAddRecordInitialType("nursing_note"); setAddOpen(true); }}>Add Nursing Note</Button>
+            </>
+          )}
+          {canInterop && (
+            <>
+              <Button variant="secondary" size="sm" onClick={() => { setConsentSuccess(null); setConsentModalOpen(true); }}>
+                Manage sharing
+              </Button>
+              <Button variant="secondary" size="sm" onClick={() => { setReferralSuccess(false); setReferralModalOpen(true); }}>
+                Create referral
+              </Button>
+            </>
+          )}
+        </div>
       </div>
+
 
       <div className="flex gap-2 border-b border-slate-300 dark:border-slate-700">
         {tabs.map((t) => (
@@ -394,6 +429,34 @@ export default function PatientPage() {
       </div>
 
       <div className="min-h-[200px]">
+        {tab === "mar" && (
+          <div className="space-y-4">
+            <MarChart
+              medications={prescriptions.map(p => ({
+                id: p.prescription_id,
+                drug_name: p.drug_name,
+                dosage: p.dosage,
+                frequency: p.frequency
+              }))}
+              doses={marSchedules.map(s => ({
+                id: s.id,
+                medication_id: s.prescription_id,
+                scheduled_time: s.scheduled_time,
+                status: s.status,
+                administered_at: s.actual_time,
+                administered_by: s.administered_by
+              }))}
+              onAdminister={async (doseId) => {
+                try {
+                  await api.post(`/mar/administer/${doseId}`, {});
+                  fetchMarSchedules();
+                } catch (error) {
+                  console.error("Failed to administer medication:", error);
+                }
+              }}
+            />
+          </div>
+        )}
         {tab === "encounters" && (
           <div className="space-y-4">
             <div className="flex flex-wrap gap-2">
@@ -566,37 +629,43 @@ export default function PatientPage() {
           </div>
         )}
         {tab === "vitals" && (
-          <div className="space-y-2">
-            {vitals.length ? (
-              <table className="w-full text-sm">
-                <thead>
-                  <tr className="border-b border-slate-200 dark:border-slate-800">
-                    <th className="py-2 text-left font-medium">Date</th>
-                    <th className="py-2 text-left font-medium">Temp</th>
-                    <th className="py-2 text-left font-medium">Pulse</th>
-                    <th className="py-2 text-left font-medium">BP</th>
-                    <th className="py-2 text-left font-medium">SpO2</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {vitals.map((v) => (
-                    <tr key={v.vital_id} className="border-b border-slate-100 dark:border-slate-900">
-                      <td className="py-2 text-slate-500 dark:text-slate-500">{v.created_at?.slice(0, 16)}</td>
-                      <td className="py-2">{v.temperature_c ?? "—"}</td>
-                      <td className="py-2">{v.pulse_bpm ?? "—"}</td>
-                      <td className="py-2">
-                        {v.bp_systolic != null && v.bp_diastolic != null
-                          ? `${v.bp_systolic}/${v.bp_diastolic}`
-                          : "—"}
-                      </td>
-                      <td className="py-2">{v.spo2_percent ?? "—"}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            ) : (
-              <p className="text-slate-500 dark:text-slate-500">No vitals recorded.</p>
+          <div className="space-y-6">
+            {vitals.length > 0 && (
+              <VitalsTrendChart data={vitals} />
             )}
+            
+            <div className="space-y-2">
+              {vitals.length ? (
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="border-b border-slate-200 dark:border-slate-800">
+                      <th className="py-2 text-left font-medium">Date</th>
+                      <th className="py-2 text-left font-medium">Temp</th>
+                      <th className="py-2 text-left font-medium">Pulse</th>
+                      <th className="py-2 text-left font-medium">BP</th>
+                      <th className="py-2 text-left font-medium">SpO2</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {vitals.map((v) => (
+                      <tr key={v.vital_id} className="border-b border-slate-100 dark:border-slate-900">
+                        <td className="py-2 text-slate-500 dark:text-slate-500">{v.created_at?.slice(0, 16)}</td>
+                        <td className="py-2">{v.temperature_c ?? "—"}</td>
+                        <td className="py-2">{v.pulse_bpm ?? "—"}</td>
+                        <td className="py-2">
+                          {v.bp_systolic != null && v.bp_diastolic != null
+                            ? `${v.bp_systolic}/${v.bp_diastolic}`
+                            : "—"}
+                        </td>
+                        <td className="py-2">{v.spo2_percent ?? "—"}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              ) : (
+                <p className="text-slate-500 dark:text-slate-500">No vitals recorded.</p>
+              )}
+            </div>
           </div>
         )}
         {tab === "timeline" && (
@@ -872,6 +941,20 @@ export default function PatientPage() {
                   onChange={(e) => setReferralReason(e.target.value)}
                   placeholder="Reason for referral"
                 />
+
+                {aiRecommendations.length > 0 && (
+                  <div className="mt-4">
+                    <ReferralSuggestions
+                      recommendedHospitals={aiRecommendations}
+                      isLoading={aiReferralLoading}
+                      onSelect={(h) => {
+                        setReferralFacilityId(h.hospital_id);
+                        setReferralReason(h.reason);
+                      }}
+                    />
+                  </div>
+                )}
+
                 {referralSuccess && <p className="text-sm text-[#0B8A96]">Referral created.</p>}
                 <div className="mt-4 flex justify-end gap-2">
                   <Button variant="secondary" onClick={() => setReferralModalOpen(false)}>Cancel</Button>

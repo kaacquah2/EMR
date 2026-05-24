@@ -125,7 +125,7 @@ class NoShowOverrideTestCase(TestCase):
         )
 
         self.assertEqual(response.status_code, status.HTTP_200_OK)
-        data = response.json()
+        data = response.json()["data"]
         self.assertEqual(data["status"], "scheduled")
         self.assertEqual(data["no_show_override_reason"], "Doctor approved absence - patient had emergency")
 

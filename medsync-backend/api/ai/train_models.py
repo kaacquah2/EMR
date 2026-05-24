@@ -404,11 +404,19 @@ class EnsembleModelTrainer:
 class HybridTrainingPipeline:
     """End-to-end training: data → features → models → metrics."""
 
-    def __init__(self, output_dir: str = 'models', data_source: str = 'synthetic', data_path: str | None = None):
+    def __init__(
+        self,
+        output_dir: str = 'models',
+        data_source: str = 'synthetic',
+        data_path: str | None = None,
+        metadata: dict | None = None,
+    ):
         self.output_dir = Path(output_dir)
         self.output_dir.mkdir(exist_ok=True, parents=True)
         self.data_source = data_source
         self.data_path = data_path
+        # Governance metadata (IRB, ethics) for ghana_clinical source
+        self.metadata = metadata or {}
 
     def _load_data(self) -> pd.DataFrame:
         """Load data based on source."""
@@ -454,6 +462,34 @@ class HybridTrainingPipeline:
             else:
                 logger.warning("UCI data not available, using synthetic only")
                 return synthetic_df
+
+        elif self.data_source == 'ghana_clinical':
+            # ------------------------------------------------------------
+            # REAL GHANA CLINICAL DATA (KATH / KBTH / Korle-Bu)
+            # ------------------------------------------------------------
+            # Requires:
+            #   - Ethics approval from Ghana Health Service
+            #   - IRB certificate from the data custodian
+            #   - De-identified CSV at self.data_path
+            #   - Metadata dict with irb_reference, ethics_approval_date, etc.
+            # ------------------------------------------------------------
+            if not self.data_path:
+                raise ValueError(
+                    "data_path is required for 'ghana_clinical' data source. "
+                    "Provide the path to the de-identified KATH/KBTH CSV export."
+                )
+            from api.ai.ghana_clinical_data import ClinicalDataPipeline
+            logger.info("Loading Ghana clinical data from: %s", self.data_path)
+            pipeline = ClinicalDataPipeline(
+                data_path=self.data_path,
+                metadata=self.metadata,
+            )
+            df = pipeline.run()
+            logger.info(
+                "Ghana clinical dataset loaded: %d rows × %d cols",
+                len(df), len(df.columns)
+            )
+            return df
         
         elif self.data_path:
             logger.info(f"Loading custom data from {self.data_path}...")

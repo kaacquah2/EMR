@@ -3,6 +3,10 @@ Tests for Celery task queue infrastructure.
 """
 from django.test import TestCase, override_settings
 from celery import current_app
+from django.contrib.auth import get_user_model
+from core.models import Hospital
+from patients.models import Patient
+from api.models import AIAnalysisJob
 from api.tasks import (
     export_patient_pdf_task,
     comprehensive_analysis_task,
@@ -10,10 +14,45 @@ from api.tasks import (
     mark_no_shows_task,
 )
 
+User = get_user_model()
+
 
 @override_settings(CELERY_ALWAYS_EAGER=True, CELERY_EAGER_PROPAGATES_EXCEPTIONS=True)
 class CeleryTaskTestCase(TestCase):
     """Test Celery task execution in eager mode (synchronous for testing)."""
+
+    def setUp(self):
+        self.hospital = Hospital.objects.create(
+            name="Test Hospital",
+            region="Greater Accra",
+            nhis_code="TST001",
+            address="123 Test Street, Accra",
+            is_active=True
+        )
+        self.user = User.objects.create_user(
+            email="doctor@hospital.com",
+            password="TempPass123!@#",
+            role="doctor",
+            hospital=self.hospital,
+            account_status="active"
+        )
+        self.patient = Patient.objects.create(
+            full_name="John Doe",
+            date_of_birth="1990-01-01",
+            gender="male",
+            ghana_health_id="GHA-12345678-9",
+            registered_at=self.hospital,
+            created_by=self.user,
+            national_id="1234567890",
+            phone="+233241234567"
+        )
+        self.job = AIAnalysisJob.objects.create(
+            patient=self.patient,
+            hospital=self.hospital,
+            created_by=self.user,
+            status="pending",
+            analysis_type="comprehensive"
+        )
 
     def test_celery_configured(self):
         """Test that Celery is properly configured."""
@@ -31,8 +70,10 @@ class CeleryTaskTestCase(TestCase):
 
     def test_comprehensive_analysis_task_not_found(self):
         """Test AI analysis task handles missing patient."""
+        import uuid
         result = comprehensive_analysis_task.apply_async(
-            args=["invalid-uuid"], kwargs={"analysis_type": "full"}
+            args=[str(uuid.uuid4()), str(self.job.id), str(self.user.id)],
+            kwargs={"analysis_type": "full"}
         ).get()
 
         self.assertEqual(result["status"], "error")
@@ -40,12 +81,14 @@ class CeleryTaskTestCase(TestCase):
     def test_risk_prediction_task_success(self):
         """Test risk prediction task returns proper structure."""
         result = risk_prediction_task.apply_async(
-            args=["test-patient-uuid"]
+            args=[str(self.patient.id), str(self.job.id), str(self.user.id)]
         ).get()
 
         self.assertEqual(result["status"], "success")
-        self.assertIn("patient_id", result)
-        self.assertIn("predictions", result)
+        self.assertEqual(result["job_id"], str(self.job.id))
+        self.job.refresh_from_db()
+        self.assertEqual(self.job.status, "completed")
+        self.assertIsNotNone(self.job.result_data)
 
     def test_mark_no_shows_task_success(self):
         """Test no-show marking task executes (may be skipped if model not ready)."""
@@ -103,7 +146,7 @@ class CeleryTaskTestCase(TestCase):
 
 
 @override_settings(CELERY_ALWAYS_EAGER=True)
-class CeleryTaskIntegrationTestCase(TestCase):
+class CeleryTaskIntegrationTestCase(CeleryTaskTestCase):
     """Integration tests for Celery tasks."""
 
     def test_task_chain_execution_order(self):
@@ -115,7 +158,7 @@ class CeleryTaskIntegrationTestCase(TestCase):
 
     def test_task_result_tracking(self):
         """Test that task results are tracked."""
-        result = risk_prediction_task.apply_async(args=["test-uuid"])
+        result = risk_prediction_task.apply_async(args=[str(self.patient.id), str(self.job.id), str(self.user.id)])
         # In eager mode, result should be immediate
         self.assertIsNotNone(result)
 

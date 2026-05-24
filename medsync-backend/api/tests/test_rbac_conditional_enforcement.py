@@ -88,7 +88,7 @@ class RBACCoverageValidationTests(TestCase):
         This is the gatekeeper test for 100% RBAC coverage.
         """
         try:
-            from api.tests.test_rbac_coverage import TestAllRoutesHavePermissions
+            from api.tests.test_rbac_coverage import TestRBACCoverageForward as TestAllRoutesHavePermissions
             self.assertTrue(callable(TestAllRoutesHavePermissions))
         except ImportError as e:
             self.fail(f"Could not import test_rbac_coverage: {e}")
@@ -97,14 +97,14 @@ class RBACCoverageValidationTests(TestCase):
         """
         Verify that coverage test can be instantiated and run.
         """
-        from api.tests.test_rbac_coverage import TestAllRoutesHavePermissions
+        from api.tests.test_rbac_coverage import TestRBACCoverageForward as TestAllRoutesHavePermissions
 
         test = TestAllRoutesHavePermissions()
 
         # Should not raise an exception
         # (Will raise AssertionError if coverage < 100%, but that's expected)
         try:
-            test.test_every_url_has_permission_entry()
+            test.test_all_registered_urls_have_permission_entry()
         except AssertionError:
             # Coverage may be incomplete, but test should at least run
             pass

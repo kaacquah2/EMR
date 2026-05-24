@@ -135,7 +135,6 @@ class TestCanAccessCrossFacility:
             global_patient=gp,
             granted_to_facility=hospital,
             granted_by=doctor,
-            account_status="active",
             scope=Consent.SCOPE_SUMMARY,
         )
         allowed, scope = can_access_cross_facility(doctor, gp.id)

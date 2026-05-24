@@ -21,11 +21,13 @@ interface RecommendedHospital {
 interface ReferralSuggestionsProps {
   recommendedHospitals: RecommendedHospital[];
   isLoading?: boolean;
+  onSelect?: (hospital: RecommendedHospital) => void;
 }
 
 export function ReferralSuggestions({
   recommendedHospitals,
   isLoading = false,
+  onSelect,
 }: ReferralSuggestionsProps) {
   if (isLoading) {
     return (
@@ -64,7 +66,10 @@ export function ReferralSuggestions({
         {recommendedHospitals.map((h, idx) => (
           <div
             key={h.hospital_id || idx}
-            className="border border-gray-200 rounded-lg p-4 hover:bg-gray-50"
+            className={`border border-gray-200 rounded-lg p-4 transition-colors ${
+              onSelect ? "cursor-pointer hover:bg-slate-50 hover:border-slate-300" : ""
+            }`}
+            onClick={() => onSelect?.(h)}
           >
             <div className="flex justify-between items-start">
               <h4 className="font-semibold text-gray-900">{h.hospital_name}</h4>

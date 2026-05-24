@@ -18,6 +18,7 @@ import {
   Calendar,
   FileText,
   Activity,
+  Network,
   AlertTriangle,
   Building2,
   Shield,
@@ -52,7 +53,7 @@ const navIconMap: Record<string, LucideIcon> = {
   // Doctor
   "My Encounters": FileText,
   "AI Suite": Brain,
-  "Referrals": Activity,
+  "Referral Network": Activity,
   
   // Nurse
   "Ward Patients": Users,
@@ -76,12 +77,14 @@ const navIconMap: Record<string, LucideIcon> = {
   
   // Super Admin
   "Hospitals": Building2,
-  "Cross-Facility Monitor": Activity,
+  "Inter-Hospital Access": Activity,
   "User Management": Users,
   "Break-glass review": Shield,
   "Facilities": Building2,
   "System health": Heart,
   "AI integration": Brain,
+  "Inter-Hospital Hub": Network,
+  "Network Overview": Activity,
 };
 
 // Get icon for a navigation label
@@ -252,6 +255,7 @@ export function Sidebar() {
 
     const system: NavRow[] = [
       { href: "/superadmin", label: "Dashboard" },
+      { href: "/superadmin/network", label: "Network Intelligence" },
       { href: "/superadmin/hospitals", label: "Hospitals" },
       { href: "/superadmin/cross-facility-activity-log", label: "Cross-Facility Monitor" },
       { href: "/superadmin/audit-logs", label: "Audit Logs" },

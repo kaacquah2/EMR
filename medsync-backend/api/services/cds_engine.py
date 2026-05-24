@@ -15,22 +15,40 @@ import logging
 from typing import List, Optional, Dict, Any
 from django.utils import timezone
 from django.db.models import Q
+from django.core.cache import cache
+from django.conf import settings
 from records.models import Prescription, Diagnosis, Vital, LabResult
 from patients.models import Patient
 from api.models import ClinicalRule, CdsAlert
 
 logger = logging.getLogger(__name__)
 
+# Cache key for CDS rules — shared across all workers via Redis
+_CDS_RULES_CACHE_KEY = "cds:active_rules:all"
+_CDS_RULES_CACHE_TTL = getattr(settings, "CDS_RULES_CACHE_TTL", 3600)  # 1 hour
+
+
+def invalidate_cds_rules_cache():
+    """
+    Invalidate the Redis-backed CDS rules cache.
+
+    Called automatically via post_save signal on ClinicalRule so that
+    all ASGI workers pick up rule changes immediately without waiting
+    for TTL expiry.
+    """
+    cache.delete(_CDS_RULES_CACHE_KEY)
+    logger.info("CDS rules cache invalidated (Redis key: %s)", _CDS_RULES_CACHE_KEY)
+
 
 class RulesEngine:
-    """Evaluates clinical rules and generates alerts."""
+    """Evaluates clinical rules and generates alerts.
+
+    Rules are cached in Redis (shared across all workers). The cache is
+    invalidated whenever a ClinicalRule is saved (via post_save signal
+    in api/signals_cds.py). Fall back to DB on cache miss.
+    """
     
-    # Cache rules in memory to avoid constant DB hits
-    _rules_cache = None
-    _cache_timestamp = None
-    _CACHE_TTL = 3600  # 1 hour
-    
-    # Load drug interaction dataset once
+    # Load drug interaction dataset once — process-local is fine (read-only JSON)
     _drug_interactions = None
     
     @classmethod
@@ -54,26 +72,31 @@ class RulesEngine:
     
     @classmethod
     def _get_active_rules(cls, rule_type: str = None) -> List[ClinicalRule]:
-        """Get active rules from cache or DB."""
-        from django.utils import timezone as tz
-        
-        now = tz.now().timestamp()
-        
-        # Refresh cache if expired
-        if (cls._rules_cache is None or 
-            cls._cache_timestamp is None or
-            (now - cls._cache_timestamp) > cls._CACHE_TTL):
-            
-            query = ClinicalRule.objects.filter(active=True)
-            if rule_type:
-                query = query.filter(rule_type=rule_type)
-            
-            cls._rules_cache = list(query)
-            cls._cache_timestamp = now
-        
+        """Get active rules from Redis cache or DB.
+
+        Cache key: ``cds:active_rules:all`` (shared across all workers).
+        Falls back to a live DB query on cache miss.
+        Filtered by rule_type in-memory after retrieval to avoid per-type
+        cache fragmentation.
+        """
+        # Try Redis first
+        rules: List[ClinicalRule] | None = cache.get(_CDS_RULES_CACHE_KEY)
+
+        if rules is None:
+            # Cache miss → fetch from DB and repopulate Redis
+            rules = list(ClinicalRule.objects.filter(active=True))
+            try:
+                cache.set(_CDS_RULES_CACHE_KEY, rules, timeout=_CDS_RULES_CACHE_TTL)
+            except Exception as cache_err:
+                # Non-fatal: continue without caching (Redis may be unavailable)
+                logger.warning(
+                    "Could not write CDS rules to cache: %s — serving from DB", cache_err
+                )
+
         if rule_type:
-            return [r for r in cls._rules_cache if r.rule_type == rule_type]
-        return cls._rules_cache
+            return [r for r in rules if r.rule_type == rule_type]
+        return rules
+
     
     @classmethod
     def evaluate_prescription(
@@ -305,36 +328,35 @@ class RulesEngine:
             # Try LabResult
             try:
                 latest_lab = LabResult.objects.filter(
-                    patient=patient,
-                    created_at__gte=last_30_days
-                ).order_by('-created_at').first()
+                    record__patient=patient,
+                    record__created_at__gte=last_30_days
+                ).order_by('-record__created_at').first()
                 
-                if latest_lab and hasattr(latest_lab, 'value'):
+                if latest_lab and latest_lab.result_value:
                     # Try to parse as eGFR or creatinine
-                    if hasattr(latest_lab, 'test_type'):
-                        test_type = str(latest_lab.test_type).lower()
-                        if 'egfr' in test_type or 'gfr' in test_type:
-                            egfr = float(latest_lab.value) if latest_lab.value else None
-                        elif 'creatinine' in test_type:
-                            creatinine = float(latest_lab.value) if latest_lab.value else None
-            except Exception:
-                pass
+                    test_name = str(latest_lab.test_name).lower()
+                    if 'egfr' in test_name or 'gfr' in test_name:
+                        egfr = float(latest_lab.result_value)
+                    elif 'creatinine' in test_name:
+                        creatinine = float(latest_lab.result_value)
+            except Exception as e:
+                logger.warning(f"Error querying/parsing latest LabResult for patient {patient.id}: {e}", exc_info=True)
             
             # Try Vital
             try:
                 if not egfr and not creatinine:
                     latest_vital = Vital.objects.filter(
-                        patient=patient,
-                        created_at__gte=last_30_days
-                    ).order_by('-created_at').first()
+                        record__patient=patient,
+                        record__created_at__gte=last_30_days
+                    ).order_by('-record__created_at').first()
                     
                     if latest_vital:
                         if hasattr(latest_vital, 'egfr') and latest_vital.egfr:
                             egfr = float(latest_vital.egfr)
                         elif hasattr(latest_vital, 'creatinine_mg_dl') and latest_vital.creatinine_mg_dl:
                             creatinine = float(latest_vital.creatinine_mg_dl)
-            except Exception:
-                pass
+            except Exception as e:
+                logger.warning(f"Error querying/parsing latest Vital for patient {patient.id}: {e}", exc_info=True)
             
             # If we have eGFR and it's below threshold, alert
             if egfr is not None and egfr < dosing_info['threshold_egfr']:

@@ -14,6 +14,9 @@ class MedicalRecord(models.Model):
         ("vital_signs", "Vital Signs"),
         ("nursing_note", "Nursing Note"),
         ("allergy", "Allergy"),
+        ("immunisation", "Immunisation"),
+        ("procedure_note", "Procedure Note"),
+        ("notifiable_disease", "Notifiable Disease"),
     ]
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     patient = models.ForeignKey(Patient, on_delete=models.CASCADE)
@@ -85,6 +88,8 @@ class Prescription(models.Model):
     ]
     STATUS = [
         ("pending", "Pending"),
+        ("dispensing", "Dispensing"),
+        ("partially_dispensed", "Partially Dispensed"),
         ("dispensed", "Dispensed"),
         ("cancelled", "Cancelled"),
     ]
@@ -109,6 +114,7 @@ class Prescription(models.Model):
     version = models.IntegerField(default=1, help_text="Version for optimistic locking")
     created_at = models.DateTimeField(auto_now_add=True)
     status = models.CharField(max_length=20, choices=STATUS, default="pending")
+    prescribed_quantity = models.PositiveIntegerField(default=10, help_text="Total prescribed quantity")
     
     # Pharmacy dispensing fields
     priority = models.CharField(max_length=20, choices=PRIORITY_CHOICES, default='routine', help_text='Prescription priority level')
@@ -733,3 +739,110 @@ class MedicationSchedule(models.Model):
     
     def __str__(self):
         return f"{self.patient} - {self.prescription.drug_name} @ {self.scheduled_time} ({self.status})"
+
+
+class Immunisation(models.Model):
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    record = models.OneToOneField(MedicalRecord, on_delete=models.CASCADE, related_name="immunisation")
+    vaccine_name = models.CharField(max_length=200)
+    dose_number = models.IntegerField()
+    lot_number = models.CharField(max_length=100, blank=True, null=True)
+    expiry_date = models.DateField(blank=True, null=True)
+    site = models.CharField(max_length=100, blank=True, null=True)
+    route = models.CharField(max_length=100, blank=True, null=True)
+    notes = models.TextField(blank=True, null=True)
+
+    def __str__(self):
+        return f"{self.vaccine_name} (Dose {self.dose_number})"
+
+
+class ProcedureNote(models.Model):
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    record = models.OneToOneField(MedicalRecord, on_delete=models.CASCADE, related_name="procedure_note")
+    procedure_name = models.CharField(max_length=255)
+    surgeon = models.ForeignKey(User, on_delete=models.PROTECT, related_name="procedure_notes_as_surgeon")
+    assistant = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True, related_name="procedure_notes_as_assistant")
+    anaesthesia_type = models.CharField(max_length=100, blank=True, null=True)
+    findings = models.TextField()
+    procedure_details = models.TextField()
+    complications = models.TextField(blank=True, null=True)
+    post_op_instructions = models.TextField(blank=True, null=True)
+
+    def __str__(self):
+        return f"{self.procedure_name} by {self.surgeon}"
+
+
+class ChronicDiseaseProgram(models.Model):
+    PROGRAM_STATUS = [
+        ("active", "Active"),
+        ("completed", "Completed"),
+        ("withdrawn", "Withdrawn"),
+        ("deceased", "Deceased"),
+    ]
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    patient = models.ForeignKey(Patient, on_delete=models.CASCADE, related_name="chronic_programs")
+    hospital = models.ForeignKey(Hospital, on_delete=models.PROTECT)
+    disease_name = models.CharField(max_length=200)
+    enrolled_at = models.DateField(auto_now_add=True)
+    enrolled_by = models.ForeignKey(User, on_delete=models.PROTECT)
+    status = models.CharField(max_length=20, choices=PROGRAM_STATUS, default="active")
+    last_review_date = models.DateField(null=True, blank=True)
+    next_review_date = models.DateField(null=True, blank=True)
+    notes = models.TextField(blank=True, null=True)
+
+    def __str__(self):
+        return f"{self.disease_name} - {self.patient}"
+
+
+class NotifiableDisease(models.Model):
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    record = models.OneToOneField(MedicalRecord, on_delete=models.CASCADE, related_name="notifiable_disease")
+    disease_name = models.CharField(max_length=200)
+    ghs_case_id = models.CharField(max_length=100, blank=True, null=True)
+    is_confirmed = models.BooleanField(default=False)
+    reported_to_ghs = models.BooleanField(default=False)
+    reported_at = models.DateTimeField(null=True, blank=True)
+    outcome = models.CharField(max_length=100, blank=True, null=True)
+
+    def __str__(self):
+        return f"{self.disease_name} (Confirmed: {self.is_confirmed})"
+
+
+class Equipment(models.Model):
+    EQUIPMENT_STATUS = [
+        ("available", "Available"),
+        ("in_use", "In Use"),
+        ("maintenance", "Maintenance"),
+        ("out_of_service", "Out of Service"),
+    ]
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    hospital = models.ForeignKey(Hospital, on_delete=models.CASCADE)
+    name = models.CharField(max_length=200)
+    serial_number = models.CharField(max_length=100, unique=True)
+    category = models.CharField(max_length=100)
+    status = models.CharField(max_length=20, choices=EQUIPMENT_STATUS, default="available")
+    current_ward = models.ForeignKey(Ward, on_delete=models.SET_NULL, null=True, blank=True)
+    last_maintenance_at = models.DateField(null=True, blank=True)
+
+    def __str__(self):
+        return f"{self.name} ({self.serial_number})"
+
+
+class FamilyLink(models.Model):
+    RELATIONSHIPS = [
+        ("parent", "Parent"),
+        ("child", "Child"),
+        ("sibling", "Sibling"),
+        ("spouse", "Spouse"),
+        ("next_of_kin", "Next of Kin"),
+        ("other", "Other"),
+    ]
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    from_patient = models.ForeignKey(Patient, on_delete=models.CASCADE, related_name="links_from")
+    to_patient = models.ForeignKey(Patient, on_delete=models.CASCADE, related_name="links_to")
+    relationship_type = models.CharField(max_length=20, choices=RELATIONSHIPS)
+    is_emergency_contact = models.BooleanField(default=False)
+    notes = models.TextField(blank=True, null=True)
+
+    def __str__(self):
+        return f"{self.from_patient} is {self.relationship_type} of {self.to_patient}"

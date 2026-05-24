@@ -121,6 +121,28 @@ Log in a user with email and password.
 
 ---
 
+### POST `/auth/passkey/check`
+
+Check if a user has registered passkeys. Frontend uses this to show/hide the "Sign in with passkey" button.
+
+**Authentication Required:** No (Public)
+
+**Request:**
+```json
+{
+  "email": "doctor@medsync.gh"
+}
+```
+
+**Response (200):**
+```json
+{
+  "has_passkeys": true
+}
+```
+
+---
+
 ### POST `/auth/mfa-verify`
 
 Verify TOTP or backup code for MFA.

@@ -5,7 +5,7 @@ from rest_framework.response import Response
 from django.db.models import Q
 
 from core.models import Hospital
-from interop.models import GlobalPatient, FacilityPatient, SharedRecordAccess
+from interop.models import GlobalPatient, FacilityPatient, SharedRecordAccess, Consent, Referral, BreakGlassLog
 from api.utils import (
     get_global_patient_queryset,
     can_access_cross_facility,
@@ -305,9 +305,82 @@ def cross_facility_records(request, global_patient_id):
             status=status.HTTP_403_FORBIDDEN,
         )
 
+    # -----------------------------------------------------------------------
+    # DATA RESIDENCY ENFORCEMENT (NDPA 2012 § 36 / Ghana Data Protection Act)
+    # -----------------------------------------------------------------------
+    if gp.data_residency_locked:
+        requesting_hospital = get_request_hospital(request)
+        is_super_admin = request.user.role == "super_admin"
+
+        # Determine country of the requesting facility
+        facility_country = getattr(requesting_hospital, "country_code", "GH") if requesting_hospital else "GH"
+
+        if facility_country != gp.data_residency_country and not is_super_admin:
+            # Log the denied access attempt
+            audit_log(
+                request.user,
+                "PERMISSION_DENIED",
+                resource_type="global_patient",
+                resource_id=global_patient_id,
+                hospital=requesting_hospital,
+                request=request,
+                extra_data={
+                    "reason": "data_residency_restriction",
+                    "patient_residency": gp.data_residency_country,
+                    "facility_country": facility_country,
+                },
+            )
+            return Response(
+                {
+                    "message": (
+                        f"Access denied: Patient data is restricted to facilities in "
+                        f"'{gp.data_residency_country}' (Ghana Data Protection Act / NDPA 2012 § 36). "
+                        f"Contact a super admin if you believe this is an error."
+                    ),
+                    "data_residency_country": gp.data_residency_country,
+                    "error_code": "DATA_RESIDENCY_RESTRICTION",
+                },
+                status=status.HTTP_403_FORBIDDEN,
+            )
+
+        # Super admin override — log it prominently
+        if is_super_admin and facility_country != gp.data_residency_country:
+            audit_log(
+                request.user,
+                "CROSS_FACILITY_ACCESS",
+                resource_type="global_patient",
+                resource_id=global_patient_id,
+                hospital=requesting_hospital,
+                request=request,
+                extra_data={
+                    "reason": "super_admin_data_residency_override",
+                    "patient_residency": gp.data_residency_country,
+                    "facility_country": facility_country,
+                },
+            )
+
+
+
+    # If access is via break-glass, find the expiry
+    expires_at = None
+    if scope == "FULL_RECORD":
+        from django.utils import timezone
+        hospital = get_request_hospital(request)
+        bg_log = BreakGlassLog.objects.filter(
+            global_patient=gp,
+            facility=hospital,
+            accessed_by=request.user,
+            expires_at__gt=timezone.now()
+        ).order_by("-expires_at").first()
+        if bg_log:
+            expires_at = bg_log.expires_at.isoformat()
+
     try:
         from uuid import UUID
-        rid = UUID(global_patient_id)
+        if isinstance(global_patient_id, UUID):
+            rid = global_patient_id
+        else:
+            rid = UUID(global_patient_id)
     except (ValueError, TypeError):
         rid = None
     audit_log(
@@ -342,6 +415,7 @@ def cross_facility_records(request, global_patient_id):
             ],
             "records": [],
             "read_only": True,
+            "expires_at": expires_at,
         })
 
     records = (
@@ -359,4 +433,75 @@ def cross_facility_records(request, global_patient_id):
         ],
         "records": records_data,
         "read_only": True,
+        "expires_at": expires_at,
     })
+
+
+@api_view(["GET"])
+@permission_classes([IsAuthenticated])
+def accessible_patients(request):
+    """
+    List global patients the current facility has cross-facility access to via:
+    1. Active Consent
+    2. Accepted/Completed Referral
+    3. Recent Break-Glass
+    """
+    if not _interop_role_ok(request.user):
+        return Response(
+            {"message": "Permission denied"},
+            status=status.HTTP_403_FORBIDDEN,
+        )
+
+    hospital = get_request_hospital(request)
+    if not hospital:
+        return Response({"data": []})
+
+    from django.utils import timezone
+    from datetime import timedelta
+    from api.utils import BREAK_GLASS_VALID_MINUTES
+
+    now = timezone.now()
+    
+    # 1. Patients with active consent
+    consent_gp_ids = Consent.objects.filter(
+        granted_to_facility=hospital,
+        is_active=True
+    ).filter(
+        Q(expires_at__isnull=True) | Q(expires_at__gt=now)
+    ).values_list('global_patient_id', flat=True)
+
+    # 2. Patients with accepted/completed referral
+    referral_gp_ids = Referral.objects.filter(
+        to_facility=hospital,
+        status__in=(Referral.STATUS_ACCEPTED, Referral.STATUS_COMPLETED)
+    ).values_list('global_patient_id', flat=True)
+
+    # 3. Recent break-glass by the user
+    cutoff = now - timedelta(minutes=BREAK_GLASS_VALID_MINUTES)
+    break_glass_gp_ids = BreakGlassLog.objects.filter(
+        facility=hospital,
+        accessed_by=request.user,
+        created_at__gte=cutoff
+    ).values_list('global_patient_id', flat=True)
+
+    # Combine all IDs
+    all_gp_ids = set(list(consent_gp_ids) + list(referral_gp_ids) + list(break_glass_gp_ids))
+    
+    if not all_gp_ids:
+        return Response({"data": []})
+
+    # Fetch GlobalPatient records
+    qs = GlobalPatient.objects.filter(id__in=all_gp_ids).order_by("-updated_at")
+    
+    out = []
+    for gp in qs:
+        d = GlobalPatientSerializer(gp).data
+        # Add access reasons
+        reasons = []
+        if gp.id in consent_gp_ids: reasons.append("CONSENT")
+        if gp.id in referral_gp_ids: reasons.append("REFERRAL")
+        if gp.id in break_glass_gp_ids: reasons.append("BREAK_GLASS")
+        d["access_reasons"] = reasons
+        out.append(d)
+
+    return Response({"data": out})

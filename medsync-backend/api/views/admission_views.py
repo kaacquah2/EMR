@@ -140,26 +140,29 @@ def admission_create(request):
             {"message": "Patient is already admitted"},
             status=status.HTTP_400_BAD_REQUEST,
         )
-    bed = None
-    bed_id = data.get("bed_id")
-    if bed_id:
-        bed_qs = Bed.objects.filter(id=bed_id, ward=ward, is_active=True)
-        bed = bed_qs.first()
-        if bed and bed.status != "available":
-            return Response(
-                {"message": "Bed is not available"},
-                status=status.HTTP_400_BAD_REQUEST,
+    try:
+        with transaction.atomic():
+            bed = None
+            bed_id = data.get("bed_id")
+            if bed_id:
+                updated = Bed.objects.filter(id=bed_id, ward=ward, is_active=True, status="available").update(status="occupied")
+                if not updated:
+                    raise ValueError("Bed is not available or occupied")
+                bed = Bed.objects.get(id=bed_id)
+
+            admission = PatientAdmission.objects.create(
+                patient=patient,
+                ward=ward,
+                bed=bed,
+                hospital=hospital,
+                admitted_by=request.user,
             )
-    admission = PatientAdmission.objects.create(
-        patient=patient,
-        ward=ward,
-        bed=bed,
-        hospital=hospital,
-        admitted_by=request.user,
-    )
-    if bed:
-        bed.status = "occupied"
-        bed.save(update_fields=["status"])
+    except ValueError as e:
+        return Response(
+            {"message": str(e)},
+            status=status.HTTP_400_BAD_REQUEST,
+        )
+
     return Response(
         {"data": {"admission_id": str(admission.id), "message": "Patient admitted"}},
         status=status.HTTP_201_CREATED,
@@ -194,12 +197,13 @@ def admission_discharge(request, admission_id):
             {"message": "Patient already discharged"},
             status=status.HTTP_400_BAD_REQUEST,
         )
-    admission.discharged_at = timezone.now()
-    admission.discharge_reason = request.data.get("discharge_reason", "")
-    admission.save()
-    if admission.bed_id:
-        admission.bed.status = "available"
-        admission.bed.save(update_fields=["status"])
+    with transaction.atomic():
+        admission.discharged_at = timezone.now()
+        admission.discharge_reason = request.data.get("discharge_reason", "")
+        admission.save()
+        if admission.bed_id:
+            admission.bed.status = "available"
+            admission.bed.save(update_fields=["status"])
     return Response({"data": {"message": "Patient discharged"}})
 
 

@@ -378,7 +378,7 @@ class AuditLog(models.Model):
     resource_type = models.CharField(max_length=50, blank=True, null=True)
     resource_id = models.CharField(max_length=64, null=True, blank=True)
     hospital = models.ForeignKey(Hospital, null=True, blank=True, on_delete=models.SET_NULL)
-    ip_address = models.GenericIPAddressField()
+    ip_address = models.GenericIPAddressField(null=True, blank=True)
     user_agent = models.TextField(blank=True, null=True)
     extra_data = models.JSONField(null=True, blank=True)
     chain_hash = models.CharField(max_length=64, editable=False, unique=True)
@@ -404,6 +404,33 @@ class AuditLog(models.Model):
             key = getattr(settings, "AUDIT_LOG_SIGNING_KEY", None) or "dev-key-change-in-production"
             self.signature = hmac.new(key.encode(), data.encode(), hashlib.sha256).hexdigest()
         super().save(*args, **kwargs)
+
+    @classmethod
+    def log_action(cls, user, action, resource_type=None, resource_id=None, hospital=None, request=None, extra_data=None):
+        """
+        Create a chained audit log entry with tamper-evident chain hashing.
+        """
+        from api.utils import sanitize_audit_resource_id, get_client_ip
+        
+        resource_id = sanitize_audit_resource_id(resource_id)
+        ip = get_client_ip(request) if request else "127.0.0.1"
+        if ip == "unknown":
+            ip = "0.0.0.0"
+        ua = (request.META.get("HTTP_USER_AGENT") or "") if request else ""
+        
+        if not hospital and user and hasattr(user, 'hospital'):
+            hospital = user.hospital
+            
+        return cls.objects.create(
+            user=user,
+            action=action,
+            resource_type=resource_type,
+            resource_id=resource_id,
+            hospital=hospital,
+            ip_address=ip,
+            user_agent=ua,
+            extra_data=extra_data,
+        )
 
     class Meta:
         indexes = [

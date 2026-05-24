@@ -27,12 +27,14 @@ class Patient(models.Model):
     # Currently validates as an internal field only.
     ghana_health_id = models.CharField(max_length=30, unique=True)
     full_name = models.CharField(max_length=200)
-    date_of_birth = models.DateField()
+    # PHI — encrypted at field level (stored as ciphertext in DB)
+    date_of_birth = encrypt(models.DateField())
     gender = models.CharField(max_length=10, choices=GENDERS)
     phone = encrypt(models.CharField(max_length=20, blank=True, null=True))
     national_id = encrypt(models.CharField(max_length=50, blank=True, null=True))
     nhis_number = encrypt(models.CharField(max_length=50, blank=True, null=True))
-    passport_number = models.CharField(max_length=50, blank=True, null=True)
+    passport_number = encrypt(models.CharField(max_length=50, blank=True, null=True))
+
     blood_group = models.CharField(max_length=10, choices=BLOOD_GROUPS, default="unknown")
     registered_at = models.ForeignKey(Hospital, on_delete=models.PROTECT, related_name="+")
     created_by = models.ForeignKey(User, on_delete=models.PROTECT)
@@ -174,6 +176,24 @@ class Invoice(models.Model):
     created_at = models.DateTimeField(auto_now_add=True)
     paid_at = models.DateTimeField(null=True, blank=True)
 
+    # Added missing billing / NHIS fields
+    invoice_number = models.CharField(max_length=50, blank=True, null=True, unique=True)
+    payment_method = models.CharField(
+        max_length=20,
+        choices=[("cash", "Cash"), ("card", "Card"), ("nhis", "NHIS"), ("insurance", "Insurance")],
+        default="cash"
+    )
+    paid_amount = models.DecimalField(max_digits=10, decimal_places=2, default=0.00)
+    payment_reference = models.CharField(max_length=100, blank=True, null=True)
+    nhis_claim_status = models.CharField(max_length=20, blank=True, null=True)
+    nhis_claim_reference = models.CharField(max_length=100, blank=True, null=True)
+    nhis_submitted_at = models.DateTimeField(blank=True, null=True)
+
+    @property
+    def total_amount(self):
+        from decimal import Decimal
+        return Decimal(self.amount_cents) / 100
+
     class Meta:
         indexes = [
             models.Index(fields=["hospital", "-created_at"]),
@@ -277,4 +297,34 @@ class Appointment(models.Model):
             models.Index(fields=["hospital", "scheduled_at"]),
             models.Index(fields=["patient", "-scheduled_at"]),
             models.Index(fields=["status", "no_show_marked_at"]),
+        ]
+
+
+class PatientConsent(models.Model):
+    """
+    Tracks patient consent for data sharing and clinical AI features.
+    Required for GHANA NDPA and HIPAA-aligned data residency.
+    """
+    CONSENT_TYPES = [
+        ("data_sharing", "External Data Sharing (NHIS/GHS)"),
+        ("ai_analysis", "Clinical AI Analysis"),
+        ("research", "Anonymized Research"),
+        ("marketing", "Communications/Marketing"),
+    ]
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    patient = models.ForeignKey(Patient, on_delete=models.CASCADE, related_name="consents")
+    consent_type = models.CharField(max_length=50, choices=CONSENT_TYPES)
+    is_granted = models.BooleanField(default=False)
+    granted_at = models.DateTimeField(null=True, blank=True)
+    revoked_at = models.DateTimeField(null=True, blank=True)
+    witness_name = models.CharField(max_length=200, blank=True, null=True)
+    notes = models.TextField(blank=True, null=True)
+    recorded_by = models.ForeignKey(User, on_delete=models.PROTECT)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        unique_together = ("patient", "consent_type")
+        indexes = [
+            models.Index(fields=["patient", "consent_type"]),
         ]

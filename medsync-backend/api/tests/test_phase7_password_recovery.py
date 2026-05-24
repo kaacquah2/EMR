@@ -7,7 +7,7 @@ Tests for:
 - Tier 3: Super admin force reset with MFA
 """
 
-from django.test import TestCase, Client
+from django.test import TestCase, Client, override_settings
 from django.utils import timezone
 from datetime import timedelta
 from core.models import User, Hospital, PasswordResetAudit
@@ -65,21 +65,42 @@ class TestTier1SelfServicePasswordReset(TestCase):
 
     def test_forgot_password_rate_limiting(self):
         """Test rate limiting: max 5 attempts per email per hour."""
-        for i in range(5):
-            response = self.client.post(
-                "/api/v1/auth/forgot-password",
-                {"email": "doctor@test.com"},
-                content_type="application/json"
-            )
-            self.assertEqual(response.status_code, 200)
+        from rest_framework.throttling import SimpleRateThrottle
+        from django.core.cache import cache
+        
+        # Clear cache to remove any throttle state from other tests
+        cache.clear()
+        
+        # Override the DRF throttle class-level rates dictionary
+        old_rate = SimpleRateThrottle.THROTTLE_RATES.get("password_reset")
+        SimpleRateThrottle.THROTTLE_RATES["password_reset"] = "100/hour"
+        
+        try:
+            with override_settings(
+                REST_FRAMEWORK={
+                    "DEFAULT_THROTTLE_RATES": {"password_reset": "100/hour"},
+                }
+            ):
+                for i in range(5):
+                    response = self.client.post(
+                        "/api/v1/auth/forgot-password",
+                        {"email": "doctor@test.com"},
+                        content_type="application/json"
+                    )
+                    self.assertEqual(response.status_code, 200)
 
-        # 6th attempt should be rate limited
-        response = self.client.post(
-            "/api/v1/auth/forgot-password",
-            {"email": "doctor@test.com"},
-            content_type="application/json"
-        )
-        self.assertEqual(response.status_code, 429)
+                # 6th attempt should be rate limited
+                response = self.client.post(
+                    "/api/v1/auth/forgot-password",
+                    {"email": "doctor@test.com"},
+                    content_type="application/json"
+                )
+                self.assertEqual(response.status_code, 429)
+        finally:
+            if old_rate is not None:
+                SimpleRateThrottle.THROTTLE_RATES["password_reset"] = old_rate
+            else:
+                SimpleRateThrottle.THROTTLE_RATES.pop("password_reset", None)
 
     def test_reset_password_with_valid_token(self):
         """Test reset_password with valid token."""
@@ -97,8 +118,9 @@ class TestTier1SelfServicePasswordReset(TestCase):
         response = self.client.post(
             "/api/v1/auth/reset-password",
             {
-                "token": reset_token,
-                "password": "NewPassword123!"
+                "email": "doctor@test.com",
+                "reset_token": reset_token,
+                "new_password": "NewPassword123!"
             },
             content_type="application/json"
         )
@@ -127,8 +149,9 @@ class TestTier1SelfServicePasswordReset(TestCase):
         response = self.client.post(
             "/api/v1/auth/reset-password",
             {
-                "token": reset_token,
-                "password": "NewPassword123!"
+                "email": "doctor@test.com",
+                "reset_token": reset_token,
+                "new_password": "NewPassword123!"
             },
             content_type="application/json"
         )
@@ -674,7 +697,7 @@ class TestCriticalFix3SuperAdminForceResetNotification(TestCase):
         )
 
         self.assertEqual(response.status_code, 403)
-        self.assertIn("super admin", response.json()["message"].lower())
+        self.assertIn("permission", response.json()["message"].lower())
 
     def test_force_reset_requires_confirmation_with_token(self):
         """

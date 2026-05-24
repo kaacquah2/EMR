@@ -68,12 +68,18 @@ def is_ai_clinical_enabled(request: Request) -> bool:
     try:
         from api.models import AIDeploymentLog
         deployment = AIDeploymentLog.get_latest_for_hospital(hospital)
-        is_enabled = deployment.enabled if deployment else False
         
-        if not is_enabled:
+        if not deployment or not deployment.enabled:
             logger.warning(f'AI not approved for hospital {hospital.id}')
-        
-        return is_enabled
+            return False
+            
+        # Validate metrics at runtime (hard safety gate check)
+        is_valid, message = deployment.validate_metrics()
+        if not is_valid:
+            logger.error(f'AI deployment enabled for hospital {hospital.id} but metrics fail validation: {message}')
+            return False
+            
+        return True
     except Exception as e:
         logger.error(f'Error checking hospital AI approval: {e}')
         return False
@@ -170,7 +176,7 @@ def log_ai_recommendation(
         logger.warning(f'Failed to log AI recommendation: {e}')
 
 
-def validate_ai_confidence_threshold(confidence: float) -> bool:
+def validate_ai_confidence_threshold(confidence: float, is_clinical: bool = True) -> bool:
     """
     Validate that AI confidence meets clinical threshold.
     
@@ -178,16 +184,22 @@ def validate_ai_confidence_threshold(confidence: float) -> bool:
     
     Args:
         confidence: Confidence score (0.0 to 1.0)
+        is_clinical: If True, enforce strict 80% threshold.
     
     Returns:
         True if confidence meets threshold, False otherwise
     """
     threshold = getattr(settings, 'AI_CONFIDENCE_THRESHOLD_CLINICAL', 0.80)
     
-    if confidence < threshold:
+    if is_clinical and confidence < threshold:
         logger.warning(
-            f'AI confidence {confidence:.2f} below clinical threshold {threshold:.2f}'
+            f'AI clinical recommendation BLOCKED: confidence {confidence:.2f} < {threshold:.2f}'
         )
         return False
     
+    # Fallback for non-clinical or lower-tier threshold
+    dev_threshold = getattr(settings, 'AI_CONFIDENCE_THRESHOLD_DEV', 0.70)
+    if not is_clinical and confidence < dev_threshold:
+        return False
+        
     return True

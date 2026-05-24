@@ -8,6 +8,11 @@
 .venv/
 venv/
 media/
+# ML Models & Data
+*.joblib
+medsync-backend/api/ai/models/*
+!medsync-backend/api/ai/models/.gitkeep
+medsync-backend/data/datasets/
 __pycache__/
 *.pyc
 node_modules/
@@ -22,3 +27,7 @@ test-results/
 playwright-report/
 blob-report/
 playwright/.cache/
+
+# Local debug artifacts (do not commit)
+medsync-frontend/ts_errors*.txt
+medsync-backend/test_run_output.txt

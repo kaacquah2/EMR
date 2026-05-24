@@ -1,0 +1,103 @@
+@media print {
+  body {
+    background: white !important;
+    color: black !important;
+    font-family: 'Inter', 'Roboto', sans-serif !important;
+    font-size: 11pt !important;
+  }
+
+  .no-print {
+    display: none !important;
+  }
+
+  .print-only {
+    display: block !important;
+  }
+
+  /* Letterhead Styles */
+  .letterhead {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    border-bottom: 2px solid #0EAFBE;
+    padding-bottom: 20px;
+    margin-bottom: 30px;
+  }
+
+  .hospital-info h1 {
+    font-size: 20pt;
+    font-weight: bold;
+    color: #0EAFBE;
+    margin: 0;
+  }
+
+  .hospital-info p {
+    font-size: 10pt;
+    margin: 2px 0;
+    color: #64748b;
+  }
+
+  .ghana-health-logo {
+    width: 60px;
+    height: 60px;
+  }
+
+  /* Clinical Record Sections */
+  .record-section {
+    margin-bottom: 25px;
+    page-break-inside: avoid;
+  }
+
+  .section-title {
+    background: #f1f5f9;
+    padding: 8px 12px;
+    font-weight: bold;
+    text-transform: uppercase;
+    font-size: 10pt;
+    border-left: 4px solid #0EAFBE;
+    margin-bottom: 10px;
+  }
+
+  .record-row {
+    display: flex;
+    border-bottom: 1px solid #e2e8f0;
+    padding: 6px 0;
+  }
+
+  .record-label {
+    width: 30%;
+    font-weight: 600;
+    color: #475569;
+  }
+
+  .record-value {
+    width: 70%;
+  }
+
+  /* Footer */
+  .print-footer {
+    position: fixed;
+    bottom: 0;
+    width: 100%;
+    border-top: 1px solid #e2e8f0;
+    padding-top: 10px;
+    font-size: 8pt;
+    color: #94a3b8;
+    text-align: center;
+  }
+
+  /* Patient Identity Strip */
+  .patient-strip {
+    background: #0EAFBE;
+    color: white;
+    padding: 10px 20px;
+    border-radius: 8px;
+    margin-bottom: 20px;
+    display: flex;
+    justify-content: space-between;
+  }
+
+  .patient-strip span {
+    font-weight: 500;
+  }
+}

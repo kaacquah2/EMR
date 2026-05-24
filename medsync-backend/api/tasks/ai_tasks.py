@@ -82,7 +82,7 @@ def comprehensive_analysis_task(patient_id: str, job_id: str, user_id: str, anal
         job = AIAnalysisJob.objects.get(id=job_id)
         job.status = 'processing'
         job.current_step = 'Extracting patient data'
-        job.progress_pct = 10
+        job.progress_percent = 10
         job.save()
         
         user = User.objects.get(id=user_id)
@@ -91,25 +91,24 @@ def comprehensive_analysis_task(patient_id: str, job_id: str, user_id: str, anal
         patient_data = data_processor.extract_complete_patient_data(patient)
         
         job.current_step = 'Engineering clinical features'
-        job.progress_pct = 30
+        job.progress_percent = 30
         job.save()
         
         feature_engineer = FeatureEngineer()
         features = feature_engineer.create_feature_vector(patient_data)
         
         job.current_step = 'Running multi-agent reasoning'
-        job.progress_pct = 50
+        job.progress_percent = 50
         job.save()
         
         orchestrator = get_orchestrator()
         analysis_result = orchestrator.analyze_patient_comprehensive(
             patient_data,
-            features,
-            analysis_type=analysis_type
+            features
         )
         
         job.current_step = 'Persisting clinical insights'
-        job.progress_pct = 90
+        job.progress_percent = 90
         job.save()
         
         save_comprehensive_analysis(
@@ -120,7 +119,7 @@ def comprehensive_analysis_task(patient_id: str, job_id: str, user_id: str, anal
         )
         
         job.status = 'completed'
-        job.progress_pct = 100
+        job.progress_percent = 100
         job.completed_at = timezone.now()
         job.result_data = analysis_result
         job.save()
@@ -151,7 +150,7 @@ def risk_prediction_task(patient_id: str, job_id: str, user_id: str):
     try:
         job = AIAnalysisJob.objects.get(id=job_id)
         job.status = 'processing'
-        job.progress_pct = 20
+        job.progress_percent = 20
         job.save()
         
         user = User.objects.get(id=user_id)
@@ -159,7 +158,7 @@ def risk_prediction_task(patient_id: str, job_id: str, user_id: str):
         result = service.predict_risk(patient_id)
         
         job.status = 'completed'
-        job.progress_pct = 100
+        job.progress_percent = 100
         job.completed_at = timezone.now()
         job.result_data = result
         job.save()

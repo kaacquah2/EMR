@@ -16,16 +16,14 @@ This documentation covers all aspects of the MedSync EMR system: architecture, d
 
 ### System Architecture
 - **[ARCHITECTURE.md](ARCHITECTURE.md)** — Complete system design, multi-tenancy, authentication, interoperability (START HERE for system overview)
-- **[Codebase_Audit_Report.md](Codebase_Audit_Report.md)** — Comprehensive code review, structure analysis, security findings
-
 ### Database
-- **[Multi_Tenancy_Architecture.md](Multi_Tenancy_Architecture.md)** — Hospital-scoped access model, data ownership, user roles
-- **[Governance_Model.md](Governance_Model.md)** — Super Admin vs Hospital Admin responsibilities
-- **[Access_Governance.md](Access_Governance.md)** — Cross-facility access rules, consent, referrals, break-glass
+- **[ARCHITECTURE.md](ARCHITECTURE.md#multi-tenancy-architecture)** — Multi-tenancy, hospital-scoped access, and data ownership
+- **[ARCHITECTURE.md](ARCHITECTURE.md#governance-model)** — Super Admin vs Hospital Admin responsibilities
+- **[ARCHITECTURE.md](ARCHITECTURE.md#cross-facility-access)** — Cross-facility access rules, consent, referrals, break-glass
 
 ### Operations
-- **[Operational_Model_Integration.md](Operational_Model_Integration.md)** — Workflow routing, role responsibilities
-- **[Monitoring_And_Alerting.md](Monitoring_And_Alerting.md)** — Observability, health checks, metrics
+- **[ARCHITECTURE.md](ARCHITECTURE.md#operational-model)** — Workflow routing and role responsibilities
+- **[ARCHITECTURE.md](ARCHITECTURE.md#monitoring)** — Observability, health checks, metrics
 
 ---
 
@@ -107,11 +105,7 @@ This documentation covers all aspects of the MedSync EMR system: architecture, d
 ## ✅ Quality Assurance & Testing
 
 ### Documentation Quality
-- **[DOCUMENTATION_QUALITY_AUDIT_FINAL.md](DOCUMENTATION_QUALITY_AUDIT_FINAL.md)** — Documentation accuracy audit results (all issues resolved)
-- **[DOCUMENTATION_ACCURACY_CORRECTIONS_COMPLETE.md](DOCUMENTATION_ACCURACY_CORRECTIONS_COMPLETE.md)** — 4 critical documentation fixes applied
-
-### Codebase Audit
-- **[Codebase_Audit_Report.md](Codebase_Audit_Report.md)** — Comprehensive code review and analysis
+- **[Quality/DOCUMENTATION_QUALITY_AUDIT_FINAL.md](Quality/DOCUMENTATION_QUALITY_AUDIT_FINAL.md)** — Documentation accuracy audit results
 
 ---
 
@@ -278,16 +272,10 @@ docs/
 │   └── PERFORMANCE_FIXES.md
 │
 ├── Architecture/
-│   ├── Multi_Tenancy_Architecture.md
-│   ├── Governance_Model.md
-│   ├── Access_Governance.md
-│   ├── Operational_Model_Integration.md
-│   ├── Codebase_Audit_Report.md
-│   └── Monitoring_And_Alerting.md
+│   └── CODEBASE_AUDIT_COMPREHENSIVE.md
 │
 └── Quality/
-    ├── DOCUMENTATION_QUALITY_AUDIT_FINAL.md
-    └── DOCUMENTATION_ACCURACY_CORRECTIONS_COMPLETE.md
+    └── DOCUMENTATION_QUALITY_AUDIT_FINAL.md
 ```
 
 ---

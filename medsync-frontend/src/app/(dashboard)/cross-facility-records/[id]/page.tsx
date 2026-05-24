@@ -18,10 +18,12 @@ export default function CrossFacilityRecordsPage() {
   const { data, loading, error, fetch } = useCrossFacilityRecords();
   const { create: breakGlass, loading: breakGlassLoading } = useBreakGlass();
 
+  const [breakGlassReasonCode, setBreakGlassReasonCode] = useState("life_threatening_emergency");
   const [breakGlassReason, setBreakGlassReason] = useState("");
   const [showBreakGlassForm, setShowBreakGlassForm] = useState(false);
   const [breakGlassConfirmOpen, setBreakGlassConfirmOpen] = useState(false);
   const [forbidden, setForbidden] = useState(false);
+  const [timeLeft, setTimeLeft] = useState<string | null>(null);
 
   useEffect(() => {
     if (!id) return;
@@ -33,6 +35,31 @@ export default function CrossFacilityRecordsPage() {
       }
     });
   }, [id, fetch]);
+
+  useEffect(() => {
+    if (!data?.expires_at) {
+      queueMicrotask(() => setTimeLeft(null));
+      return;
+    }
+
+    const interval = setInterval(() => {
+      const expires = new Date(data.expires_at!).getTime();
+      const now = new Date().getTime();
+      const diff = expires - now;
+
+      if (diff <= 0) {
+        setTimeLeft("Expired");
+        clearInterval(interval);
+      } else {
+        const h = Math.floor(diff / (1000 * 60 * 60));
+        const m = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60));
+        const s = Math.floor((diff % (1000 * 60)) / 1000);
+        setTimeLeft(`${h}h ${m}m ${s}s`);
+      }
+    }, 1000);
+
+    return () => clearInterval(interval);
+  }, [data?.expires_at]);
 
   const canView =
     user?.role === "doctor" ||
@@ -48,9 +75,13 @@ export default function CrossFacilityRecordsPage() {
   }
 
   const handleBreakGlass = async () => {
-    if (!breakGlassReason.trim()) return;
+    if (!breakGlassReason.trim() || !breakGlassReasonCode) return;
     try {
-      await breakGlass({ global_patient_id: id, reason: breakGlassReason.trim() });
+      await breakGlass({
+        global_patient_id: id,
+        reason_code: breakGlassReasonCode,
+        reason: breakGlassReason.trim(),
+      });
       setShowBreakGlassForm(false);
       setBreakGlassReason("");
       setBreakGlassConfirmOpen(false);
@@ -100,11 +131,26 @@ export default function CrossFacilityRecordsPage() {
             </Button>
           ) : (
             <div className="space-y-4">
+              <div className="space-y-1">
+                <label className="text-sm font-medium text-slate-900 dark:text-slate-100">
+                  Reason code (required)
+                </label>
+                <select
+                  className="w-full rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 px-3 py-2 text-sm"
+                  value={breakGlassReasonCode}
+                  onChange={(e) => setBreakGlassReasonCode(e.target.value)}
+                >
+                  <option value="life_threatening_emergency">Life-threatening emergency</option>
+                  <option value="unconscious_patient">Unconscious patient</option>
+                  <option value="legal_requirement">Legal/Court requirement</option>
+                  <option value="other">Other emergency</option>
+                </select>
+              </div>
               <Input
-                label="Reason for emergency access (required)"
+                label="Detail (required)"
                 value={breakGlassReason}
                 onChange={(e) => setBreakGlassReason(e.target.value)}
-                placeholder="e.g. Emergency presentation, life-threatening"
+                placeholder="Describe the clinical emergency..."
               />
               <div className="flex gap-2">
                 <Button
@@ -142,6 +188,16 @@ export default function CrossFacilityRecordsPage() {
             <p className="text-sm text-slate-500 dark:text-slate-500 mt-1">
               DOB: {data.demographics.date_of_birth} | Scope: {data.scope} | Read-only
             </p>
+            {timeLeft && (
+              <div className={`mt-3 inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium ${
+                timeLeft === "Expired" ? "bg-red-100 text-red-800" : "bg-orange-100 text-orange-800"
+              }`}>
+                <svg className="mr-1.5 h-2 w-2 animate-pulse text-orange-400" fill="currentColor" viewBox="0 0 8 8">
+                  <circle cx="4" cy="4" r="3" />
+                </svg>
+                Access Expires In: {timeLeft}
+              </div>
+            )}
             {data.facilities?.length > 0 && (
               <p className="text-xs text-slate-500 dark:text-slate-500 mt-2">
                 Facilities: {data.facilities.map((f) => f.name).join(", ")}

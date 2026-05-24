@@ -46,8 +46,9 @@ const VirtualPatientList = ({
   const Row = ({ index, style }: any) => {
     const p = patients[index];
     return (
-      <div 
-        style={style} 
+      <div
+        style={style}
+        data-testid="patient-list-item"
         className="flex items-center border-b border-slate-200 dark:border-slate-800 hover:bg-slate-50 dark:bg-slate-900 px-4"
       >
         <div className="w-[25%] font-medium text-slate-900 dark:text-slate-100 truncate pr-4">{p.full_name}</div>
@@ -345,10 +346,19 @@ export default function PatientSearchPage() {
                       <TableCell className="font-medium text-slate-900 dark:text-white">{gp.full_name}</TableCell>
                       <TableCell className="font-mono text-sm text-slate-500 dark:text-slate-400">{gp.national_id ?? "—"}</TableCell>
                       <TableCell className="text-sm text-slate-500 dark:text-slate-400">{gp.date_of_birth}</TableCell>
-                      <TableCell className="text-sm text-slate-500 dark:text-slate-400">
-                        {(gp.facility_names && gp.facility_names.length > 0)
-                          ? gp.facility_names.join(", ")
-                          : "—"}
+                      <TableCell className="text-sm">
+                        <div className="flex flex-wrap gap-1">
+                          {(gp.facility_names && gp.facility_names.length > 0)
+                            ? gp.facility_names.map((name, idx) => (
+                                <span
+                                  key={idx}
+                                  className="inline-flex items-center rounded-md bg-slate-100 px-2 py-0.5 text-xs font-medium text-slate-800 dark:bg-slate-800 dark:text-slate-200"
+                                >
+                                  {name}
+                                </span>
+                              ))
+                            : "—"}
+                        </div>
                       </TableCell>
                       <TableCell className="flex gap-2">
                         <Button

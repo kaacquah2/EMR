@@ -24,7 +24,7 @@ from rest_framework import status
 from rest_framework.decorators import api_view, permission_classes
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
-from core.models import User, Hospital, PasswordResetAudit
+from core.models import User, Hospital, PasswordResetAudit, AuditLog
 from api.password_policy import validate_password, check_password_reuse, record_password_history
 from api.utils import get_client_ip
 from api.signals_alerts import broadcast_password_override
@@ -926,7 +926,25 @@ def get_suspicious_resets(request):
             risk_factors.append('Super admin forced reset')
 
         # Factor 4: Unusual IP pattern (if we have history)
-        # TODO: Compare with user's typical IPs
+        reset_ip = reset.ip_address
+        if reset_ip:
+            login_ips = set(
+                AuditLog.objects.filter(
+                    user=reset.user,
+                    action__in=["LOGIN", "PASSKEY_AUTH_SUCCESS"]
+                ).exclude(ip_address=None).values_list("ip_address", flat=True)
+            )
+            successful_reset_ips = set(
+                PasswordResetAudit.objects.filter(
+                    user=reset.user,
+                    status="completed"
+                ).exclude(ip_address=None).values_list("ip_address", flat=True)
+            )
+            known_ips = login_ips.union(successful_reset_ips)
+            
+            if known_ips and reset_ip not in known_ips:
+                risk_score += 0.3
+                risk_factors.append(f"Unrecognized IP address: {reset_ip}")
 
         # Only include if risk score > 0
         if risk_score > 0:

@@ -153,19 +153,19 @@ class APIPermissionTests(APITestCase):
 
     def test_unauthenticated_access_to_protected_endpoint(self):
         """Test unauthenticated user cannot access protected endpoints"""
-        response = self.client.get("/api/v1/patients/search")
+        response = self.client.get("/api/v1/patients/search/")
         assert response.status_code == 401
 
     def test_doctor_can_access_patient_search(self):
         """Test doctor can search patients"""
         self.client.force_authenticate(user=self.users["doctor"])
-        response = self.client.get("/api/v1/patients/search")
+        response = self.client.get("/api/v1/patients/search/")
         assert response.status_code in [200, 400]  # 400 if no query params
 
     def test_nurse_can_access_patient_search(self):
         """Test nurse can search patients"""
         self.client.force_authenticate(user=self.users["nurse"])
-        response = self.client.get("/api/v1/patients/search")
+        response = self.client.get("/api/v1/patients/search/")
         assert response.status_code in [200, 400]
 
     def test_lab_tech_cannot_create_diagnosis(self):
@@ -222,7 +222,7 @@ class APIPermissionTests(APITestCase):
 
         # Test various endpoints
         endpoints = [
-            ("/api/v1/patients/search", "GET"),
+            ("/api/v1/patients/search/", "GET"),
             ("/api/v1/admin/users", "GET"),
             ("/api/v1/admin/audit-logs", "GET"),
             ("/api/v1/dashboard/metrics", "GET"),
@@ -442,7 +442,7 @@ class PermissionMatrixRouteCoverageTests(TestCase):
         matrix_keys = re.findall(r'^\s*"([^"]+)":\s*\{', permissions_text, flags=re.MULTILINE)
 
         def normalize(route: str) -> str:
-            # Compare by route shape, not placeholder names/types.
+            route = route.strip("/")
             return re.sub(r"<[^>]+>", "<param>", route)
 
         matrix_shapes = {normalize(k) for k in matrix_keys}

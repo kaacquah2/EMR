@@ -102,6 +102,31 @@ def grant_consent(request, payload: dict[str, Any]) -> Union[GrantOk, GrantErr]:
     return consent, None
 
 
+def list_all_consents(request) -> Union[ListOk, ListErr]:
+    """List all consents related to the hospital (granted to it)."""
+    user = request.user
+    if not interop_role_ok(user):
+        return None, ("Permission denied", 403)
+
+    hospital = get_request_hospital(request)
+    if not hospital and user.role != "super_admin":
+        return None, ("No hospital assigned", 400)
+
+    from django.db.models import Q
+    if user.role == "super_admin":
+        consents = Consent.objects.all()
+    else:
+        consents = Consent.objects.filter(
+            Q(granted_to_facility=hospital) | Q(granted_by__hospital=hospital)
+        )
+
+    consents = consents.select_related(
+        "global_patient", "granted_to_facility", "granted_by"
+    ).order_by("-created_at")
+
+    return consents, None
+
+
 def consents_for_global_patient(
     request,
     global_patient_id: str,

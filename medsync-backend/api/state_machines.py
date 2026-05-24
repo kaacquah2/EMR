@@ -17,9 +17,10 @@ class StateMachineError(Exception):
 REFERRAL_TRANSITIONS = {
     'PENDING': ['ACCEPTED', 'REJECTED'],
     'ACCEPTED': ['COMPLETED', 'CANCELLED'],
-    'REJECTED': [],  # Terminal state
+    'REJECTED': [],   # Terminal state
     'COMPLETED': [],  # Terminal state
     'CANCELLED': [],  # Terminal state
+    'EXPIRED': [],    # Terminal state — expired referrals cannot be actioned
 }
 
 # Lab order status transitions

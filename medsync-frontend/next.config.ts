@@ -2,6 +2,7 @@ import type { NextConfig } from "next";
 import withPWA from "@ducanh2912/next-pwa";
 
 const nextConfig: NextConfig = {
+  output: 'standalone',
   // Reduce dev-time compile cost by letting Next optimize common deps imports.
   experimental: {
     optimizePackageImports: ["lucide-react"],

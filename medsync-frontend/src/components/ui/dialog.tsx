@@ -150,6 +150,18 @@ function DialogClose({ className = "", ...props }: React.ButtonHTMLAttributes<HT
   );
 }
 
+function DialogDescription({ className = "", ...props }: React.HTMLAttributes<HTMLParagraphElement>) {
+  return (
+    <p className={`text-sm text-[var(--gray-500)] ${className}`} {...props} />
+  );
+}
+
+function DialogFooter({ className = "", ...props }: React.HTMLAttributes<HTMLDivElement>) {
+  return (
+    <div className={`mt-6 flex flex-col-reverse sm:flex-row sm:justify-end sm:space-x-2 ${className}`} {...props} />
+  );
+}
+
 export {
   Dialog,
   DialogTrigger,
@@ -158,5 +170,7 @@ export {
   DialogContent,
   DialogHeader,
   DialogTitle,
+  DialogDescription,
+  DialogFooter,
   DialogClose,
 };

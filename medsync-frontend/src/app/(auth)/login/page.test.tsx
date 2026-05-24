@@ -19,6 +19,18 @@ vi.mock('@/hooks/use-passkey', () => ({
   }),
 }));
 
+vi.mock('@/lib/device-policy', () => ({
+  validateDevicePolicy: vi.fn(() => ({
+    isSupported: true,
+    platform: 'windows',
+    platformName: 'Windows',
+    biometricSupport: 'Windows Hello',
+    warning: null,
+  })),
+  cacheDevicePolicyCheck: vi.fn(),
+  getCachedDevicePolicy: vi.fn(() => null),
+}));
+
 // Mock fetch
 const mockFetch = vi.fn();
 global.fetch = mockFetch;

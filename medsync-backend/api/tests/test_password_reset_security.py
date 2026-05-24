@@ -245,12 +245,15 @@ class TestPasswordResetTokenSecurity(TestCase):
         
         assert response.status_code == 400
     
+    @override_settings(
+        PASSWORD_RESET_FRONTEND_URL="https://medsync.example.com/auth/reset-password",
+        PASSWORD_RESET_TOKEN_EXPIRY_HOURS=24,
+    )
     def test_frontend_url_configurable_via_settings(self):
         """Test that PASSWORD_RESET_FRONTEND_URL is configurable."""
-        # Verify setting exists and has a value
-        assert hasattr(settings, 'PASSWORD_RESET_FRONTEND_URL')
         assert settings.PASSWORD_RESET_FRONTEND_URL == 'https://medsync.example.com/auth/reset-password'
     
+    @override_settings(PASSWORD_RESET_TOKEN_EXPIRY_HOURS=24)
     def test_token_expiry_hours_configurable_via_settings(self):
         """Test that PASSWORD_RESET_TOKEN_EXPIRY_HOURS is configurable."""
         # Verify setting exists and has a value

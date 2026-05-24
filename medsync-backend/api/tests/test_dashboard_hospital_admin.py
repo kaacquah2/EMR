@@ -54,7 +54,7 @@ class HospitalAdminDashboardMetricsTests(TestCase):
         self.client.force_authenticate(user=self.ha)
         response = self.client.get("/api/v1/dashboard/metrics")
         self.assertEqual(response.status_code, 200)
-        data = response.data
+        data = response.data["data"]
         for key in (
             "total_patients",
             "total_users",
@@ -86,7 +86,7 @@ class HospitalAdminDashboardMetricsTests(TestCase):
         self.client.force_authenticate(user=self.ha)
         response = self.client.get("/api/v1/dashboard/metrics")
         self.assertEqual(response.status_code, 200)
-        emails = {row["email"] for row in response.data["pending_invitations_list"]}
+        emails = {row["email"] for row in response.data["data"]["pending_invitations_list"]}
         self.assertIn("nopexpire@dash.test", emails)
 
 

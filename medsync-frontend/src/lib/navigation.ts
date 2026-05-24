@@ -20,7 +20,8 @@ const COMMON_NAV = {
   appointments: { href: "/appointments", label: "Appointments" },
   admissions: { href: "/admissions", label: "Admissions" },
   alerts: { href: "/alerts", label: "Alerts" },
-  referrals: { href: "/referrals", label: "Referrals" },
+  referrals: { href: "/referrals", label: "Referral Network" },
+  interopHub: { href: "/interop", label: "Inter-Hospital Hub" },
   emergencyQueue: { href: "/emergency", label: "Emergency Queue" },
   pharmacyWorklist: { href: "/pharmacy", label: "Pharmacy" },
   pharmacyInventory: { href: "/pharmacy/inventory", label: "Pharmacy Inventory" },
@@ -29,10 +30,11 @@ const COMMON_NAV = {
   facilities: { href: "/admin/facilities", label: "Facility config" },
   rbacReview: { href: "/admin/rbac-review", label: "RBAC review" },
   superAdminDashboard: { href: "/superadmin", label: "Dashboard" },
+  superAdminNetwork: { href: "/superadmin/network", label: "Network Overview" },
   superAdminHospitals: { href: "/superadmin/hospitals", label: "Hospitals" },
   crossFacilityMonitor: {
     href: "/superadmin/cross-facility-activity-log",
-    label: "Cross-Facility Monitor",
+    label: "Inter-Hospital Access",
   },
   superAdminAuditLogs: { href: "/superadmin/audit-logs", label: "Audit Logs" },
   superAdminUserManagement: { href: "/superadmin/user-management", label: "User Management" },
@@ -52,6 +54,7 @@ export const navByRole: Record<string, NavItem[]> = {
     COMMON_NAV.appointments,
     COMMON_NAV.alerts,
     COMMON_NAV.referrals,
+    COMMON_NAV.interopHub,
   ],
 
   nurse: [
@@ -83,6 +86,12 @@ export const navByRole: Record<string, NavItem[]> = {
     COMMON_NAV.dashboard,
   ],
 
+  billing_staff: [
+    COMMON_NAV.dashboard,
+    COMMON_NAV.patientSearch,
+    COMMON_NAV.appointments,
+  ],
+
   hospital_admin: [
     COMMON_NAV.dashboard,
     COMMON_NAV.emergencyQueue,
@@ -97,11 +106,13 @@ export const navByRole: Record<string, NavItem[]> = {
     COMMON_NAV.facilities,
     COMMON_NAV.rbacReview,
     COMMON_NAV.auditLogs,
+    COMMON_NAV.interopHub,
   ],
 
   super_admin: [
     COMMON_NAV.referrals,
     COMMON_NAV.superAdminDashboard,
+    COMMON_NAV.superAdminNetwork,
     COMMON_NAV.superAdminHospitals,
     COMMON_NAV.crossFacilityMonitor,
     COMMON_NAV.superAdminAuditLogs,
@@ -153,6 +164,7 @@ const DOCTOR_EXACT_ALLOWED = new Set([
   "/appointments",
   "/alerts",
   "/referrals",
+  "/interop",
   "/unauthorized",
 ]);
 

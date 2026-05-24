@@ -81,8 +81,8 @@ class RoleSpecGapAlignmentTests(TestCase):
         self.client.force_authenticate(user=self.doctor)
         response = self.client.get("/api/v1/dashboard")
         self.assertEqual(response.status_code, 200)
-        self.assertIn("queue_count", response.data)
-        self.assertIn("pending_prescriptions", response.data)
+        self.assertIn("queue_count", response.data["data"])
+        self.assertIn("pending_prescriptions", response.data["data"])
 
     def test_appointments_post_route_accepts_creation(self):
         self.client.force_authenticate(user=self.receptionist)

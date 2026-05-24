@@ -7,7 +7,7 @@ import {
   getLabTechCreds,
   getHospitalAdminCreds,
   getSuperAdminCreds,
-} from "../../e2e/auth";
+} from "../utils/auth";
 import { ROLES } from "../utils/roles";
 import { LOGIN_SIGN_IN_TITLE } from "../utils/constants";
 

@@ -2,15 +2,39 @@
 Django signals for Clinical Decision Support (CDS) engine.
 
 Auto-fires CDS rule evaluation when Prescription or Diagnosis is created.
+Also invalidates the Redis-backed rules cache whenever a ClinicalRule is
+created or updated, ensuring all ASGI workers pick up changes immediately.
 """
 
 import logging
 from django.db.models.signals import post_save
 from django.dispatch import receiver
 from records.models import Prescription, Diagnosis, Encounter
-from api.services.cds_engine import RulesEngine
+from api.services.cds_engine import RulesEngine, invalidate_cds_rules_cache
+from api.models import ClinicalRule
 
 logger = logging.getLogger(__name__)
+
+
+# ---------------------------------------------------------------------------
+# Cache invalidation: flush Redis cache whenever ClinicalRule changes
+# ---------------------------------------------------------------------------
+
+@receiver(post_save, sender=ClinicalRule)
+def clinical_rule_changed_invalidate_cache(sender, instance: ClinicalRule, **kwargs):
+    """
+    Invalidate the Redis CDS rules cache when any ClinicalRule is saved.
+
+    This covers CREATE, UPDATE, and bulk_update (when called with update_fields).
+    Workers will re-hydrate from the DB on the next CDS evaluation request.
+    """
+    try:
+        invalidate_cds_rules_cache()
+    except Exception as e:
+        # Non-fatal: next request will serve stale cache until TTL expires
+        logger.warning("Failed to invalidate CDS rules cache after rule change: %s", e)
+
+
 
 
 @receiver(post_save, sender=Prescription)
@@ -43,7 +67,7 @@ def prescription_created_trigger_cds(sender, instance: Prescription, created: bo
             encounter = Encounter.objects.filter(
                 patient=instance.patient,
                 hospital=instance.hospital
-            ).order_by('-created_at').first()
+            ).order_by('-encounter_date').first()
         
         if not encounter:
             logger.warning(f"No encounter found for prescription {instance.id}")
@@ -106,7 +130,7 @@ def diagnosis_created_trigger_cds(sender, instance: Diagnosis, created: bool, **
             encounter = Encounter.objects.filter(
                 patient=patient,
                 hospital=hospital
-            ).order_by('-created_at').first()
+            ).order_by('-encounter_date').first()
         
         if not encounter:
             logger.warning(f"No encounter found for diagnosis {instance.id}")

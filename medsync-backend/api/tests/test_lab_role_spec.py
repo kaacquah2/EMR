@@ -89,7 +89,7 @@ class LabRoleSpecTests(TestCase):
             format="json",
         )
         self.assertEqual(collected.status_code, 200)
-        self.assertEqual(collected.data["status"], "collected")
+        self.assertEqual(collected.data["data"]["status"], "collected")
 
         in_progress = self.client.patch(
             f"/api/v1/lab/orders/{order_id}",
@@ -97,7 +97,7 @@ class LabRoleSpecTests(TestCase):
             format="json",
         )
         self.assertEqual(in_progress.status_code, 200)
-        self.assertEqual(in_progress.data["status"], "in_progress")
+        self.assertEqual(in_progress.data["data"]["status"], "in_progress")
 
         result = self.client.post(
             f"/api/v1/lab/orders/{order_id}/result",
@@ -105,6 +105,6 @@ class LabRoleSpecTests(TestCase):
             format="json",
         )
         self.assertEqual(result.status_code, 200)
-        self.assertEqual(result.data["status"], "resulted")
+        self.assertEqual(result.data["data"]["status"], "resulted")
 
 

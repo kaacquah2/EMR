@@ -1,3 +1,4 @@
+import logging
 from rest_framework import status
 from rest_framework.decorators import api_view, permission_classes
 from rest_framework.permissions import IsAuthenticated
@@ -9,6 +10,8 @@ from interop.models import GlobalPatient, Referral, Consent
 from api.utils import audit_log, get_request_hospital
 from api.serializers import ReferralSerializer
 from api.state_machines import validate_referral_transition, StateMachineError
+
+logger = logging.getLogger(__name__)
 
 
 def _interop_role_ok(user):
@@ -118,6 +121,30 @@ def referral_incoming(request):
 
     qs = (
         Referral.objects.filter(to_facility=hospital)
+        .select_related("global_patient", "from_facility", "to_facility")
+        .order_by("-created_at")
+    )
+    status_filter = request.GET.get("status")
+    if status_filter:
+        qs = qs.filter(status=status_filter)
+    qs = qs[:100]
+    return Response({"data": ReferralSerializer(qs, many=True).data})
+
+
+@api_view(["GET"])
+@permission_classes([IsAuthenticated])
+def referral_outgoing(request):
+    if not _interop_role_ok(request.user):
+        return Response(
+            {"message": "Permission denied"},
+            status=status.HTTP_403_FORBIDDEN,
+        )
+    hospital = get_request_hospital(request)
+    if not hospital:
+        return Response({"data": []})
+
+    qs = (
+        Referral.objects.filter(from_facility=hospital)
         .select_related("global_patient", "from_facility", "to_facility")
         .order_by("-created_at")
     )

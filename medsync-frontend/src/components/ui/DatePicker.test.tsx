@@ -227,9 +227,11 @@ describe("DatePicker", () => {
     fireEvent.focus(input);
 
     await waitFor(() => {
-      const hourInputs = screen.getAllByRole("textbox");
-      // Should have input for date + hour + minute
-      expect(hourInputs.length).toBeGreaterThanOrEqual(3);
+      const dateInput = screen.getByRole("textbox");
+      const timeInputs = screen.getAllByRole("spinbutton");
+      // Should have 1 textbox for date + 2 spinbuttons for hour and minute
+      expect(dateInput).toBeInTheDocument();
+      expect(timeInputs.length).toBe(2);
     });
   });
 });

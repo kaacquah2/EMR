@@ -9,50 +9,17 @@ import { usePollWhenVisible } from "@/hooks/use-poll-when-visible";
 import { useApi } from "@/hooks/use-api";
 import { Button } from "@/components/ui/button";
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
-import {
-  Table,
-  TableHeader,
-  TableRow,
-  TableHead,
-  TableBody,
-  TableCell,
-} from "@/components/ui/Table";
 import { useNurseWorklist } from "@/hooks/use-nurse";
+import { QueueBoard } from "@/components/features/clinical/QueueBoard";
 
 const WORKLIST_ROLES = ["doctor", "nurse", "hospital_admin", "super_admin"];
 const WORKLIST_POLL_MS = 45_000;
 
-function getTriageLabel(value?: string): "CRITICAL" | "URGENT" | "LESS URGENT" {
-  const normalized = (value || "").trim().toLowerCase();
-  if (normalized === "critical") return "CRITICAL";
-  if (normalized === "urgent") return "URGENT";
-  return "LESS URGENT";
-}
 
-function TriageBadge({ triage }: { triage?: string }) {
-  const label = getTriageLabel(triage);
-  const cls =
-    label === "CRITICAL"
-      ? "bg-red-100 text-red-800 border-red-200"
-      : label === "URGENT"
-        ? "bg-amber-100 text-amber-800 border-amber-200"
-        : "bg-blue-100 text-blue-800 border-blue-200";
-  return <span className={`inline-flex items-center rounded-full border px-2 py-0.5 text-xs font-semibold ${cls}`}>{label}</span>;
-}
-
-function AllergyIndicator({ hasAllergy }: { hasAllergy?: boolean }) {
-  if (!hasAllergy) return <span className="text-xs text-slate-500 dark:text-slate-500">None</span>;
-  return (
-    <span className="inline-flex items-center rounded-full border border-rose-200 bg-rose-100 px-2 py-0.5 text-xs font-semibold text-rose-800">
-      Allergy risk
-    </span>
-  );
-}
 
 export default function WorklistPage() {
   const router = useRouter();
   const { user } = useAuth();
-  const api = useApi();
   const { encounters, summary, loading, fetch } = useWorklistEncounters();
   const [departmentFilter, setDepartmentFilter] = React.useState("");
   const [encounterTypeFilter, setEncounterTypeFilter] = React.useState("");
@@ -72,15 +39,7 @@ export default function WorklistPage() {
     if (user && !canAccess) router.replace("/unauthorized");
   }, [user, canAccess, router]);
   if (user && !canAccess) return <div className="flex min-h-[200px] items-center justify-center text-slate-500 dark:text-slate-500">Redirecting...</div>;
-  const startConsultation = async (patientId: string, complaint: string) => {
-    const encounter = await api.post<{ id: string }>(`/patients/${patientId}/encounters`, {
-      encounter_type: "outpatient",
-      chief_complaint: complaint || "",
-      status: "in_consultation",
-      visit_status: "in_consultation",
-    });
-    router.push(`/patients/${patientId}/encounter/${encounter.id}`);
-  };
+
 
   if (user?.role === "nurse") {
     return <NurseWardWorklist />;
@@ -134,71 +93,23 @@ export default function WorklistPage() {
           </div>
           {loading ? (
             <p className="py-8 text-center text-slate-500 dark:text-slate-500">Loading…</p>
-          ) : encounters.length === 0 ? (
-            <p className="py-8 text-center text-slate-500 dark:text-slate-500">No patients waiting.</p>
           ) : (
-            <div className="overflow-x-auto">
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Patient</TableHead>
-                    <TableHead>Ghana Health ID</TableHead>
-                    <TableHead>Department</TableHead>
-                    <TableHead>Status</TableHead>
-                    <TableHead>Triage</TableHead>
-                    <TableHead>Allergy</TableHead>
-                    <TableHead>Date</TableHead>
-                    <TableHead>Action</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {encounters.map((e) => (
-                    <TableRow key={e.id}>
-                      <TableCell className="font-medium text-slate-900 dark:text-white">{e.patient_name}</TableCell>
-                      <TableCell className="text-sm text-slate-500 dark:text-slate-400">{e.ghana_health_id}</TableCell>
-                      <TableCell className="text-sm text-slate-500 dark:text-slate-400">{e.assigned_department_name ?? "—"}</TableCell>
-                      <TableCell>
-                        <span
-                          className={
-                            e.status === "in_consultation"
-                              ? "rounded-full bg-amber-100 px-2 py-0.5 text-xs text-amber-800"
-                              : "rounded-full bg-blue-100 px-2 py-0.5 text-xs text-blue-800"
-                          }
-                        >
-                          {e.status === "in_consultation" ? "In consultation" : "Waiting"}
-                        </span>
-                      </TableCell>
-                      <TableCell><TriageBadge triage={e.triage_badge} /></TableCell>
-                      <TableCell><AllergyIndicator hasAllergy={e.has_active_allergy} /></TableCell>
-                      <TableCell className="text-sm text-slate-500 dark:text-slate-400">
-                        {new Date(e.encounter_date).toLocaleString()}
-                      </TableCell>
-                      <TableCell>
-                        <div className="flex gap-2">
-                          <Link href={`/patients/${e.patient_id}`}>
-                            {/* UX-14: 'View chart' is clearer than 'Open' */}
-                            <Button size="sm" variant="secondary">View chart</Button>
-                          </Link>
-                          <Button
-                            size="sm"
-                            onClick={() => {
-                              // UX-13: warn if encounter already in progress
-                              if (e.status === "in_consultation" && !window.confirm(
-                                `${e.patient_name} already has an encounter in progress. Start a new one anyway?`
-                              )) return;
-                              void startConsultation(e.patient_id, e.notes ?? "");
-                            }}
-                          >
-                            {/* UX-14: 'Begin consult' is clearer than 'Start consultation' */}
-                            Begin consult →
-                          </Button>
-                        </div>
-                      </TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-            </div>
+            <QueueBoard 
+              items={encounters.map(e => ({
+                id: e.id,
+                patient_id: e.patient_id,
+                patient_name: e.patient_name,
+                ghana_health_id: e.ghana_health_id,
+                triage_color: (e.triage_badge?.toLowerCase() || "blue") as "red" | "orange" | "yellow" | "green" | "blue",
+                waiting_since: e.encounter_date,
+                department: e.assigned_department_name || "General",
+                chief_complaint: e.notes || ""
+              }))}
+              onAction={(id) => {
+                const e = encounters.find(enc => enc.id === id);
+                if (e) router.push(`/patients/${e.patient_id}`);
+              }}
+            />
           )}
         </CardContent>
       </Card>

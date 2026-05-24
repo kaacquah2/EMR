@@ -27,6 +27,9 @@ from records.models import (
     RadiologyOrder,
     MedicationAdministration,
     PrescriptionFavorite,
+    Immunisation,
+    ProcedureNote,
+    NotifiableDisease,
 )
 
 # Safety logging
@@ -480,6 +483,108 @@ def create_vitals(request):
                 )
     
     return Response(response_data, status=status.HTTP_201_CREATED)
+
+
+@api_view(["POST"])
+@permission_classes([IsAuthenticated])
+def create_immunisation(request):
+    if request.user.role not in ("doctor", "nurse"):
+        return Response({"message": "Permission denied"}, status=status.HTTP_403_FORBIDDEN)
+    hospital = get_request_hospital(request)
+    if not hospital:
+        return Response({"message": "No hospital assigned"}, status=status.HTTP_400_BAD_REQUEST)
+    data = request.data
+    patient_id = data.get("patient_id")
+    patient = get_patient_queryset(request.user, get_effective_hospital(request)).filter(id=patient_id).first()
+    if not patient:
+        return Response({"message": "Patient not found"}, status=status.HTTP_404_NOT_FOUND)
+    
+    record = MedicalRecord.objects.create(
+        patient=patient,
+        hospital=hospital,
+        record_type="immunisation",
+        created_by=request.user,
+    )
+    from api.serializers import ImmunisationSerializer
+    imm = Immunisation.objects.create(
+        record=record,
+        vaccine_name=data.get("vaccine_name", ""),
+        dose_number=data.get("dose_number", 1),
+        lot_number=data.get("lot_number"),
+        expiry_date=data.get("expiry_date"),
+        site=data.get("site"),
+        route=data.get("route"),
+        notes=data.get("notes"),
+    )
+    return Response(ImmunisationSerializer(imm).data, status=status.HTTP_201_CREATED)
+
+
+@api_view(["POST"])
+@permission_classes([IsAuthenticated])
+def create_procedure_note(request):
+    if request.user.role != "doctor":
+        return Response({"message": "Permission denied"}, status=status.HTTP_403_FORBIDDEN)
+    hospital = get_request_hospital(request)
+    if not hospital:
+        return Response({"message": "No hospital assigned"}, status=status.HTTP_400_BAD_REQUEST)
+    data = request.data
+    patient_id = data.get("patient_id")
+    patient = get_patient_queryset(request.user, get_effective_hospital(request)).filter(id=patient_id).first()
+    if not patient:
+        return Response({"message": "Patient not found"}, status=status.HTTP_404_NOT_FOUND)
+    
+    record = MedicalRecord.objects.create(
+        patient=patient,
+        hospital=hospital,
+        record_type="procedure_note",
+        created_by=request.user,
+    )
+    from api.serializers import ProcedureNoteSerializer
+    proc = ProcedureNote.objects.create(
+        record=record,
+        procedure_name=data.get("procedure_name", ""),
+        surgeon=request.user,
+        assistant_id=data.get("assistant_id"),
+        anaesthesia_type=data.get("anaesthesia_type"),
+        findings=data.get("findings", ""),
+        procedure_details=data.get("procedure_details", ""),
+        complications=data.get("complications"),
+        post_op_instructions=data.get("post_op_instructions"),
+    )
+    return Response(ProcedureNoteSerializer(proc).data, status=status.HTTP_201_CREATED)
+
+
+@api_view(["POST"])
+@permission_classes([IsAuthenticated])
+def create_notifiable_disease(request):
+    if request.user.role != "doctor":
+        return Response({"message": "Permission denied"}, status=status.HTTP_403_FORBIDDEN)
+    hospital = get_request_hospital(request)
+    if not hospital:
+        return Response({"message": "No hospital assigned"}, status=status.HTTP_400_BAD_REQUEST)
+    data = request.data
+    patient_id = data.get("patient_id")
+    patient = get_patient_queryset(request.user, get_effective_hospital(request)).filter(id=patient_id).first()
+    if not patient:
+        return Response({"message": "Patient not found"}, status=status.HTTP_404_NOT_FOUND)
+    
+    record = MedicalRecord.objects.create(
+        patient=patient,
+        hospital=hospital,
+        record_type="notifiable_disease",
+        created_by=request.user,
+    )
+    from api.serializers import NotifiableDiseaseSerializer
+    nd = NotifiableDisease.objects.create(
+        record=record,
+        disease_name=data.get("disease_name", ""),
+        ghs_case_id=data.get("ghs_case_id"),
+        is_confirmed=data.get("is_confirmed", False),
+        reported_to_ghs=data.get("reported_to_ghs", False),
+        reported_at=data.get("reported_at"),
+        outcome=data.get("outcome"),
+    )
+    return Response(NotifiableDiseaseSerializer(nd).data, status=status.HTTP_201_CREATED)
 
 
 @api_view(["POST"])

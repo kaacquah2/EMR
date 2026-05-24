@@ -449,6 +449,7 @@ class AIAnalysisJob(models.Model):
     # Result storage (populated when completed)
     analysis_result = models.OneToOneField(AIAnalysis, on_delete=models.SET_NULL,
                                            null=True, blank=True, related_name='job')
+    result_data = models.JSONField(null=True, blank=True, help_text="Raw task result payload")
     error_message = models.TextField(blank=True, help_text="Error message if job failed")
 
     # Timestamps
@@ -717,7 +718,7 @@ class Dispensation(models.Model):
     """
     
     id = models.UUIDField(primary_key=True, default=uuid4, editable=False)
-    prescription = models.OneToOneField(Prescription, on_delete=models.CASCADE, related_name='dispensation')
+    prescription = models.ForeignKey(Prescription, on_delete=models.CASCADE, related_name='dispensations')
     drug_stock = models.ForeignKey(DrugStock, on_delete=models.PROTECT, related_name='dispensations')
     quantity_dispensed = models.PositiveIntegerField(help_text="Quantity given to patient")
     dispensed_by = models.ForeignKey(User, on_delete=models.PROTECT, related_name='dispensed_medications')

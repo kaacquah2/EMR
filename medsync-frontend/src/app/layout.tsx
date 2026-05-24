@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { DM_Sans, DM_Mono, Sora } from "next/font/google";
 import "./globals.css";
+import "../styles/clinical-print.css";
 import { AuthProvider } from "@/lib/auth-context";
 import { ToastProvider } from "@/lib/toast-context";
 import { ServiceWorkerRegistration } from "@/components/ServiceWorkerRegistration";

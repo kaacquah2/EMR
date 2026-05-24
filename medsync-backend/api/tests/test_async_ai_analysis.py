@@ -325,9 +325,10 @@ class PollAsyncAnalysisStatusTest(AsyncAIAnalysisSetupMixin, TestCase):
         )
 
         self.assertEqual(response.status_code, status.HTTP_200_OK)
-        self.assertEqual(response.data['job_id'], str(self.pending_job.id))
-        self.assertEqual(response.data['status'], 'pending')
-        self.assertEqual(response.data['progress_percent'], 0)
+        resp_data = response.data.get('data') or response.data
+        self.assertEqual(resp_data['job_id'], str(self.pending_job.id))
+        self.assertEqual(resp_data['status'], 'pending')
+        self.assertEqual(resp_data['progress_percent'], 0)
 
     def test_nurse_can_poll_job(self):
         """Nurse can poll job status (read-only)."""
@@ -338,9 +339,10 @@ class PollAsyncAnalysisStatusTest(AsyncAIAnalysisSetupMixin, TestCase):
         )
 
         self.assertEqual(response.status_code, status.HTTP_200_OK)
-        self.assertEqual(response.data['status'], 'processing')
-        self.assertEqual(response.data['progress_percent'], 45)
-        self.assertEqual(response.data['current_step'], 'Running risk prediction agent')
+        resp_data = response.data.get('data') or response.data
+        self.assertEqual(resp_data['status'], 'processing')
+        self.assertEqual(resp_data['progress_percent'], 45)
+        self.assertEqual(resp_data['current_step'], 'Running risk prediction agent')
 
     def test_completed_job_includes_analysis(self):
         """Completed job response includes analysis results."""
@@ -351,11 +353,12 @@ class PollAsyncAnalysisStatusTest(AsyncAIAnalysisSetupMixin, TestCase):
         )
 
         self.assertEqual(response.status_code, status.HTTP_200_OK)
-        self.assertEqual(response.data['status'], 'completed')
-        self.assertEqual(response.data['progress_percent'], 100)
-        self.assertIn('analysis', response.data)
-        self.assertIsNotNone(response.data['analysis'])
-        self.assertEqual(response.data['analysis']['analysis_id'], str(self.analysis.id))
+        resp_data = response.data.get('data') or response.data
+        self.assertEqual(resp_data['status'], 'completed')
+        self.assertEqual(resp_data['progress_percent'], 100)
+        self.assertIn('analysis', resp_data)
+        self.assertIsNotNone(resp_data['analysis'])
+        self.assertEqual(resp_data['analysis']['analysis_id'], str(self.analysis.id))
 
     def test_doctor_cannot_poll_other_hospital_job(self):
         """Doctor cannot poll job for patient at different hospital."""
@@ -397,7 +400,8 @@ class PollAsyncAnalysisStatusTest(AsyncAIAnalysisSetupMixin, TestCase):
         )
 
         self.assertEqual(response.status_code, status.HTTP_200_OK)
-        self.assertIsNone(response.data.get('analysis'))
+        resp_data = response.data.get('data') or response.data
+        self.assertIsNone(resp_data.get('analysis'))
 
     def test_progress_percent_range(self):
         """Progress percent is between 0 and 100."""
@@ -418,7 +422,8 @@ class PollAsyncAnalysisStatusTest(AsyncAIAnalysisSetupMixin, TestCase):
                 f'/api/v1/ai/async-analysis/status/{job.id}'
             )
 
-            self.assertEqual(response.data['progress_percent'], percent)
+            resp_data = response.data.get('data') or response.data
+            self.assertEqual(resp_data['progress_percent'], percent)
 
     def test_serializer_fields_present(self):
         """Response includes all required serializer fields."""
@@ -433,8 +438,9 @@ class PollAsyncAnalysisStatusTest(AsyncAIAnalysisSetupMixin, TestCase):
             'current_step', 'analysis_type', 'created_at'
         ]
 
+        resp_data = response.data.get('data') or response.data
         for field in required_fields:
-            self.assertIn(field, response.data, f"Missing field: {field}")
+            self.assertIn(field, resp_data, f"Missing field: {field}")
 
 
 class PermissionMatrixTest(AsyncAIAnalysisSetupMixin, TestCase):
@@ -763,7 +769,7 @@ class AuditLoggingTest(AsyncAIAnalysisSetupMixin, TestCase):
         self.assertEqual(response.status_code, status.HTTP_202_ACCEPTED)
 
         # Verify audit log created
-        new_logs = AuditLog.objects.all().order_by('-created_at')
+        new_logs = AuditLog.objects.all().order_by('-timestamp')
         self.assertGreater(new_logs.count(), initial_count)
 
         latest_log = new_logs.first()

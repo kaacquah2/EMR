@@ -79,7 +79,7 @@ class NurseRoleSpecTests(TestCase):
 
     def test_nurse_cannot_read_other_ward_patient(self):
         self.client.force_authenticate(user=self.nurse_a)
-        resp = self.client.get(f"/api/v1/patients/{self.patient_b.id}")
+        resp = self.client.get(f"/api/v1/patients/{self.patient_b.id}/")
         self.assertEqual(resp.status_code, 404)
 
     def test_nurse_diagnosis_endpoint_allowed(self):

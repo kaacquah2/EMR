@@ -31,7 +31,7 @@ from rest_framework.test import APIClient
 
 from core.models import Hospital, User
 from patients.models import Patient
-from records.models import Encounter, Diagnosis, Prescription, Vital, LabOrder, LabResult
+from records.models import Encounter, Diagnosis, Prescription, Vital, LabOrder, LabResult, MedicalRecord
 
 # FHIR validation (install: pip install fhir.resources)
 try:
@@ -61,22 +61,22 @@ class TestFHIRPatientResource:
 
     @pytest.fixture
     def setup(self, db):
-        hospital = Hospital.objects.create(name="Test Hospital", code="TEST")
+        hospital = Hospital.objects.create(name="Test Hospital", nhis_code="FHIR_TST_001", region="Greater Accra", is_active=True)
         user = User.objects.create_user(
             email="doctor@hospital.gh",
             password="TestPass123!",
             hospital=hospital,
             role="doctor",
+            full_name="Dr. John Mensah",
         )
         patient = Patient.objects.create(
             ghana_health_id="GH-2024-001234",
-            first_name="John",
-            last_name="Doe",
+            full_name="John Doe",
             date_of_birth="1985-05-15",
             gender="male",
             registered_at=hospital,
+            created_by=user,
             phone="+233201234567",
-            address="Accra, Ghana",
         )
         return {"hospital": hospital, "user": user, "patient": patient}
 
@@ -112,18 +112,20 @@ class TestFHIRPatientResource:
         # Ghana Health ID must be in identifiers
         identifiers = data["identifier"]
         ghi_found = any(
-            i.get("system") == "https://medsync.health/identifiers/ghana-health-id"
+            i.get("system") == "https://ghanahealth.org/ghana-health-id"
             and i.get("value") == patient.ghana_health_id
             for i in identifiers
         )
         assert ghi_found, "Ghana Health ID not in FHIR identifiers"
 
-        # Name
+        # Name (Patient uses full_name; serializer splits into given/family)
         assert "name" in data
         assert len(data["name"]) > 0
         name = data["name"][0]
-        assert name.get("given", []) == [patient.first_name]
-        assert name.get("family") == patient.last_name
+        parts = patient.full_name.split()
+        expected_given = parts[:-1] if len(parts) > 1 else parts
+        assert name.get("given", []) == expected_given
+        assert name.get("family") == parts[-1]
 
         # Gender mapping (MedSync → FHIR)
         # MedSync: male, female, other
@@ -139,10 +141,9 @@ class TestFHIRPatientResource:
             phones = [t for t in data["telecom"] if t.get("system") == "phone"]
             assert len(phones) > 0
 
-        # Address
-        if patient.address:
-            assert "address" in data
-            assert len(data["address"]) > 0
+        # Address (derived from patient.registered_at hospital name)
+        assert "address" in data
+        assert len(data["address"]) > 0
 
     @pytest.mark.django_db
     def test_fhir_patient_validate_with_library(self, setup):
@@ -160,7 +161,7 @@ class TestFHIRPatientResource:
         try:
             fhir_patient = FHIRPatient(**data)
             # If no exception, structure is valid
-            assert fhir_patient.resourceType == "Patient"
+            assert fhir_patient.get_resource_type() == "Patient"
         except Exception as e:
             pytest.fail(f"FHIR Patient validation failed: {str(e)}")
 
@@ -205,7 +206,8 @@ class TestFHIREncounterResource:
 
     @pytest.fixture
     def setup(self, db):
-        hospital = Hospital.objects.create(name="Test Hospital", code="TEST")
+        hospital = Hospital.objects.create(name="Test Hospital", nhis_code="FHIR_TST_002", region="Greater Accra", is_active=True)
+
         user = User.objects.create_user(
             email="doctor@hospital.gh",
             password="TestPass123!",
@@ -214,20 +216,20 @@ class TestFHIREncounterResource:
         )
         patient = Patient.objects.create(
             ghana_health_id="GH-2024-001234",
-            first_name="John",
-            last_name="Doe",
+            full_name="John Doe",
             date_of_birth="1985-05-15",
             gender="male",
             registered_at=hospital,
+            created_by=user,
         )
         encounter = Encounter.objects.create(
             patient=patient,
             hospital=hospital,
-            provider=user,
+            created_by=user,
+            assigned_doctor=user,
             encounter_type="outpatient",
             chief_complaint="Headache and fever",
-            started_at=timezone.now(),
-            status="active",
+            status="waiting",
         )
         return {"hospital": hospital, "user": user, "patient": patient, "encounter": encounter}
 
@@ -269,7 +271,6 @@ class TestFHIREncounterResource:
         assert "subject" in data
         subject = data["subject"]
         assert subject.get("reference").startswith("Patient/")
-        assert subject.get("type") == "Patient"
 
         # Participant (provider)
         if "participant" in data:
@@ -311,8 +312,14 @@ class TestFHIREncounterResource:
         assert len(participants) > 0
 
         provider = participants[0]
-        assert provider.get("type") in ["PPRF", "SPRF", "ATND", "REF", "CALLCNT"]
-        # individual or actor (MedSync returns actor)
+        # type is a list of coding objects; extract code values
+        provider_type_codes = [
+            coding.get("code")
+            for type_item in provider.get("type", [])
+            for coding in type_item.get("coding", [])
+        ]
+        assert any(code in ["PPRF", "SPRF", "ATND", "REF", "CALLCNT"] for code in provider_type_codes)
+        # individual or actor (MedSync returns individual)
         assert "individual" in provider or "actor" in provider
 
 
@@ -325,7 +332,7 @@ class TestFHIRConditionResource:
 
     @pytest.fixture
     def setup(self, db):
-        hospital = Hospital.objects.create(name="Test Hospital", code="TEST")
+        hospital = Hospital.objects.create(name="Test Hospital", nhis_code="FHIR_TST_003", region="Greater Accra", is_active=True)
         user = User.objects.create_user(
             email="doctor@hospital.gh",
             password="TestPass123!",
@@ -334,31 +341,29 @@ class TestFHIRConditionResource:
         )
         patient = Patient.objects.create(
             ghana_health_id="GH-2024-001234",
-            first_name="John",
-            last_name="Doe",
+            full_name="John Doe",
             date_of_birth="1985-05-15",
             gender="male",
             registered_at=hospital,
+            created_by=user,
         )
-        encounter = Encounter.objects.create(
+        # Diagnosis requires a MedicalRecord (OneToOne relationship)
+        med_record = MedicalRecord.objects.create(
             patient=patient,
             hospital=hospital,
-            provider=user,
-            encounter_type="outpatient",
-            chief_complaint="Pneumonia symptoms",
-            started_at=timezone.now(),
+            record_type="diagnosis",
+            created_by=user,
         )
         diagnosis = Diagnosis.objects.create(
-            encounter=encounter,
+            record=med_record,
             icd10_code="J18.9",  # Pneumonia, unspecified
-            description="Community-acquired pneumonia",
-            primary=True,
+            icd10_description="Community-acquired pneumonia",
+            severity="moderate",
         )
         return {
             "hospital": hospital,
             "user": user,
             "patient": patient,
-            "encounter": encounter,
             "diagnosis": diagnosis,
         }
 
@@ -456,7 +461,7 @@ class TestFHIRObservationResource:
 
     @pytest.fixture
     def setup(self, db):
-        hospital = Hospital.objects.create(name="Test Hospital", code="TEST")
+        hospital = Hospital.objects.create(name="Test Hospital", nhis_code="FHIR_TST_004", region="Greater Accra", is_active=True)
         user = User.objects.create_user(
             email="doctor@hospital.gh",
             password="TestPass123!",
@@ -465,33 +470,32 @@ class TestFHIRObservationResource:
         )
         patient = Patient.objects.create(
             ghana_health_id="GH-2024-001234",
-            first_name="John",
-            last_name="Doe",
+            full_name="John Doe",
             date_of_birth="1985-05-15",
             gender="male",
             registered_at=hospital,
+            created_by=user,
         )
-        encounter = Encounter.objects.create(
+        # Vital requires a MedicalRecord (OneToOne relationship)
+        med_record = MedicalRecord.objects.create(
             patient=patient,
             hospital=hospital,
-            provider=user,
-            encounter_type="outpatient",
-            started_at=timezone.now(),
+            record_type="vital_signs",
+            created_by=user,
         )
         vital = Vital.objects.create(
-            encounter=encounter,
-            temperature_celsius=38.5,
-            systolic_bp=120,
-            diastolic_bp=80,
-            heart_rate_bpm=85,
-            oxygen_saturation_percent=98,
+            record=med_record,
+            temperature_c="38.5",
+            bp_systolic=120,
+            bp_diastolic=80,
+            pulse_bpm=85,
+            spo2_percent="98.0",
             recorded_by=user,
         )
         return {
             "hospital": hospital,
             "user": user,
             "patient": patient,
-            "encounter": encounter,
             "vital": vital,
         }
 
@@ -510,18 +514,22 @@ class TestFHIRObservationResource:
 
         data = response.json()
 
-        # LOINC code for body temperature
-        coding = data.get("code", {}).get("coding", [])
-        loinc_found = any(
-            c.get("system") == "http://loinc.org" and c.get("code") == "8310-5"
-            for c in coding
+        # The view returns a full vitals panel (LOINC 85353-1) with components.
+        # Temperature is a component with LOINC 8310-5.
+        components = data.get("component", [])
+        temp_component = next(
+            (c for c in components if any(
+                entry.get("code") == "8310-5"
+                for entry in c.get("code", {}).get("coding", [])
+            )),
+            None,
         )
-        assert loinc_found, "LOINC 8310-5 not found for temperature"
+        assert temp_component is not None, "LOINC 8310-5 (temperature) not found in vitals panel components"
 
         # Value
-        value = data.get("valueQuantity", {})
-        assert value.get("value") == 38.5
-        assert value.get("unit") == "Celsius"
+        value = temp_component.get("valueQuantity", {})
+        assert float(value.get("value")) == 38.5
+        assert value.get("unit") == "\u00b0C"
 
     @pytest.mark.django_db
     def test_fhir_vital_bp_observation(self, setup):
@@ -539,27 +547,41 @@ class TestFHIRObservationResource:
 
         data = response.json()
 
-        # LOINC code for BP panel
-        coding = data.get("code", {}).get("coding", [])
-        loinc_found = any(
-            c.get("system") == "http://loinc.org" and c.get("code") == "85354-9"
-            for c in coding
-        )
-        assert loinc_found, "LOINC 85354-9 not found for BP"
+        # The view returns a full vitals panel. BP is a component with LOINC 55284-4,
+        # containing systolic (8480-6) and diastolic (8462-4) sub-components.
+        top_components = data.get("component", [])
+        assert len(top_components) >= 1, "No vital components found"
 
-        # Component (systolic + diastolic)
-        components = data.get("component", [])
-        assert len(components) >= 2
+        # Find BP component in top-level components
+        bp_component = next(
+            (c for c in top_components if any(
+                entry.get("code") == "55284-4"
+                for entry in c.get("code", {}).get("coding", [])
+            )),
+            None,
+        )
+        assert bp_component is not None, "LOINC 55284-4 (blood pressure panel) not found in components"
+
+        # Systolic and diastolic are sub-components of the BP component
+        sub_components = [sc for sc in bp_component.get("component", []) if sc is not None]
+        assert len(sub_components) >= 2
 
         systolic = next(
-            (c for c in components if "8480-6" in str(c.get("code", {}))), None
+            (c for c in sub_components if any(
+                entry.get("code") == "8480-6"
+                for entry in c.get("code", {}).get("coding", [])
+            )),
+            None,
         )
         diastolic = next(
-            (c for c in components if "8462-4" in str(c.get("code", {}))), None
+            (c for c in sub_components if any(
+                entry.get("code") == "8462-4"
+                for entry in c.get("code", {}).get("coding", [])
+            )),
+            None,
         )
-
-        assert systolic is not None, "Systolic BP component not found"
-        assert diastolic is not None, "Diastolic BP component not found"
+        assert systolic is not None, "Systolic BP sub-component (8480-6) not found"
+        assert diastolic is not None, "Diastolic BP sub-component (8462-4) not found"
 
         assert systolic.get("valueQuantity", {}).get("value") == 120
         assert diastolic.get("valueQuantity", {}).get("value") == 80

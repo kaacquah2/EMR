@@ -18,7 +18,9 @@ def hospital():
     """Create test hospital."""
     return Hospital.objects.create(
         name="Test Hospital",
-        code="TEST001",is_active=True,
+        region="Greater Accra",
+        nhis_code="TEST001",
+        is_active=True,
     )
 
 
@@ -28,8 +30,7 @@ def receptionist(hospital):
     return User.objects.create_user(
         email="receptionist@test.local",
         password="testpass123",
-        first_name="Rec",
-        last_name="Eptionist",
+        full_name="Rec Eptionist",
         role="receptionist",
         hospital=hospital,
         account_status="active",
@@ -42,8 +43,7 @@ def doctor(hospital):
     user = User.objects.create_user(
         email="doctor@test.local",
         password="testpass123",
-        first_name="Doc",
-        last_name="Tor",
+        full_name="Doc Tor",
         role="doctor",
         hospital=hospital,
         account_status="active",
@@ -57,8 +57,7 @@ def nurse(hospital):
     return User.objects.create_user(
         email="nurse@test.local",
         password="testpass123",
-        first_name="Nur",
-        last_name="Sed",
+        full_name="Nur Sed",
         role="nurse",
         hospital=hospital,
         account_status="active",
@@ -99,7 +98,7 @@ class TestWalkInQueue:
             "urgency": "routine",
         }
         
-        response = client.post("/api/appointments/walk-in", payload, format="json")
+        response = client.post("/api/v1/appointments/walk-in", payload, format="json")
         
         assert response.status_code == status.HTTP_201_CREATED
         assert response.data["status"] == "checked_in"
@@ -125,7 +124,7 @@ class TestWalkInQueue:
             "urgency": "urgent",
         }
         
-        response = client.post("/api/appointments/walk-in", payload, format="json")
+        response = client.post("/api/v1/appointments/walk-in", payload, format="json")
         
         assert response.status_code == status.HTTP_201_CREATED
         assert response.data["urgency"] == "urgent"
@@ -142,10 +141,10 @@ class TestWalkInQueue:
             "urgency": "routine",
         }
         
-        response = client.post("/api/appointments/walk-in", payload, format="json")
+        response = client.post("/api/v1/appointments/walk-in", payload, format="json")
         
         assert response.status_code == status.HTTP_201_CREATED
-        assert response.data["doctor"] == doctor.get_full_name()
+        assert response.data["doctor"] == doctor.full_name
 
     def test_create_walk_in_unassigned_doctor(self, receptionist, patient, hospital):
         """Walk-in without assigned doctor shows 'Unassigned'."""
@@ -158,7 +157,7 @@ class TestWalkInQueue:
             "urgency": "routine",
         }
         
-        response = client.post("/api/appointments/walk-in", payload, format="json")
+        response = client.post("/api/v1/appointments/walk-in", payload, format="json")
         
         assert response.status_code == status.HTTP_201_CREATED
         assert response.data["doctor"] == "Unassigned"
@@ -174,7 +173,7 @@ class TestWalkInQueue:
             "urgency": "invalid",
         }
         
-        response = client.post("/api/appointments/walk-in", payload, format="json")
+        response = client.post("/api/v1/appointments/walk-in", payload, format="json")
         
         assert response.status_code == status.HTTP_201_CREATED
         assert response.data["urgency"] == "routine"
@@ -189,7 +188,7 @@ class TestWalkInQueue:
             "urgency": "routine",
         }
         
-        response = client.post("/api/appointments/walk-in", payload, format="json")
+        response = client.post("/api/v1/appointments/walk-in", payload, format="json")
         
         assert response.status_code == status.HTTP_400_BAD_REQUEST
         assert "patient_id required" in response.data["message"]
@@ -205,7 +204,7 @@ class TestWalkInQueue:
             "urgency": "routine",
         }
         
-        response = client.post("/api/appointments/walk-in", payload, format="json")
+        response = client.post("/api/v1/appointments/walk-in", payload, format="json")
         
         assert response.status_code == status.HTTP_404_NOT_FOUND
 
@@ -221,7 +220,7 @@ class TestWalkInQueue:
             "urgency": "routine",
         }
         
-        response = client.post("/api/appointments/walk-in", payload, format="json")
+        response = client.post("/api/v1/appointments/walk-in", payload, format="json")
         
         assert response.status_code == status.HTTP_404_NOT_FOUND
 
@@ -244,7 +243,7 @@ class TestWalkInQueue:
             "urgency": "routine",
         }
         
-        response = client.post("/api/appointments/walk-in", payload, format="json")
+        response = client.post("/api/v1/appointments/walk-in", payload, format="json")
         
         assert response.status_code == status.HTTP_403_FORBIDDEN
 
@@ -266,7 +265,7 @@ class TestWalkInQueue:
                 created_by=receptionist,
             )
         
-        response = client.get("/api/appointments/walk-in-queue")
+        response = client.get("/api/v1/appointments/walk-in-queue")
         
         assert response.status_code == status.HTTP_200_OK
         assert response.data["total_waiting"] == 3
@@ -293,7 +292,7 @@ class TestWalkInQueue:
         
         # Query for yesterday (should be empty)
         yesterday = (timezone.now() - timezone.timedelta(days=1)).strftime("%Y-%m-%d")
-        response = client.get(f"/api/appointments/walk-in-queue?date={yesterday}")
+        response = client.get(f"/api/v1/appointments/walk-in-queue?date={yesterday}")
         
         assert response.status_code == status.HTTP_200_OK
         assert response.data["total_waiting"] == 0
@@ -328,7 +327,7 @@ class TestWalkInQueue:
             created_by=receptionist,
         )
         
-        response = client.get("/api/appointments/walk-in-queue")
+        response = client.get("/api/v1/appointments/walk-in-queue")
         
         assert response.status_code == status.HTTP_200_OK
         assert response.data["total_waiting"] == 1
@@ -373,7 +372,7 @@ class TestWalkInQueue:
             created_by=receptionist,
         )
         
-        response = client.get("/api/appointments/walk-in-queue")
+        response = client.get("/api/v1/appointments/walk-in-queue")
         
         assert response.status_code == status.HTTP_200_OK
         assert len(response.data["queue"]) == 3
@@ -404,7 +403,7 @@ class TestWalkInQueue:
             created_by=doctor,
         )
         
-        response = client.get("/api/appointments/walk-in-queue")
+        response = client.get("/api/v1/appointments/walk-in-queue")
         
         assert response.status_code == status.HTTP_200_OK
 
@@ -413,7 +412,7 @@ class TestWalkInQueue:
         client = APIClient()
         client.force_authenticate(user=receptionist)
         
-        response = client.get("/api/appointments/walk-in-queue?date=invalid-date")
+        response = client.get("/api/v1/appointments/walk-in-queue?date=invalid-date")
         
         assert response.status_code == status.HTTP_400_BAD_REQUEST
         assert "Invalid date format" in response.data["message"]
@@ -435,7 +434,7 @@ class TestWalkInQueue:
             created_by=receptionist,
         )
         
-        response = client.get("/api/appointments/walk-in-queue")
+        response = client.get("/api/v1/appointments/walk-in-queue")
         
         assert response.status_code == status.HTTP_200_OK
         assert "wait_time_minutes" in response.data["queue"][0]
@@ -459,7 +458,7 @@ class TestWalkInQueue:
                 created_by=receptionist,
             )
         
-        response = client.get("/api/appointments/walk-in-queue")
+        response = client.get("/api/v1/appointments/walk-in-queue")
         
         assert response.status_code == status.HTTP_200_OK
         assert response.data["emergency_count"] == 2

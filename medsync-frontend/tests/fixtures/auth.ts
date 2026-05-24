@@ -1,6 +1,6 @@
 /* eslint-disable react-hooks/rules-of-hooks -- Playwright fixture "use" is not React's use() hook */
 import { test as base } from "@playwright/test";
-import type { E2ECredentials } from "../../e2e/auth";
+import type { E2ECredentials } from "../utils/auth";
 import {
   login,
   getReceptionistCreds,
@@ -9,7 +9,7 @@ import {
   getLabTechCreds,
   getHospitalAdminCreds,
   getSuperAdminCreds,
-} from "../../e2e/auth";
+} from "../utils/auth";
 import type { Role } from "../utils/roles";
 
 const CREDS_GETTERS: Record<Role, () => E2ECredentials | null> = {

@@ -11,6 +11,7 @@ FHIR R4 API for MedSync Interoperability
 All endpoints enforce consent-based access for cross-facility reads.
 """
 
+import logging
 from rest_framework import status
 from rest_framework.decorators import api_view, permission_classes
 from rest_framework.permissions import IsAuthenticated
@@ -18,6 +19,7 @@ from rest_framework.response import Response
 from django.utils import timezone
 from django.db.models import Q
 
+from core.models import AuditLog
 from patients.models import Patient, PatientAdmission
 from records.models import Encounter, Diagnosis, Prescription, Vital, LabOrder, LabResult
 from api.fhir.serializers import (
@@ -37,6 +39,8 @@ from api.utils import (
 )
 from api.audit_logging import audit_log_extended
 from interop.models import Consent, Referral
+
+logger = logging.getLogger(__name__)
 
 _FHIR_ALLOWED_ROLES = (
     "super_admin", "hospital_admin", "doctor", "nurse", "receptionist"
@@ -75,7 +79,7 @@ def _can_access_patient_fhir(request, patient):
             gp = GlobalPatient.objects.get(facility_profiles__patient=patient)
             referral = Referral.objects.filter(
                 global_patient=gp,
-                referred_to_hospital=request.user.hospital,
+                to_facility=request.user.hospital,
                 status__in=['PENDING', 'ACCEPTED']
             ).first()
             if referral:
@@ -106,7 +110,7 @@ def _build_everything_bundle(request, patient):
         patient_resource = FHIRPatientSerializer.serialize(patient)
         entries.append(patient_resource)
     except Exception as e:
-        pass
+        logger.error(f"Failed to serialize FHIR Patient {patient.id}: {e}", exc_info=True)
     
     # If SUMMARY scope, return only patient demographics
     if consent_scope == "SUMMARY":
@@ -116,7 +120,7 @@ def _build_everything_bundle(request, patient):
             action="VIEW",
             resource_type="Patient",
             resource_id=str(patient.id),
-            details=f"FHIR $everything export (SUMMARY scope)"
+            extra_data={"note": "FHIR $everything export (SUMMARY scope)"},
         )
         return bundle, consent_scope, None
     
@@ -126,36 +130,36 @@ def _build_everything_bundle(request, patient):
         for enc in Encounter.objects.filter(patient=patient).order_by('-encounter_date')[:100]:
             try:
                 entries.append(FHIREncounterSerializer.serialize(enc))
-            except Exception:
-                pass
+            except Exception as e:
+                logger.error(f"Failed to serialize FHIR Encounter {enc.id}: {e}", exc_info=True)
         
         # Conditions (Diagnoses)
         for diag in Diagnosis.objects.filter(record__patient=patient).select_related('record').order_by('-record__created_at')[:100]:
             try:
                 entries.append(FHIRConditionSerializer.serialize(diag))
-            except Exception:
-                pass
+            except Exception as e:
+                logger.error(f"Failed to serialize FHIR Condition for diagnosis {diag.id}: {e}", exc_info=True)
         
         # Prescriptions
         for rx in Prescription.objects.filter(record__patient=patient).select_related('record').order_by('-record__created_at')[:100]:
             try:
                 entries.append(FHIRMedicationRequestSerializer.serialize(rx))
-            except Exception:
-                pass
+            except Exception as e:
+                logger.error(f"Failed to serialize FHIR MedicationRequest for prescription {rx.id}: {e}", exc_info=True)
         
         # Vitals
         for vital in Vital.objects.filter(record__patient=patient).select_related('record').order_by('-record__created_at')[:100]:
             try:
                 entries.append(FHIRObservationSerializer.serialize_vital(vital))
-            except Exception:
-                pass
+            except Exception as e:
+                logger.error(f"Failed to serialize FHIR Observation for vital {vital.id}: {e}", exc_info=True)
         
         # Lab Results
         for lab_result in LabResult.objects.filter(record__patient=patient).select_related('record').order_by('-result_date')[:100]:
             try:
                 entries.append(FHIRObservationSerializer.serialize_lab_result(lab_result))
-            except Exception:
-                pass
+            except Exception as e:
+                logger.error(f"Failed to serialize FHIR Observation for lab result {lab_result.id}: {e}", exc_info=True)
         
         # Diagnostic Reports (Lab Orders)
         for lab_order in LabOrder.objects.filter(record__patient=patient).select_related('record').order_by('-created_at')[:100]:
@@ -163,8 +167,8 @@ def _build_everything_bundle(request, patient):
                 # Get associated results
                 results = LabResult.objects.filter(lab_order=lab_order)
                 entries.append(FHIRDiagnosticReportSerializer.serialize(lab_order, results=results))
-            except Exception:
-                pass
+            except Exception as e:
+                logger.error(f"Failed to serialize FHIR DiagnosticReport for lab order {lab_order.id}: {e}", exc_info=True)
     
     except Exception as e:
         return None, consent_scope, f"Error building bundle: {str(e)}"
@@ -201,11 +205,19 @@ def fhir_patient_read(request, pk):
     
     patient = get_patient_queryset(request.user, get_effective_hospital(request)).filter(id=pk).first()
     if not patient:
+        if Patient.objects.filter(id=pk).exists():
+            return Response(
+                {
+                    "resourceType": "OperationOutcome",
+                    "issue": [{"severity": "error", "code": "forbidden", "diagnostics": "Cross-facility access denied"}],
+                },
+                status=status.HTTP_403_FORBIDDEN,
+            )
         return Response(
             {"resourceType": "OperationOutcome", "issue": [{"severity": "error", "code": "not-found"}]},
             status=status.HTTP_404_NOT_FOUND
         )
-    
+
     can_access, error = _can_access_patient_fhir(request, patient)
     if not can_access:
         return Response(
@@ -511,6 +523,35 @@ def hl7_adt_list(request):
 # FHIR Push (Outbound HIE)
 # ============================================================================
 
+def _is_safe_fhir_url(url: str) -> bool:
+    import urllib.parse
+    import socket
+    import ipaddress
+
+    try:
+        parsed = urllib.parse.urlparse(url)
+        if parsed.scheme not in ('http', 'https'):
+            return False
+        
+        hostname = parsed.hostname
+        if not hostname:
+            return False
+        
+        # Resolve hostname to IP to prevent loopback/private range bypasses
+        try:
+            ip = socket.gethostbyname(hostname)
+        except socket.gaierror:
+            return False
+        
+        ip_obj = ipaddress.ip_address(ip)
+        if ip_obj.is_loopback or ip_obj.is_private or ip_obj.is_link_local:
+            return False
+            
+        return True
+    except Exception:
+        return False
+
+
 @api_view(["POST"])
 @permission_classes([IsAuthenticated])
 def fhir_push(request):
@@ -533,6 +574,13 @@ def fhir_push(request):
     if not target_url or not resource_type or not resource_id:
         return Response(
             {"message": "target_url, resource_type, and resource_id required"},
+            status=status.HTTP_400_BAD_REQUEST,
+        )
+
+    # SSRF Validation check
+    if not _is_safe_fhir_url(target_url):
+        return Response(
+            {"message": "Invalid or unsafe target_url. Only public HTTP/HTTPS endpoints are allowed."},
             status=status.HTTP_400_BAD_REQUEST,
         )
     
@@ -615,7 +663,7 @@ def fhir_push(request):
                 action="CREATE",
                 resource_type=resource_type,
                 resource_id=str(resource_id),
-                details=f"Pushed {resource_type} to {target_url}"
+                extra_data={"note": f"Pushed {resource_type} to {target_url}"},
             )
             return Response(
                 {"message": "Pushed successfully", "status": resp.status},
@@ -716,26 +764,28 @@ def fhir_condition_list(request):
     
     # Filter by patient if provided
     patient_id = request.query_params.get('patient')
-    conditions = get_medical_record_queryset(request.user, effective_hospital=get_effective_hospital(request))
+    records = get_medical_record_queryset(request.user, effective_hospital=get_effective_hospital(request))
     
     if patient_id:
-        conditions = conditions.filter(patient_id=patient_id)
+        records = records.filter(patient_id=patient_id)
+    
+    diagnoses_qs = Diagnosis.objects.filter(record__in=records)
+    total_count = diagnoses_qs.count()
+    diagnoses = diagnoses_qs.select_related('record', 'record__patient').order_by('-record__created_at')[:100]
     
     entries = []
-    for mr in conditions[:100]:
-        diag = Diagnosis.objects.filter(record=mr).first()
-        if diag:
-            resource = FHIRConditionSerializer.serialize(diag)
-            entries.append({
-                "fullUrl": f"http://{request.get_host()}/api/v1/fhir/Condition/{diag.id}",
-                "resource": resource,
-                "search": {"mode": "match"}
-            })
+    for diag in diagnoses:
+        resource = FHIRConditionSerializer.serialize(diag)
+        entries.append({
+            "fullUrl": f"http://{request.get_host()}/api/v1/fhir/Condition/{diag.id}",
+            "resource": resource,
+            "search": {"mode": "match"}
+        })
     
     bundle = {
         "resourceType": "Bundle",
         "type": "searchset",
-        "total": conditions.count(),
+        "total": total_count,
         "entry": entries
     }
     

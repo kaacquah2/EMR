@@ -20,6 +20,12 @@ from records.models import (
     Encounter,
     EncounterDraft,
     ShiftHandover,
+    Immunisation,
+    ProcedureNote,
+    ChronicDiseaseProgram,
+    NotifiableDisease,
+    Equipment,
+    FamilyLink,
 )
 from api.models import DrugStock, Dispensation, StockMovement, StockAlert, ModelVersion
 
@@ -138,6 +144,7 @@ class EncounterWorklistSerializer(serializers.ModelSerializer):
 
 
 class PatientSerializer(serializers.ModelSerializer):
+    patient_id = serializers.SerializerMethodField()
     allergies = serializers.SerializerMethodField()
     registered_at = serializers.SerializerMethodField()
     global_patient_id = serializers.SerializerMethodField()
@@ -224,6 +231,7 @@ class AllergySerializer(serializers.ModelSerializer):
 
 
 class DiagnosisSerializer(serializers.ModelSerializer):
+    diagnosis_id = serializers.SerializerMethodField()
     record_id = serializers.SerializerMethodField()
     created_at = serializers.SerializerMethodField()
     created_by_name = serializers.SerializerMethodField()
@@ -348,11 +356,156 @@ class VitalSerializer(serializers.ModelSerializer):
         return obj.record.created_at.isoformat()
 
 
+class ImmunisationSerializer(serializers.ModelSerializer):
+    record_id = serializers.SerializerMethodField()
+    created_at = serializers.SerializerMethodField()
+
+    class Meta:
+        model = Immunisation
+        fields = [
+            "id",
+            "record_id",
+            "vaccine_name",
+            "dose_number",
+            "lot_number",
+            "expiry_date",
+            "site",
+            "route",
+            "notes",
+            "created_at",
+        ]
+
+    def get_record_id(self, obj):
+        return str(obj.record_id)
+
+    def get_created_at(self, obj):
+        return obj.record.created_at.isoformat()
+
+
+class ProcedureNoteSerializer(serializers.ModelSerializer):
+    record_id = serializers.SerializerMethodField()
+    created_at = serializers.SerializerMethodField()
+    surgeon_name = serializers.CharField(source="surgeon.full_name", read_only=True)
+    assistant_name = serializers.CharField(source="assistant.full_name", read_only=True, allow_null=True)
+
+    class Meta:
+        model = ProcedureNote
+        fields = [
+            "id",
+            "record_id",
+            "procedure_name",
+            "surgeon",
+            "surgeon_name",
+            "assistant",
+            "assistant_name",
+            "anaesthesia_type",
+            "findings",
+            "procedure_details",
+            "complications",
+            "post_op_instructions",
+            "created_at",
+        ]
+
+    def get_record_id(self, obj):
+        return str(obj.record_id)
+
+    def get_created_at(self, obj):
+        return obj.record.created_at.isoformat()
+
+
+class ChronicDiseaseProgramSerializer(serializers.ModelSerializer):
+    enrolled_by_name = serializers.CharField(source="enrolled_by.full_name", read_only=True)
+
+    class Meta:
+        model = ChronicDiseaseProgram
+        fields = [
+            "id",
+            "patient",
+            "hospital",
+            "disease_name",
+            "enrolled_at",
+            "enrolled_by",
+            "enrolled_by_name",
+            "status",
+            "last_review_date",
+            "next_review_date",
+            "notes",
+        ]
+
+
+class NotifiableDiseaseSerializer(serializers.ModelSerializer):
+    record_id = serializers.SerializerMethodField()
+    created_at = serializers.SerializerMethodField()
+
+    class Meta:
+        model = NotifiableDisease
+        fields = [
+            "id",
+            "record_id",
+            "disease_name",
+            "ghs_case_id",
+            "is_confirmed",
+            "reported_to_ghs",
+            "reported_at",
+            "outcome",
+            "created_at",
+        ]
+
+    def get_record_id(self, obj):
+        return str(obj.record_id)
+
+    def get_created_at(self, obj):
+        return obj.record.created_at.isoformat()
+
+
+class EquipmentSerializer(serializers.ModelSerializer):
+    ward_name = serializers.CharField(source="current_ward.ward_name", read_only=True, allow_null=True)
+
+    class Meta:
+        model = Equipment
+        fields = [
+            "id",
+            "hospital",
+            "name",
+            "serial_number",
+            "category",
+            "status",
+            "current_ward",
+            "ward_name",
+            "last_maintenance_at",
+        ]
+
+
+class FamilyLinkSerializer(serializers.ModelSerializer):
+    from_patient_name = serializers.CharField(source="from_patient.full_name", read_only=True)
+    to_patient_name = serializers.CharField(source="to_patient.full_name", read_only=True)
+
+    class Meta:
+        model = FamilyLink
+        fields = [
+            "id",
+            "from_patient",
+            "from_patient_name",
+            "to_patient",
+            "to_patient_name",
+            "relationship_type",
+            "is_emergency_contact",
+            "notes",
+        ]
+
+
 class MedicalRecordSerializer(serializers.ModelSerializer):
+    record_id = serializers.SerializerMethodField()
+    patient_id = serializers.SerializerMethodField()
+    hospital_id = serializers.SerializerMethodField()
+    amended_record_id = serializers.SerializerMethodField()
     diagnosis = serializers.SerializerMethodField()
     prescription = serializers.SerializerMethodField()
     lab_result = serializers.SerializerMethodField()
     vital = serializers.SerializerMethodField()
+    immunisation = serializers.SerializerMethodField()
+    procedure_note = serializers.SerializerMethodField()
+    notifiable_disease = serializers.SerializerMethodField()
     created_at = serializers.DateTimeField(read_only=True)
     record_version = serializers.IntegerField(read_only=True)
 
@@ -373,6 +526,9 @@ class MedicalRecordSerializer(serializers.ModelSerializer):
             "prescription",
             "lab_result",
             "vital",
+            "immunisation",
+            "procedure_note",
+            "notifiable_disease",
         ]
 
     def get_record_id(self, obj):
@@ -407,6 +563,21 @@ class MedicalRecordSerializer(serializers.ModelSerializer):
             return VitalSerializer(obj.vital).data
         return None
 
+    def get_immunisation(self, obj):
+        if obj.record_type == "immunisation" and hasattr(obj, "immunisation"):
+            return ImmunisationSerializer(obj.immunisation).data
+        return None
+
+    def get_procedure_note(self, obj):
+        if obj.record_type == "procedure_note" and hasattr(obj, "procedure_note"):
+            return ProcedureNoteSerializer(obj.procedure_note).data
+        return None
+
+    def get_notifiable_disease(self, obj):
+        if obj.record_type == "notifiable_disease" and hasattr(obj, "notifiable_disease"):
+            return NotifiableDiseaseSerializer(obj.notifiable_disease).data
+        return None
+
 
 class GlobalPatientSerializer(serializers.ModelSerializer):
     global_patient_id = serializers.SerializerMethodField()
@@ -417,6 +588,7 @@ class GlobalPatientSerializer(serializers.ModelSerializer):
         fields = [
             "global_patient_id",
             "national_id",
+            "ghana_health_id",
             "first_name",
             "last_name",
             "full_name",
@@ -1018,18 +1190,19 @@ class InvoiceCreateSerializer(serializers.ModelSerializer):
         if request:
             validated_data["created_by"] = request.user
         
-        # Calculate total amount
-        total_amount = sum(item["quantity"] * item["unit_price"] for item in items_data)
-        validated_data["total_amount"] = total_amount
+        # Calculate total amount in cents
+        total_amount_cents = sum(item["quantity"] * item["unit_price"] for item in items_data)
+        validated_data["amount_cents"] = total_amount_cents
         validated_data["status"] = "pending"
 
         with transaction.atomic():
             invoice = Invoice.objects.create(**validated_data)
+            # Generate invoice number
+            invoice.invoice_number = f"INV-{str(invoice.id)[:8].upper()}"
+            invoice.save()
             for item_data in items_data:
-                line_total = item_data["quantity"] * item_data["unit_price"]
                 InvoiceItem.objects.create(
                     invoice=invoice,
-                    line_total=line_total,
                     **item_data
                 )
         return invoice

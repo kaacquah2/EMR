@@ -38,7 +38,52 @@ def _parse_rate(rate):
 # CUSTOM THROTTLE CLASSES
 # ============================================================================
 
-class LoginThrottle(AnonRateThrottle):
+class SafeRateLimitHeadersMixin:
+    def __init__(self):
+        scope = getattr(self, 'scope', None)
+        if scope:
+            from rest_framework.settings import api_settings
+            if api_settings.DEFAULT_THROTTLE_RATES and scope in api_settings.DEFAULT_THROTTLE_RATES:
+                self.rate = api_settings.DEFAULT_THROTTLE_RATES[scope]
+        super().__init__()
+
+    def allow_request(self, request, view):
+        self.key = self.get_cache_key(request, view)
+        if self.key is None:
+            history_len = 0
+        else:
+            history = self.cache.get(self.key, [])
+            now = self.timer()
+            duration = getattr(self, 'duration', 3600)
+            history_len = len([t for t in history if t > now - duration])
+            
+        allowed = super().allow_request(request, view)
+        
+        limit = getattr(self, 'num_requests', None)
+        if limit is not None:
+            remaining = max(0, limit - history_len)
+            
+            # Get underlying Django request if request is a DRF Request wrapper
+            django_request = getattr(request, '_request', request)
+            if not hasattr(django_request, '_throttle_info'):
+                django_request._throttle_info = []
+            django_request._throttle_info.append({
+                'limit': limit,
+                'remaining': remaining,
+                'retry_after': getattr(self, 'wait', None)
+            })
+        return allowed
+
+
+class SafeAnonRateThrottle(SafeRateLimitHeadersMixin, AnonRateThrottle):
+    pass
+
+
+class SafeUserRateThrottle(SafeRateLimitHeadersMixin, UserRateThrottle):
+    pass
+
+
+class LoginThrottle(SafeAnonRateThrottle):
     """
     Rate limit login attempts: 5 attempts per 15 minutes per IP address.
     PHASE 2: Prevents brute-force password attacks.
@@ -57,7 +102,7 @@ class LoginThrottle(AnonRateThrottle):
         return f"throttle_login_{ip}"
 
 
-class MFAThrottle(AnonRateThrottle):
+class MFAThrottle(SafeAnonRateThrottle):
     """
     Rate limit MFA verification: 3 attempts per 5 minutes per IP address.
     PHASE 2 (Task 5): Prevents MFA brute-force attacks.
@@ -74,7 +119,7 @@ class MFAThrottle(AnonRateThrottle):
         return f"throttle_mfa_{ip}"
 
 
-class MFAUserThrottle(UserRateThrottle):
+class MFAUserThrottle(SafeUserRateThrottle):
     """
     **MEDIUM-2 FIX:** Per-user MFA rate limiting.
 
@@ -155,7 +200,7 @@ class MFAUserThrottle(UserRateThrottle):
             return f"throttle_mfa_token_{token_hash}"
 
 
-class PasswordResetThrottle(AnonRateThrottle):
+class PasswordResetThrottle(SafeAnonRateThrottle):
     """
     Rate limit password reset requests: 3 per hour per IP address.
     PHASE 2: Prevents password reset spam and enumeration attacks.
@@ -169,7 +214,7 @@ class PasswordResetThrottle(AnonRateThrottle):
         return f"throttle_password_reset_{ip}"
 
 
-class PatientSearchThrottle(UserRateThrottle):
+class PatientSearchThrottle(SafeUserRateThrottle):
     """
     Rate limit patient search: 100 requests per hour per authenticated user.
     PHASE 2: Prevents enumeration attacks (guessing patient IDs).
@@ -183,7 +228,7 @@ class PatientSearchThrottle(UserRateThrottle):
         return f"throttle_patient_search_{request.user.id}"
 
 
-class AdminEndpointThrottle(UserRateThrottle):
+class AdminEndpointThrottle(SafeUserRateThrottle):
     """
     Rate limit admin endpoints: 50 requests per hour per admin user.
     PHASE 2: Prevents admin action spam.
@@ -199,7 +244,7 @@ class AdminEndpointThrottle(UserRateThrottle):
         return f"throttle_admin_{request.user.id}"
 
 
-class ExportThrottle(UserRateThrottle):
+class ExportThrottle(SafeUserRateThrottle):
     """
     Rate limit bulk export/report generation: 5 per day per user.
     PHASE 2: Prevents resource exhaustion from large exports.
@@ -213,7 +258,7 @@ class ExportThrottle(UserRateThrottle):
         return f"throttle_export_{request.user.id}"
 
 
-class CrossFacilityAccessThrottle(UserRateThrottle):
+class CrossFacilityAccessThrottle(SafeUserRateThrottle):
     """
     Rate limit cross-facility/break-glass access: 10 per hour per user.
     PHASE 2: Monitors access to sensitive cross-hospital data.
@@ -227,7 +272,7 @@ class CrossFacilityAccessThrottle(UserRateThrottle):
         return f"throttle_cross_facility_{request.user.id}"
 
 
-class AIEndpointThrottle(UserRateThrottle):
+class AIEndpointThrottle(SafeUserRateThrottle):
     """
     Rate limit AI endpoints: 20 requests per hour per user.
     PHASE 2 (HIGH-PRIORITY): Prevents abuse of computationally expensive AI operations.
@@ -242,7 +287,7 @@ class AIEndpointThrottle(UserRateThrottle):
         return f"throttle_ai_{request.user.id}"
 
 
-class AIThrottle(UserRateThrottle):
+class AIThrottle(SafeUserRateThrottle):
     """
     Daily rate limit for AI operations to save credits.
     Controlled by 'ai' rate in settings.
@@ -255,7 +300,7 @@ class AIThrottle(UserRateThrottle):
         return f"throttle_ai_daily_{request.user.id}"
 
 
-class AIHospitalThrottle(UserRateThrottle):
+class AIHospitalThrottle(SafeUserRateThrottle):
     """
     Rate limit AI endpoints: 200 requests per hour per hospital.
     PHASE 2 (HIGH-PRIORITY): Additional hospital-level rate limiting to prevent

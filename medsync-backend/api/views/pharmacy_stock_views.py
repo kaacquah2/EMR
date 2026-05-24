@@ -483,9 +483,9 @@ def dispense_confirm(request, prescription_id):
     except Prescription.DoesNotExist:
         return Response({'error': 'Prescription not found'}, status=status.HTTP_404_NOT_FOUND)
     
-    if prescription.status != 'dispensing':
+    if prescription.status not in ('pending', 'dispensing', 'partially_dispensed'):
         return Response(
-            {'error': f'Prescription status must be "dispensing", not "{prescription.status}"'},
+            {'error': f'Prescription status must be pending, dispensing, or partially_dispensed, not "{prescription.status}"'},
             status=status.HTTP_400_BAD_REQUEST
         )
     
@@ -499,13 +499,29 @@ def dispense_confirm(request, prescription_id):
             )
         
         with transaction.atomic():
+            # Get cumulative dispensed quantity
+            cumulative_dispensed = sum(d.quantity_dispensed for d in prescription.dispensations.all())
+            total_after_dispense = cumulative_dispensed + quantity
+            
+            # Determine new status
+            if total_after_dispense >= prescription.prescribed_quantity:
+                new_status = 'dispensed'
+            else:
+                new_status = 'partially_dispensed'
+            
+            # Set transient fields for the post_save signal
+            prescription._dispensing_quantity = quantity
+            prescription._dispensing_notes = data.get('notes', '')
+            
             # Update prescription
-            prescription.status = 'dispensed'
+            prescription.status = new_status
+            prescription.dispense_status = new_status
             prescription.dispensed_by = request.user
-            prescription.dispensed_quantity = quantity
+            prescription.dispensed_quantity = total_after_dispense
             prescription.dispense_notes = data.get('notes', '')
+            prescription.dispensed_at = timezone.now()
             prescription.save(update_fields=[
-                'status', 'dispensed_by', 'dispensed_quantity', 'dispense_notes'
+                'status', 'dispense_status', 'dispensed_by', 'dispensed_quantity', 'dispense_notes', 'dispensed_at'
             ])
             
             # Audit log
@@ -519,14 +535,14 @@ def dispense_confirm(request, prescription_id):
                     'drug': prescription.drug_name,
                     'patient_id': str(prescription.patient.id) if prescription.patient else None,
                     'quantity': quantity,
+                    'cumulative_quantity': total_after_dispense,
                 }
             )
             
-            # Signal will trigger auto-deduction
             return Response({
                 'id': str(prescription.id),
-                'status': 'dispensed',
-                'message': 'Prescription dispensed successfully'
+                'status': new_status,
+                'message': f'Prescription dispensed successfully (Qty: {quantity}, Cumulative: {total_after_dispense}/{prescription.prescribed_quantity})'
             })
     
     except ValueError as e:

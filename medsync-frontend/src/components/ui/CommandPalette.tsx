@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useRef, useCallback } from "react";
+import { useState, useEffect, useRef, useCallback, useMemo } from "react";
 import { useRouter } from "next/navigation";
 import { 
   Search, 
@@ -15,6 +15,7 @@ import {
   X
 } from "lucide-react";
 import { useAuth } from "@/lib/auth-context";
+import { useApi } from "@/hooks/use-api";
 
 interface Command {
   id: string;
@@ -102,6 +103,60 @@ export function CommandPalette() {
     cmd.label.toLowerCase().includes(query.toLowerCase())
   );
 
+  const [searchResults, setSearchResults] = useState<Command[]>([]);
+  const [isSearching, setIsSearching] = useState(false);
+  const api = useApi();
+
+  // Async search for patients, ICD-10, and drugs
+  useEffect(() => {
+    if (query.length < 2) {
+      setSearchResults([]);
+      return;
+    }
+
+    const timer = setTimeout(async () => {
+      setIsSearching(true);
+      try {
+        const [patients, icd10, drugs] = await Promise.all([
+          api.get<{ data: { patient_id: string; full_name: string; ghana_health_id: string }[] }>(`/patients/search?q=${query}`).catch(() => ({ data: [] })),
+          api.get<{ data: { code: string; description: string }[] }>(`/records/icd10-autocomplete?q=${query}`).catch(() => ({ data: [] })),
+          api.get<{ data: { name: string }[] }>(`/records/drug-autocomplete?q=${query}`).catch(() => ({ data: [] })),
+        ]);
+
+        const patientCommands: Command[] = (patients.data || []).slice(0, 3).map(p => ({
+          id: `patient-${p.patient_id}`,
+          label: `Patient: ${p.full_name} (${p.ghana_health_id})`,
+          icon: <User className="h-4 w-4 text-indigo-500" />,
+          action: () => router.push(`/patients/${p.patient_id}`),
+        }));
+
+        const icd10Commands: Command[] = (icd10.data || []).slice(0, 3).map(i => ({
+          id: `icd10-${i.code}`,
+          label: `ICD-10: ${i.code} - ${i.description}`,
+          icon: <FileText className="h-4 w-4 text-amber-500" />,
+          action: () => router.push(`/patients/search?icd10=${i.code}`),
+        }));
+
+        const drugCommands: Command[] = (drugs.data || []).slice(0, 3).map(d => ({
+          id: `drug-${d.name}`,
+          label: `Drug: ${d.name}`,
+          icon: <Activity className="h-4 w-4 text-emerald-500" />,
+          action: () => router.push(`/pharmacy/search?q=${d.name}`),
+        }));
+
+        setSearchResults([...patientCommands, ...icd10Commands, ...drugCommands]);
+      } catch (error) {
+        console.error("Search failed:", error);
+      } finally {
+        setIsSearching(false);
+      }
+    }, 300);
+
+    return () => clearTimeout(timer);
+  }, [query, api, router]);
+
+  const allResults = useMemo(() => [...filteredCommands, ...searchResults], [filteredCommands, searchResults]);
+
   // Keyboard shortcuts
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -136,31 +191,30 @@ export function CommandPalette() {
       if (e.key === "ArrowDown") {
         e.preventDefault();
         setSelectedIndex((prev) =>
-          prev < filteredCommands.length - 1 ? prev + 1 : 0
+          prev < allResults.length - 1 ? prev + 1 : 0
         );
       } else if (e.key === "ArrowUp") {
         e.preventDefault();
         setSelectedIndex((prev) =>
-          prev > 0 ? prev - 1 : filteredCommands.length - 1
+          prev > 0 ? prev - 1 : allResults.length - 1
         );
-      } else if (e.key === "Enter" && filteredCommands[selectedIndex]) {
+      } else if (e.key === "Enter" && allResults[selectedIndex]) {
         e.preventDefault();
-        filteredCommands[selectedIndex].action();
+        allResults[selectedIndex].action();
         setIsOpen(false);
       }
     },
-    [filteredCommands, selectedIndex]
+    [allResults, selectedIndex]
   );
 
   // Reset selection when filteredCommands length changes
-  const prevFilteredLengthRef = useRef(filteredCommands.length);
+  const prevFilteredLengthRef = useRef(allResults.length);
   useEffect(() => {
-    if (prevFilteredLengthRef.current !== filteredCommands.length) {
-      prevFilteredLengthRef.current = filteredCommands.length;
-      // eslint-disable-next-line react-hooks/set-state-in-effect
+    if (prevFilteredLengthRef.current !== allResults.length) {
+      prevFilteredLengthRef.current = allResults.length;
       setSelectedIndex(0);
     }
-  }, [filteredCommands.length]);
+  }, [allResults.length]);
 
   if (!isOpen) return null;
 
@@ -183,10 +237,13 @@ export function CommandPalette() {
             value={query}
             onChange={(e) => setQuery(e.target.value)}
             onKeyDown={handleKeyNavigation}
-            placeholder="Search commands..."
+            placeholder="Search commands, patients, ICD-10..."
             className="flex-1 bg-transparent outline-none text-foreground placeholder:text-muted-foreground"
             data-testid="command-palette-input"
           />
+          {isSearching && (
+            <div className="h-4 w-4 animate-spin rounded-full border-2 border-primary border-t-transparent mr-2" />
+          )}
           <button
             onClick={() => setIsOpen(false)}
             className="p-1 hover:bg-muted rounded"
@@ -197,12 +254,12 @@ export function CommandPalette() {
 
         {/* Commands list */}
         <div className="max-h-80 overflow-y-auto py-2">
-          {filteredCommands.length === 0 ? (
+          {allResults.length === 0 ? (
             <div className="px-4 py-8 text-center text-muted-foreground">
-              No commands found
+              {query.length < 2 ? "Type to search..." : "No results found"}
             </div>
           ) : (
-            filteredCommands.map((cmd, index) => (
+            allResults.map((cmd, index) => (
               <button
                 key={cmd.id}
                 onClick={() => {
@@ -217,7 +274,7 @@ export function CommandPalette() {
                 data-testid={`command-${cmd.id}`}
               >
                 <span className="text-muted-foreground">{cmd.icon}</span>
-                <span className="flex-1">{cmd.label}</span>
+                <span className="flex-1 line-clamp-1">{cmd.label}</span>
                 {cmd.shortcut && (
                   <kbd className="hidden sm:inline-block px-2 py-0.5 text-xs bg-muted rounded">
                     {cmd.shortcut}

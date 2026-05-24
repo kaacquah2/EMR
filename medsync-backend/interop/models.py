@@ -45,6 +45,30 @@ class GlobalPatient(models.Model):
     updated_at = models.DateTimeField(auto_now=True)
     version = models.IntegerField(default=1)
 
+    # -------------------------------------------------------------------------
+    # DATA RESIDENCY CONTROLS (Ghana Data Protection Act / NDPA 2012)
+    # -------------------------------------------------------------------------
+    data_residency_country = models.CharField(
+        max_length=2,
+        default="GH",
+        db_index=True,
+        help_text=(
+            "ISO 3166-1 alpha-2 country code for the patient's data residency. "
+            "Defaults to 'GH' (Ghana). "
+            "Determines which facilities are allowed to access cross-facility records."
+        ),
+    )
+    data_residency_locked = models.BooleanField(
+        default=False,
+        help_text=(
+            "When True, cross-facility record sharing is restricted to facilities "
+            "within the data_residency_country. Access from outside the residency "
+            "country will be blocked regardless of consent. "
+            "Set True for patients who have explicitly requested data localisation "
+            "or when required by law (e.g. NDPA 2012 § 36 — transfer restriction)."
+        ),
+    )
+
     class Meta:
         indexes = [
             models.Index(fields=["last_name", "first_name"]),
@@ -52,7 +76,9 @@ class GlobalPatient(models.Model):
             models.Index(fields=["ghana_health_id"]),
             models.Index(fields=["nhis_number"]),
             models.Index(fields=["passport_number"]),
+            models.Index(fields=["data_residency_country", "data_residency_locked"]),
         ]
+
 
     @property
     def full_name(self):
@@ -137,11 +163,15 @@ class Referral(models.Model):
     STATUS_ACCEPTED = "ACCEPTED"
     STATUS_REJECTED = "REJECTED"
     STATUS_COMPLETED = "COMPLETED"
+    STATUS_CANCELLED = "CANCELLED"
+    STATUS_EXPIRED = "EXPIRED"
     STATUS_CHOICES = [
         (STATUS_PENDING, "Pending"),
         (STATUS_ACCEPTED, "Accepted"),
         (STATUS_REJECTED, "Rejected"),
         (STATUS_COMPLETED, "Completed"),
+        (STATUS_CANCELLED, "Cancelled"),
+        (STATUS_EXPIRED, "Expired"),
     ]
 
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
@@ -173,6 +203,12 @@ class Referral(models.Model):
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
     version = models.IntegerField(default=1, help_text="Version for optimistic locking")
+
+    def is_expired(self) -> bool:
+        """Check if referral has expired (valid for 30 days)."""
+        from django.utils import timezone
+        from datetime import timedelta
+        return timezone.now() - self.created_at > timedelta(days=30)
 
     class Meta:
         indexes = [models.Index(fields=["to_facility", "status"])]

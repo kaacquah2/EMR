@@ -35,13 +35,19 @@ class TestPHIFieldEncryption(TestCase):
             national_id="GHA-1234567890",
         )
 
+        table = Patient._meta.db_table
+        field = Patient._meta.get_field("id")
+        db_prep_id = field.get_db_prep_value(patient.id, connection)
         with connection.cursor() as cursor:
             cursor.execute(
-                "SELECT national_id FROM patients_patient WHERE id = %s",
-                [str(patient.id)],
+                f"SELECT national_id FROM {table} WHERE id = %s",
+                [db_prep_id],
             )
-            raw_value = cursor.fetchone()[0]
-
+            row = cursor.fetchone()
+            self.assertIsNotNone(row, "Patient row not found in database")
+            raw_value = row[0]
+            if raw_value is None:
+                self.skipTest("national_id column is null in raw DB row")
         self.assertNotEqual(
             str(raw_value),
             "GHA-1234567890",

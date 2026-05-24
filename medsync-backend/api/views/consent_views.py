@@ -20,9 +20,13 @@ def consent_grant(request):
 @api_view(["GET"])
 @permission_classes([IsAuthenticated])
 def consent_list(request):
-    """List consents for a global patient (for audit trail)."""
+    """List consents for a global patient (for audit trail) or all for hospital."""
     global_patient_id = request.GET.get("global_patient_id")
-    consents, err = consent_service.consents_for_global_patient(request, global_patient_id)
+    if global_patient_id:
+        consents, err = consent_service.consents_for_global_patient(request, global_patient_id)
+    else:
+        consents, err = consent_service.list_all_consents(request)
+    
     if err:
         msg, code = err
         return Response({"message": msg}, status=code)

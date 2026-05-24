@@ -13,18 +13,23 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "test:e2e": "playwright test",
+    "test:e2e:smoke": "playwright test tests/workflows/clinical-core.spec.ts",
     "test:e2e:ui": "playwright test --ui"
   },
   "dependencies": {
     "@ducanh2912/next-pwa": "^10",
+    "@sentry/nextjs": "^10.53.1",
     "@types/react-window": "^1.8.8",
+    "clsx": "^2.1.1",
     "lucide-react": "^1.6.0",
     "next": "^16.2.6",
     "qrcode.react": "^4.0.1",
     "react": "19.2.3",
     "react-dom": "19.2.3",
     "react-window": "^2.2.7",
-    "swr": "^2.4.1"
+    "recharts": "^3.8.1",
+    "swr": "^2.4.1",
+    "tailwind-merge": "^3.6.0"
   },
   "devDependencies": {
     "@playwright/test": "^1.58.2",

@@ -97,11 +97,11 @@ def prescription_dispensed_auto_deduct(sender, instance, created=False, **kwargs
     }
     """
     try:
-        # Only process if status is dispensed
-        if instance.status != 'dispensed':
+        # Process if status is dispensed or partially_dispensed
+        if instance.status not in ('dispensed', 'partially_dispensed'):
             return
         
-        # Skip if already dispensed (prevents double-deduction)
+        # Skip if already processed in this flow (prevents double-deduction/recursion)
         if hasattr(instance, '_pharmacy_processed'):
             return
         
@@ -112,18 +112,19 @@ def prescription_dispensed_auto_deduct(sender, instance, created=False, **kwargs
             logger.warning(f"Prescription {instance.pk} missing drug_name or hospital; skipping auto-deduction")
             return
         
-        # Get dispensed_quantity from prescription (set by pharmacy tech)
-        qty_to_dispense = instance.dispensed_quantity or 1
+        # Get dispensed_quantity for this transaction
+        qty_to_dispense = getattr(instance, '_dispensing_quantity', None)
+        if qty_to_dispense is None:
+            # Fallback calculation: target dispensed quantity minus what was already dispensed
+            existing_dispensed_sum = sum(d.quantity_dispensed for d in instance.dispensations.all())
+            target_qty = instance.dispensed_quantity or instance.prescribed_quantity
+            qty_to_dispense = target_qty - existing_dispensed_sum
+            
         if qty_to_dispense <= 0:
-            logger.warning(f"Prescription {instance.pk} has invalid dispensed_quantity: {qty_to_dispense}")
+            logger.info(f"No additional quantity to dispense for prescription {instance.pk}")
             return
         
         with transaction.atomic():
-            # Check if dispensation already exists (idempotency)
-            if Dispensation.objects.filter(prescription=instance).exists():
-                logger.info(f"Dispensation already exists for prescription {instance.pk}; skipping")
-                return
-            
             # Get available stock for this drug at this hospital (FIFO order)
             available_stock = DrugStock.objects.filter(
                 hospital=instance.hospital,
@@ -139,7 +140,7 @@ def prescription_dispensed_auto_deduct(sender, instance, created=False, **kwargs
                 )
                 return
             
-            # Use first (oldest) batch by default; tech can select custom batch via request
+            # Use first (oldest) batch by default
             selected_batch = available_stock.first()
             
             # Deduct from stock
@@ -150,16 +151,30 @@ def prescription_dispensed_auto_deduct(sender, instance, created=False, **kwargs
                 )
                 qty_to_dispense = selected_batch.quantity  # Dispense what's available
             
+            if qty_to_dispense <= 0:
+                logger.warning(f"Available batch quantity is 0 after check for prescription {instance.pk}")
+                return
+
             selected_batch.quantity -= qty_to_dispense
             selected_batch.save(update_fields=['quantity'])
+            
+            # Fallback user if dispensed_by is None
+            from django.contrib.auth import get_user_model
+            User = get_user_model()
+            dispensed_by_user = instance.dispensed_by
+            if not dispensed_by_user:
+                dispensed_by_user = User.objects.filter(is_superuser=True).first()
+                if not dispensed_by_user:
+                    logger.error("No user found to assign as dispenser. Dispensation aborted.")
+                    return
             
             # Create Dispensation record (audit trail linking prescription to batch)
             dispensation = Dispensation.objects.create(
                 prescription=instance,
                 drug_stock=selected_batch,
                 quantity_dispensed=qty_to_dispense,
-                dispensed_by=instance.dispensed_by,
-                batch_notes=instance.dispense_notes or ''
+                dispensed_by=dispensed_by_user,
+                batch_notes=getattr(instance, '_dispensing_notes', '') or instance.dispense_notes or ''
             )
             
             logger.info(
@@ -176,7 +191,7 @@ def prescription_dispensed_auto_deduct(sender, instance, created=False, **kwargs
                 quantity_before=quantity_before,
                 quantity_after=selected_batch.quantity,
                 reason=f"Prescribed for patient {instance.patient.ghana_health_id if instance.patient else 'unknown'}",
-                performed_by=instance.dispensed_by,
+                performed_by=dispensed_by_user,
                 dispensation=dispensation
             )
             
@@ -186,7 +201,7 @@ def prescription_dispensed_auto_deduct(sender, instance, created=False, **kwargs
             
             # Audit logging
             AuditLog.log_action(
-                user=instance.dispensed_by,
+                user=dispensed_by_user,
                 action='DISPENSE_MEDICATION',
                 resource_type='Prescription',
                 resource_id=str(instance.id),

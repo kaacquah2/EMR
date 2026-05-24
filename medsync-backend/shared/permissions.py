@@ -335,6 +335,19 @@ PERMISSION_MATRIX = {
         "hospital_admin": ["GET"],
         "super_admin": ["GET"],
     },
+    "appointments/walk-in": {
+        "receptionist": ["POST"],
+        "nurse": ["POST"],
+        "hospital_admin": ["POST"],
+        "super_admin": ["POST"],
+    },
+    "appointments/walk-in-queue": {
+        "receptionist": ["GET"],
+        "nurse": ["GET"],
+        "doctor": ["GET"],
+        "hospital_admin": ["GET"],
+        "super_admin": ["GET"],
+    },
     "appointments/<pk>": {
         "receptionist": ["GET", "PUT", "PATCH"],
         "hospital_admin": ["GET", "PUT", "PATCH"],
@@ -716,6 +729,7 @@ PERMISSION_MATRIX = {
         "super_admin": ["POST"],
     },
     "appointments/<pk>/unmark-no-show": {
+        "doctor": ["POST"],
         "receptionist": ["POST"],
         "hospital_admin": ["POST"],
         "super_admin": ["POST"],
@@ -766,6 +780,32 @@ PERMISSION_MATRIX = {
     "billing/nhis-claim": {
         "hospital_admin": ["POST"],
         "billing_staff": ["POST"],
+    },
+    "billing/dashboard": {
+        "hospital_admin": ["GET"],
+        "billing_staff": ["GET"],
+        "super_admin": ["GET"],
+    },
+    "billing/invoices/new": {
+        "hospital_admin": ["POST"],
+        "billing_staff": ["POST"],
+        "receptionist": ["POST"],
+        "super_admin": ["POST"],
+    },
+    "billing/invoices/<pk>/pay": {
+        "hospital_admin": ["POST"],
+        "billing_staff": ["POST"],
+        "super_admin": ["POST"],
+    },
+    "billing/invoices/<pk>/submit-nhis": {
+        "hospital_admin": ["POST"],
+        "billing_staff": ["POST"],
+        "super_admin": ["POST"],
+    },
+    "patients/<pk>/billing-history": {
+        "hospital_admin": ["GET"],
+        "billing_staff": ["GET"],
+        "super_admin": ["GET"],
     },
     # Interop / super-admin / nurse advanced / task endpoints
     "superadmin/dashboard-bundle": {"super_admin": ["GET"]},
@@ -924,6 +964,287 @@ PERMISSION_MATRIX = {
         "hospital_admin": ["GET"],
         "super_admin": ["GET"],
     },
+    "auth/setup-totp": {"authenticated": ["POST"]},
+    "auth/passkey/check": {"public": ["POST"]},
+    "encounter-templates": {
+        "doctor": ["GET", "POST"],
+        "hospital_admin": ["GET"],
+        "super_admin": ["GET", "POST"],
+    },
+    "encounter-templates/<uuid:template_id>": {
+        "doctor": ["GET", "PUT", "PATCH", "DELETE"],
+        "hospital_admin": ["GET"],
+        "super_admin": ["GET", "PUT", "PATCH", "DELETE"],
+    },
+    "patients/<uuid:patient_pk>/encounters/<uuid:encounter_id>/apply-template/<uuid:template_id>": {
+        "doctor": ["POST"],
+        "super_admin": ["POST"],
+    },
+    "patients/<pk>/obs-chart": {
+        "doctor": ["GET"],
+        "nurse": ["GET"],
+        "hospital_admin": ["GET"],
+        "super_admin": ["GET"],
+    },
+    "patients/<pk>/chronic-programs": {
+        "doctor": ["GET", "POST"],
+        "nurse": ["GET"],
+        "hospital_admin": ["GET"],
+        "super_admin": ["GET"],
+    },
+    "patients/<pk>/family-links": {
+        "doctor": ["GET", "POST"],
+        "nurse": ["GET"],
+        "hospital_admin": ["GET"],
+        "super_admin": ["GET"],
+    },
+    "records/immunisation": {
+        "doctor": ["POST"],
+        "nurse": ["POST"],
+        "super_admin": ["POST"],
+    },
+    "records/procedure-note": {
+        "doctor": ["POST"],
+        "nurse": ["POST"],
+        "super_admin": ["POST"],
+    },
+    "records/notifiable-disease": {
+        "doctor": ["POST"],
+        "nurse": ["POST"],
+        "super_admin": ["POST"],
+    },
+    "incidents": {
+        "doctor": ["POST"],
+        "nurse": ["POST"],
+        "hospital_admin": ["POST"],
+        "super_admin": ["POST"],
+    },
+    "incidents/list": {
+        "hospital_admin": ["GET"],
+        "super_admin": ["GET"],
+    },
+    "admin/equipment": {
+        "hospital_admin": ["GET", "POST"],
+        "super_admin": ["GET", "POST"],
+    },
+    "admin/analytics/staff-performance": {
+        "hospital_admin": ["GET"],
+        "super_admin": ["GET"],
+    },
+    "superadmin/analytics/network-overview": {
+        "super_admin": ["GET"],
+    },
+    "superadmin/analytics/disease-burden": {
+        "super_admin": ["GET"],
+    },
+    "superadmin/analytics/referral-network": {
+        "super_admin": ["GET"],
+    },
+    "superadmin/gpid-registry/duplicates": {
+        "super_admin": ["GET"],
+    },
+    "doctors/<uuid:doctor_id>/availability": {
+        "receptionist": ["GET"],
+        "doctor": ["GET"],
+        "hospital_admin": ["GET"],
+        "super_admin": ["GET"],
+    },
+    "departments/<uuid:department_id>/doctors": {
+        "receptionist": ["GET"],
+        "doctor": ["GET"],
+        "hospital_admin": ["GET"],
+        "super_admin": ["GET"],
+    },
+    "fhir/Patient/<pk>/$everything": {
+        "doctor": ["GET"],
+        "hospital_admin": ["GET"],
+        "super_admin": ["GET"],
+    },
+    "fhir/DiagnosticReport/<pk>": {
+        "doctor": ["GET"],
+        "hospital_admin": ["GET"],
+        "super_admin": ["GET"],
+    },
+    "superadmin/security/alerts": {
+        "super_admin": ["GET"],
+    },
+    "global-patients/accessible/": {
+        "doctor": ["GET"],
+        "hospital_admin": ["GET"],
+        "super_admin": ["GET"],
+    },
+    "referrals/outgoing": {
+        "doctor": ["GET"],
+        "hospital_admin": ["GET"],
+        "super_admin": ["GET"],
+    },
+    "referrals/mine": {
+        "doctor": ["GET"],
+    },
+    "referrals/<pk>/accept": {
+        "doctor": ["POST"],
+        "super_admin": ["POST"],
+    },
+    "referrals/<pk>/complete": {
+        "doctor": ["POST"],
+        "super_admin": ["POST"],
+    },
+    "ward/medication-schedule": {
+        "nurse": ["GET"],
+        "doctor": ["GET"],
+        "super_admin": ["GET"],
+    },
+    "prescriptions/<uuid:prescription_id>/administer": {
+        "nurse": ["POST"],
+        "super_admin": ["POST"],
+    },
+    "batch-operations/summary": {
+        "hospital_admin": ["GET"],
+        "super_admin": ["GET"],
+    },
+    "superadmin/ai-models": {
+        "super_admin": ["GET"],
+    },
+    "superadmin/ai-models/retrain": {
+        "super_admin": ["POST"],
+    },
+    "superadmin/ai-models/<uuid:pk>": {
+        "super_admin": ["GET"],
+    },
+    "superadmin/ai-models/<uuid:pk>/approve": {
+        "super_admin": ["POST"],
+    },
+    "superadmin/ai-models/retrain/<str:task_id>/status": {
+        "super_admin": ["GET"],
+    },
+    "ai/antibiotic-guidance": {
+        "doctor": ["POST"],
+        "super_admin": ["POST"],
+    },
+    "ai/no-show-risk": {
+        "receptionist": ["POST"],
+        "hospital_admin": ["POST"],
+        "super_admin": ["POST"],
+    },
+    "admin/ai/enable": {
+        "hospital_admin": ["POST"],
+        "super_admin": ["POST"],
+    },
+    "admin/ai/status": {
+        "hospital_admin": ["GET"],
+        "super_admin": ["GET"],
+    },
+    "admin/ai/history": {
+        "hospital_admin": ["GET"],
+        "super_admin": ["GET"],
+    },
+    "admin/ai/disable": {
+        "hospital_admin": ["POST"],
+        "super_admin": ["POST"],
+    },
+    "admin/ai/deployment/status": {
+        "hospital_admin": ["GET"],
+        "super_admin": ["GET"],
+    },
+    "admin/ai/deployment/approve": {
+        "hospital_admin": ["POST"],
+        "super_admin": ["POST"],
+    },
+    "admin/ai/deployment/<uuid:approval_id>/revoke": {
+        "hospital_admin": ["POST"],
+        "super_admin": ["POST"],
+    },
+    "admin/ai/recommendations/<uuid:patient_id>/audit-trail": {
+        "hospital_admin": ["GET"],
+        "super_admin": ["GET"],
+    },
+    "admin/ai/performance-metrics": {
+        "hospital_admin": ["GET"],
+        "super_admin": ["GET"],
+    },
+    "admin/bed-management": {
+        "hospital_admin": ["GET"],
+        "super_admin": ["GET"],
+    },
+    "admissions/<uuid:admission_id>/transfer": {
+        "doctor": ["POST"],
+        "nurse": ["POST"],
+        "hospital_admin": ["POST"],
+        "super_admin": ["POST"],
+    },
+    "encounters/<uuid:encounter_id>/cds-alerts": {
+        "doctor": ["GET"],
+        "nurse": ["GET"],
+        "super_admin": ["GET"],
+    },
+    "cds-alerts/<uuid:alert_id>": {
+        "doctor": ["GET"],
+        "nurse": ["GET"],
+        "super_admin": ["GET"],
+    },
+    "cds-alerts/<uuid:alert_id>/acknowledge": {
+        "doctor": ["POST"],
+        "nurse": ["POST"],
+        "super_admin": ["POST"],
+    },
+    "pharmacy/stock/": {
+        "pharmacy_technician": ["GET", "POST"],
+        "hospital_admin": ["GET"],
+        "super_admin": ["GET"],
+    },
+    "pharmacy/stock/<uuid:stock_id>/": {
+        "pharmacy_technician": ["GET", "PUT", "PATCH", "DELETE"],
+        "hospital_admin": ["GET"],
+        "super_admin": ["GET"],
+    },
+    "pharmacy/stock/<uuid:stock_id>/adjust/": {
+        "pharmacy_technician": ["POST"],
+        "hospital_admin": ["POST"],
+        "super_admin": ["POST"],
+    },
+    "pharmacy/dispensations/": {
+        "pharmacy_technician": ["GET"],
+        "hospital_admin": ["GET"],
+        "super_admin": ["GET"],
+    },
+    "pharmacy/reports/low-stock/": {
+        "pharmacy_technician": ["GET"],
+        "hospital_admin": ["GET"],
+        "super_admin": ["GET"],
+    },
+    "pharmacy/reports/expiring/": {
+        "pharmacy_technician": ["GET"],
+        "hospital_admin": ["GET"],
+        "super_admin": ["GET"],
+    },
+    "pharmacy/tasks/check-expiry/": {
+        "pharmacy_technician": ["POST"],
+        "hospital_admin": ["POST"],
+        "super_admin": ["POST"],
+    },
+    "pharmacy/prescriptions/<uuid:prescription_id>/dispense-confirm/": {
+        "pharmacy_technician": ["POST"],
+        "hospital_admin": ["POST"],
+        "super_admin": ["POST"],
+    },
+    "mar/ward/<uuid:ward_id>/due": {
+        "nurse": ["GET"],
+        "doctor": ["GET"],
+        "super_admin": ["GET"],
+    },
+    "mar/administer/<uuid:schedule_id>": {
+        "nurse": ["POST"],
+        "super_admin": ["POST"],
+    },
+    "mar/hold/<uuid:schedule_id>": {
+        "nurse": ["POST"],
+        "super_admin": ["POST"],
+    },
+    "mar/patient/<uuid:patient_id>/schedule": {
+        "nurse": ["GET"],
+        "doctor": ["GET"],
+        "super_admin": ["GET"],
+    },
 }
 class PermissionValidator:
     """
@@ -941,6 +1262,8 @@ class PermissionValidator:
         # Remove /api/v1/ or /api/ prefix and query string (use removeprefix; lstrip would strip chars)
         path = request_path.split("?")[0]
         path = path.removeprefix("/api/v1/").removeprefix("/api/").lstrip("/")
+        if path.endswith("/") and path != "/":
+            path = path.rstrip("/")
         # Try exact match first
         if path in PERMISSION_MATRIX:
             return path

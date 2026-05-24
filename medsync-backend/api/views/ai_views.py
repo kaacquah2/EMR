@@ -708,6 +708,9 @@ def start_async_analysis(request: Request, patient_id: str) -> Response:
     except ValueError as e:
         return Response({'error': str(e)}, status=status.HTTP_400_BAD_REQUEST)
     except Exception as e:
+        from rest_framework.exceptions import ParseError
+        if isinstance(e, ParseError):
+            return Response({'error': f'JSON parse error - {str(e)}'}, status=status.HTTP_400_BAD_REQUEST)
         logger.error(f"Error starting async analysis: {e}")
         return Response(
             {'error': 'Failed to start analysis'},

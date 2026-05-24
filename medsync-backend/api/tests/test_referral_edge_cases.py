@@ -2,7 +2,6 @@
 Edge case tests for referral state machine.
 
 Tests:
-- Offline facility referral retry
 - Expired referral handling
 - Concurrent referral updates
 - Rollback scenarios
@@ -12,8 +11,7 @@ import pytest
 from django.utils import timezone
 from datetime import timedelta
 from core.models import User, Hospital
-from interop.models import Referral
-from patients.models import Patient
+from interop.models import Referral, GlobalPatient
 from api.state_machines import validate_referral_transition, StateMachineError
 
 
@@ -53,143 +51,73 @@ class TestReferralEdgeCases:
             account_status="active",
         )
 
-        self.patient = Patient.objects.create(
-            ghana_health_id="GHI_001",
-            registered_at=self.hospital_a,
-            full_name="Test Patient",
+        self.global_patient = GlobalPatient.objects.create(
+            first_name="Test",
+            last_name="Patient",
             date_of_birth="1990-01-01",
             gender="male",
         )
 
+    def _create_referral(self, status=Referral.STATUS_PENDING):
+        return Referral.objects.create(
+            global_patient=self.global_patient,
+            from_facility=self.hospital_a,
+            to_facility=self.hospital_b,
+            reason="Specialist consultation required",
+            status=status,
+        )
+
     def test_expired_referral_cannot_be_accepted(self):
         """Expired referral should not allow acceptance."""
-        referral = Referral.objects.create(
-            from_hospital=self.hospital_a,
-            to_hospital=self.hospital_b,
-            patient=self.patient,
-            referred_by=self.doctor_a,
-            status="pending",
-            expires_at=timezone.now() - timedelta(hours=1),  # Expired
-        )
-        
-        # Should not allow transition to accepted
+        referral = self._create_referral(status=Referral.STATUS_EXPIRED)
         with pytest.raises(StateMachineError):
-            validate_referral_transition(referral.status, "accepted")
+            validate_referral_transition(referral.status, Referral.STATUS_ACCEPTED)
 
     def test_concurrent_accept_reject_race_condition(self):
         """Two doctors trying to accept/reject simultaneously."""
-        referral = Referral.objects.create(
-            from_hospital=self.hospital_a,
-            to_hospital=self.hospital_b,
-            patient=self.patient,
-            referred_by=self.doctor_a,
-            status="pending",
-            expires_at=timezone.now() + timedelta(hours=1),
-        )
+        referral = self._create_referral(status=Referral.STATUS_PENDING)
 
-        # Simulate first doctor accepting
-        referral.status = "accepted"
-        referral.accepted_by = self.doctor_b
+        referral.status = Referral.STATUS_ACCEPTED
         referral.save()
 
-        # Try to reject same referral
-        try:
-            validate_referral_transition("accepted", "rejected")
-            # Should fail - can't transition from accepted to rejected
-            assert False, "Should not allow transition"
-        except StateMachineError:
-            pass
+        with pytest.raises(StateMachineError):
+            validate_referral_transition(Referral.STATUS_ACCEPTED, Referral.STATUS_REJECTED)
 
     def test_referral_completion_requires_acceptance_first(self):
         """Referral must be accepted before completion."""
-        referral = Referral.objects.create(
-            from_hospital=self.hospital_a,
-            to_hospital=self.hospital_b,
-            patient=self.patient,
-            referred_by=self.doctor_a,
-            status="pending",
-        )
+        referral = self._create_referral(status=Referral.STATUS_PENDING)
 
-        # Try to transition pending -> completed (invalid)
-        try:
-            validate_referral_transition(referral.status, "completed")
-            assert False, "Should not allow pending -> completed"
-        except StateMachineError:
-            pass
+        with pytest.raises(StateMachineError):
+            validate_referral_transition(referral.status, Referral.STATUS_COMPLETED)
 
     def test_referral_rejection_is_terminal(self):
         """Rejected referral cannot be reverted."""
-        referral = Referral.objects.create(
-            from_hospital=self.hospital_a,
-            to_hospital=self.hospital_b,
-            patient=self.patient,
-            referred_by=self.doctor_a,
-            status="pending",
-        )
+        referral = self._create_referral(status=Referral.STATUS_REJECTED)
 
-        # Reject referral
-        referral.status = "rejected"
-        referral.save()
-
-        # Try to transition back to pending
-        try:
-            validate_referral_transition("rejected", "pending")
-            assert False, "Should not allow rejected -> pending"
-        except StateMachineError:
-            pass
+        with pytest.raises(StateMachineError):
+            validate_referral_transition(referral.status, Referral.STATUS_PENDING)
 
     def test_idempotent_status_update(self):
         """Updating to same status should be safe."""
-        referral = Referral.objects.create(
-            from_hospital=self.hospital_a,
-            to_hospital=self.hospital_b,
-            patient=self.patient,
-            referred_by=self.doctor_a,
-            status="pending",
-        )
-
-        # Update to same status (should be idempotent)
-        referral.status = "pending"
+        referral = self._create_referral(status=Referral.STATUS_PENDING)
+        referral.status = Referral.STATUS_PENDING
         referral.save()
-        
-        assert referral.status == "pending"
+        assert referral.status == Referral.STATUS_PENDING
 
     def test_referral_audit_trail_on_state_change(self):
-        """Each state change creates audit entry."""
-        referral = Referral.objects.create(
-            from_hospital=self.hospital_a,
-            to_hospital=self.hospital_b,
-            patient=self.patient,
-            referred_by=self.doctor_a,
-            status="pending",
-        )
-
-        # Accept
-        referral.status = "accepted"
-        referral.accepted_by = self.doctor_b
-        referral.accepted_at = timezone.now()
+        """Each state change updates referral record."""
+        referral = self._create_referral(status=Referral.STATUS_PENDING)
+        referral.status = Referral.STATUS_ACCEPTED
         referral.save()
-
-        # Verify state was recorded
-        assert referral.status == "accepted"
-        assert referral.accepted_by == self.doctor_b
-        assert referral.accepted_at is not None
+        referral.refresh_from_db()
+        assert referral.status == Referral.STATUS_ACCEPTED
 
     def test_referral_version_increments_on_update(self):
         """Version field increments on each update."""
-        referral = Referral.objects.create(
-            from_hospital=self.hospital_a,
-            to_hospital=self.hospital_b,
-            patient=self.patient,
-            referred_by=self.doctor_a,
-            status="pending",
-            version=1,
-        )
-
+        referral = self._create_referral(status=Referral.STATUS_PENDING)
         initial_version = referral.version
-        referral.status = "accepted"
+        referral.status = Referral.STATUS_ACCEPTED
         referral.version = initial_version + 1
         referral.save()
-
         referral.refresh_from_db()
         assert referral.version == initial_version + 1

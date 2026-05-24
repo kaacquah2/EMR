@@ -26,10 +26,11 @@ def export_patient_pdf_task(self, patient_id, format_type="summary"):
     """
     try:
         from patients.models import Patient
+        from django.core.exceptions import ValidationError
 
         try:
             patient = Patient.objects.get(id=patient_id)
-        except Patient.DoesNotExist:
+        except (Patient.DoesNotExist, ValidationError):
             logger.error(f"Patient not found: {patient_id}")
             return {"status": "error", "message": "Patient not found"}
 
@@ -96,10 +97,11 @@ def export_encounter_pdf_task(self, encounter_id):
     """
     try:
         from records.models import Encounter
+        from django.core.exceptions import ValidationError
 
         try:
             Encounter.objects.get(id=encounter_id)
-        except Encounter.DoesNotExist:
+        except (Encounter.DoesNotExist, ValidationError):
             logger.error(f"Encounter not found: {encounter_id}")
             return {"status": "error", "message": "Encounter not found"}
 

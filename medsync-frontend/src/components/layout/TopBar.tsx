@@ -7,7 +7,7 @@ import { useApi } from "@/hooks/use-api";
 import { isBenignApiNetworkFailure } from "@/lib/api-client";
 import { useToast } from "@/lib/toast-context";
 import { Button } from "@/components/ui/button";
-import { ConnectionStatusIndicator } from "@/components/ui/ConnectionStatusIndicator";
+import { SyncStatusIndicator } from "@/components/ui/SyncStatusIndicator";
 import { API_BASE } from "@/lib/api-base";
 import { ThemeToggle } from "@/components/ui/ThemeToggle";
 import { Search } from "lucide-react";
@@ -272,7 +272,7 @@ export function TopBar() {
             </Button>
           )}
           <div className="flex items-center gap-1 bg-slate-100 dark:bg-slate-800 rounded-full px-2 py-1 ml-2">
-            <ConnectionStatusIndicator />
+            <SyncStatusIndicator />
             <div className="h-4 w-px bg-slate-300 dark:bg-slate-700 mx-1" />
             <ThemeToggle />
           </div>

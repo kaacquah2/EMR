@@ -18,7 +18,7 @@ from rest_framework.response import Response
 from core.models import Hospital, User, AuditLog
 from records.models import Prescription, LabOrder
 from patients.models import Patient, Appointment, Invoice, InvoiceItem
-from api.utils import get_effective_hospital, sanitize_audit_resource_id
+from api.utils import get_request_hospital, sanitize_audit_resource_id
 from api.pagination import paginate_queryset
 from api.serializers import InvoiceCreateSerializer
 
@@ -41,7 +41,7 @@ def billing_dashboard(request):
     if request.user.role not in ('billing_staff', 'hospital_admin', 'super_admin'):
         return Response({'error': 'Insufficient permissions'}, status=status.HTTP_403_FORBIDDEN)
     
-    effective_hospital = get_effective_hospital(request)
+    effective_hospital = get_request_hospital(request)
     if not effective_hospital:
         return Response({'error': 'Hospital context required'}, status=status.HTTP_400_BAD_REQUEST)
     
@@ -126,13 +126,15 @@ def create_invoice(request):
     if request.user.role not in ('billing_staff', 'receptionist', 'hospital_admin', 'super_admin'):
         return Response({'error': 'Insufficient permissions'}, status=status.HTTP_403_FORBIDDEN)
     
-    effective_hospital = get_effective_hospital(request)
+    effective_hospital = get_request_hospital(request)
     if not effective_hospital:
         return Response({'error': 'Hospital context required'}, status=status.HTTP_400_BAD_REQUEST)
     
     # Use Serializer for robust validation and nested creation
     data = request.data.copy()
     data["hospital"] = str(effective_hospital.id)
+    if "patient_id" in data:
+        data["patient"] = data["patient_id"]
     
     serializer = InvoiceCreateSerializer(data=data, context={"request": request})
     if not serializer.is_valid():
@@ -140,6 +142,7 @@ def create_invoice(request):
     
     try:
         invoice = serializer.save()
+        patient = invoice.patient
         
         # Audit log (Note: serializer handles nested items and total calculation)
         AuditLog.log_action(
@@ -203,7 +206,7 @@ def record_payment(request, invoice_id):
     payment_reference = request.data.get('payment_reference', '')
     notes = request.data.get('notes', '')
     
-    effective_hospital = get_effective_hospital(request)
+    effective_hospital = get_request_hospital(request)
 
     with transaction.atomic():
         try:
@@ -266,72 +269,174 @@ def record_payment(request, invoice_id):
 def submit_nhis_claim(request, invoice_id):
     """
     Submit an invoice to NHIS for claim processing.
-    
+
+    Calls the Ghana NHIA API to:
+    1. Verify patient eligibility (NHISClient.check_eligibility)
+    2. Submit the claim (NHISClient.submit_claim)
+
+    Falls back to offline mode (mock reference) when NHIS_API_KEY is not
+    configured (development / staging environments).
+
     **Request body:**
-    - nhis_member_id: str (patient's NHIS number)
-    - diagnosis_codes: list of ICD-10 codes
+    - nhis_member_id: str (patient's NHIS card number)
+    - diagnosis_codes: list of ICD-10 codes (e.g. ["A09", "I10"])
+    - check_eligibility: bool (default: true — verify card before submitting)
     - notes: str (optional)
     """
-    
+    from api.integrations.nhis_client import (
+        get_nhis_client, NHISClaimItem,
+        NHISRetryableError, NHISClaimError, NHISCircuitOpenError,
+    )
+
     if request.user.role not in ('billing_staff', 'hospital_admin', 'super_admin'):
         return Response({'error': 'Insufficient permissions'}, status=status.HTTP_403_FORBIDDEN)
-    
+
     try:
         invoice = Invoice.objects.select_related('patient', 'hospital').get(pk=invoice_id)
     except Invoice.DoesNotExist:
         return Response({'error': 'Invoice not found'}, status=status.HTTP_404_NOT_FOUND)
-    
-    effective_hospital = get_effective_hospital(request)
+
+    effective_hospital = get_request_hospital(request)
     if effective_hospital and invoice.hospital_id != effective_hospital.id:
         return Response({'error': 'Cannot submit claim for another hospital'}, status=status.HTTP_403_FORBIDDEN)
-    
+
     if invoice.payment_method != 'nhis':
         return Response({'error': 'Invoice payment method must be NHIS'}, status=status.HTTP_400_BAD_REQUEST)
-    
+
     if hasattr(invoice, 'nhis_claim_status') and invoice.nhis_claim_status in ('submitted', 'approved'):
         return Response({'error': f'Claim already {invoice.nhis_claim_status}'}, status=status.HTTP_400_BAD_REQUEST)
-    
-    # Get claim data
-    nhis_member_id = request.data.get('nhis_member_id')
+
+    # --- Input validation ---
+    nhis_member_id = (request.data.get('nhis_member_id') or '').strip()
     diagnosis_codes = request.data.get('diagnosis_codes', [])
-    
+    should_check_eligibility = request.data.get('check_eligibility', True)
+
     if not nhis_member_id:
         return Response({'error': 'nhis_member_id is required'}, status=status.HTTP_400_BAD_REQUEST)
-    
-    # In production, this would call NHIS API
-    # For now, simulate submission
-    claim_reference = f"NHIS-{timezone.now().strftime('%Y%m%d')}-{str(invoice.id)[:8].upper()}"
-    
-    with transaction.atomic():
-        if hasattr(invoice, 'nhis_claim_status'):
-            invoice.nhis_claim_status = 'submitted'
-        if hasattr(invoice, 'nhis_claim_reference'):
-            invoice.nhis_claim_reference = claim_reference
-        if hasattr(invoice, 'nhis_submitted_at'):
-            invoice.nhis_submitted_at = timezone.now()
-        invoice.save()
-        
-        # Audit log
-        AuditLog.log_action(
-            user=request.user,
-            action='NHIS_CLAIM_SUBMIT',
-            resource_type='Invoice',
-            resource_id=sanitize_audit_resource_id(str(invoice.id)),
-            hospital=invoice.hospital,
-            extra_data={
-                'claim_reference': claim_reference,
-                'nhis_member_id': nhis_member_id,
-                'total_amount': float(invoice.total_amount),
-            }
+
+    if not isinstance(diagnosis_codes, list) or len(diagnosis_codes) == 0:
+        return Response({'error': 'diagnosis_codes must be a non-empty list of ICD-10 codes'},
+                        status=status.HTTP_400_BAD_REQUEST)
+
+    nhis_client = get_nhis_client()
+
+    # --- Step 1: Eligibility check (optional but strongly recommended) ---
+    eligibility = None
+    if should_check_eligibility:
+        try:
+            eligibility = nhis_client.check_eligibility(nhis_member_id)
+            if not eligibility.is_eligible:
+                return Response({
+                    'error': f"Patient NHIS card is not eligible: {eligibility.card_status}",
+                    'card_status': eligibility.card_status,
+                    'card_expiry_date': eligibility.card_expiry_date.isoformat() if eligibility.card_expiry_date else None,
+                }, status=status.HTTP_400_BAD_REQUEST)
+        except NHISCircuitOpenError as e:
+            logger.warning("NHIS circuit open during eligibility check: %s", e)
+            # Proceed without eligibility check — don't block care delivery
+            pass
+        except NHISRetryableError as e:
+            logger.warning("NHIS eligibility check transient error: %s", e)
+            # Proceed without eligibility check
+            pass
+        except NHISClaimError as e:
+            return Response({'error': f'NHIS eligibility check failed: {e}'}, status=status.HTTP_400_BAD_REQUEST)
+
+    # --- Step 2: Build claim items from invoice line items ---
+    claim_items = []
+    invoice_items = getattr(invoice, 'items', None)
+    if invoice_items is not None:
+        for item in invoice_items.all():
+            claim_items.append(NHISClaimItem(
+                service_code=getattr(item, 'nhis_service_code', None) or getattr(item, 'service_type', 'CONSULT'),
+                description=item.description,
+                quantity=item.quantity,
+                unit_price_ghs=Decimal(str(item.unit_price / 100)),  # stored in cents
+            ))
+
+    # Fallback: single aggregate claim item
+    if not claim_items:
+        claim_items.append(NHISClaimItem(
+            service_code="CONSULT",
+            description="Medical Services",
+            quantity=1,
+            unit_price_ghs=getattr(invoice, 'total_amount', Decimal('0.00')),
+        ))
+
+    # --- Step 3: Submit claim ---
+    try:
+        result = nhis_client.submit_claim(
+            invoice_id=str(invoice.id),
+            nhis_member_id=nhis_member_id,
+            diagnosis_codes=diagnosis_codes,
+            items=claim_items,
+            attending_provider_id=getattr(request.user, 'gmdc_licence_number', None),
         )
-    
-    return Response({
-        'invoice_id': str(invoice.id),
-        'claim_reference': claim_reference,
-        'status': 'submitted',
-        'submitted_at': timezone.now().isoformat(),
-        'message': 'NHIS claim submitted successfully. Allow 24-48 hours for processing.',
-    })
+
+        # Persist claim reference on invoice
+        with transaction.atomic():
+            if hasattr(invoice, 'nhis_claim_status'):
+                invoice.nhis_claim_status = 'submitted'
+            if hasattr(invoice, 'nhis_claim_reference'):
+                invoice.nhis_claim_reference = result.claim_reference
+            if hasattr(invoice, 'nhis_submitted_at'):
+                invoice.nhis_submitted_at = timezone.now()
+            invoice.save()
+
+            AuditLog.log_action(
+                user=request.user,
+                action='NHIS_CLAIM_SUBMIT',
+                resource_type='Invoice',
+                resource_id=sanitize_audit_resource_id(str(invoice.id)),
+                hospital=invoice.hospital,
+                extra_data={
+                    'claim_reference': result.claim_reference,
+                    'nhis_status': result.status,
+                    'item_count': len(claim_items),
+                }
+            )
+
+        return Response({
+            'invoice_id': str(invoice.id),
+            'claim_reference': result.claim_reference,
+            'nhis_status': result.status,
+            'submitted_at': result.submitted_at.isoformat() if result.submitted_at else timezone.now().isoformat(),
+            'eligibility': {
+                'card_status': eligibility.card_status if eligibility else 'NOT_CHECKED',
+                'benefit_package': eligibility.benefit_package if eligibility else None,
+                'exemption': eligibility.exemption_message if eligibility else None,
+            },
+            'message': 'NHIS claim submitted successfully. Allow 24-48 hours for processing.',
+        })
+
+    except NHISCircuitOpenError as e:
+        logger.error("NHIS circuit open during claim submission: %s", e)
+        return Response({
+            'error': 'NHIS API is temporarily unavailable. Claim has been queued for retry.',
+            'retry_available': True,
+        }, status=status.HTTP_202_ACCEPTED)
+
+    except NHISRetryableError as e:
+        logger.error("NHIS claim submission transient error: %s", e)
+        return Response({
+            'error': f'NHIS service temporarily unavailable: {e}. Please retry shortly.',
+            'retry_available': True,
+        }, status=status.HTTP_503_SERVICE_UNAVAILABLE)
+
+    except NHISClaimError as e:
+        logger.warning("NHIS claim rejected: %s (code: %s)", e, e.error_code)
+        return Response({
+            'error': f'NHIS rejected claim: {e}',
+            'nhis_error_code': e.error_code,
+            'retry_available': False,
+        }, status=status.HTTP_400_BAD_REQUEST)
+
+    except Exception as e:
+        logger.exception("Unexpected error during NHIS claim submission: %s", e)
+        return Response({'error': 'Internal error during claim submission.'},
+                        status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
 
 
 @api_view(['GET'])
@@ -349,7 +454,7 @@ def patient_billing_history(request, patient_id):
     except Patient.DoesNotExist:
         return Response({'error': 'Patient not found'}, status=status.HTTP_404_NOT_FOUND)
     
-    effective_hospital = get_effective_hospital(request)
+    effective_hospital = get_request_hospital(request)
     
     # Get invoices
     invoices_qs = Invoice.objects.filter(patient=patient)

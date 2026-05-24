@@ -6,6 +6,7 @@ export type ConnectionStatus = "online" | "offline" | "degraded";
 
 interface ConnectionStatusResult {
   status: ConnectionStatus;
+  isOnline: boolean;
   lastOnline: Date | null;
   pendingSyncCount: number;
   setPendingSyncCount: (count: number) => void;
@@ -108,5 +109,11 @@ export function useConnectionStatus(): ConnectionStatusResult {
     };
   }, [initialized]);
 
-  return { status, lastOnline, pendingSyncCount, setPendingSyncCount };
+  return { 
+    status, 
+    isOnline: status !== "offline", 
+    lastOnline, 
+    pendingSyncCount, 
+    setPendingSyncCount 
+  };
 }

@@ -80,6 +80,14 @@ class AIDeploymentLog(models.Model):
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
+    def save(self, *args, **kwargs):
+        if self.enabled:
+            is_valid, message = self.validate_metrics()
+            if not is_valid:
+                from django.core.exceptions import ValidationError
+                raise ValidationError(f"Cannot enable clinical AI: {message}")
+        super().save(*args, **kwargs)
+
     class Meta:
         ordering = ['-enabled_at']
         indexes = [
@@ -318,7 +326,19 @@ class AIDeploymentApproval(models.Model):
     
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
-    
+
+    def save(self, *args, **kwargs):
+        if self.enabled and not self.revoked_at:
+            from django.core.exceptions import ValidationError
+            try:
+                metrics = ModelMetrics.objects.get(model_version=self.model_version)
+                is_valid, errors = metrics.meets_clinical_thresholds()
+                if not is_valid:
+                    raise ValidationError(f"Cannot approve model version {self.model_version}: {', '.join(errors)}")
+            except ModelMetrics.DoesNotExist:
+                raise ValidationError(f"Cannot approve model version {self.model_version}: No ModelMetrics found for this version.")
+        super().save(*args, **kwargs)
+
     class Meta:
         db_table = 'ai_deployment_approval'
         unique_together = ('hospital', 'model_version')

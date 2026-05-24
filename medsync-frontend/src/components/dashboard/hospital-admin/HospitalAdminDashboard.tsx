@@ -8,6 +8,7 @@ import { useToast } from "@/lib/toast-context";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { StatCard } from "./StatCard";
+import { HospitalStatistics } from "./HospitalStatistics";
 
 type HaUser = {
   user_id: string;
@@ -241,6 +242,8 @@ export function HospitalAdminDashboard({
           loading={loading}
         />
       </div>
+
+      <HospitalStatistics />
 
       <div className="grid gap-6 lg:grid-cols-5">
         <div className="space-y-6 lg:col-span-3">

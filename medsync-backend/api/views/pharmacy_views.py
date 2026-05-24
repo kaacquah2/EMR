@@ -194,11 +194,24 @@ def dispense_medication(request, prescription_id):
     
     # Update prescription
     with transaction.atomic():
-        prescription.status = 'dispensed'
-        prescription.dispense_status = 'dispensed'
+        # Get cumulative dispensed quantity
+        cumulative_dispensed = sum(d.quantity_dispensed for d in prescription.dispensations.all())
+        total_after_dispense = cumulative_dispensed + dispensed_quantity
+        
+        # Determine new status
+        if total_after_dispense >= prescription.prescribed_quantity:
+            new_status = 'dispensed'
+        else:
+            new_status = 'partially_dispensed'
+            
+        prescription._dispensing_quantity = dispensed_quantity
+        prescription._dispensing_notes = dispense_notes
+        
+        prescription.status = new_status
+        prescription.dispense_status = new_status
         prescription.dispensed_at = timezone.now()
         prescription.dispensed_by = request.user
-        prescription.dispensed_quantity = dispensed_quantity
+        prescription.dispensed_quantity = total_after_dispense
         prescription.dispense_notes = dispense_notes
         prescription.drug_interaction_checked = True
         prescription.drug_interactions = drug_interactions
@@ -214,6 +227,7 @@ def dispense_medication(request, prescription_id):
             extra_data={
                 'drug_name': prescription.drug_name,
                 'dispensed_quantity': dispensed_quantity,
+                'cumulative_quantity': total_after_dispense,
                 'patient_id': str(prescription.patient_id) if prescription.patient_id else None,
                 'drug_interactions': bool(drug_interactions),
             }
@@ -225,6 +239,7 @@ def dispense_medication(request, prescription_id):
         'dispensed_at': prescription.dispensed_at.isoformat(),
         'dispensed_by': request.user.full_name,
         'dispensed_quantity': dispensed_quantity,
+        'cumulative_quantity': total_after_dispense,
         'drug_interactions': drug_interactions,
     })
 

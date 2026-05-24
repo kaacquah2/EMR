@@ -161,10 +161,11 @@ function CdsAlertCard({
           <textarea
             value={notes}
             onChange={(e) => setNotes(e.target.value)}
-            placeholder="Add acknowledgment notes (optional)..."
+            placeholder="Mandatory acknowledgment reason (e.g., patient clinical status overrides alert)..."
             className={`w-full rounded border p-2 text-sm ${config.borderColor}`}
             rows={2}
             disabled={isAcknowledging || loading}
+            required
           />
           <div className="mt-2 flex justify-end gap-2">
             <button
@@ -178,7 +179,7 @@ function CdsAlertCard({
             </button>
             <button
               onClick={handleAcknowledge}
-              disabled={isAcknowledging || loading}
+              disabled={isAcknowledging || loading || !notes.trim()}
               className={`flex items-center gap-2 px-3 py-1 text-sm font-medium rounded text-white transition-colors ${
                 config.badgeColor.split(' ')[0] === 'bg-red-100'
                   ? 'bg-red-600 hover:bg-red-700'

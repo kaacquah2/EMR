@@ -4,6 +4,7 @@ Tests utility functions, dashboard endpoints, and nurse access controls.
 """
 
 from datetime import timedelta
+from unittest.mock import patch
 
 from django.test import TestCase
 from django.utils import timezone
@@ -66,9 +67,34 @@ class VitalsOverdueUtilityTests(TestCase):
             hospital=self.hospital,
             ward=self.ward,
             bed=self.bed,
-            admitted_at=admission_time,
             admitted_by=self.doctor
         )
+        PatientAdmission.objects.filter(pk=self.admission.pk).update(admitted_at=admission_time)
+        self.admission.refresh_from_db()
+
+    def _create_vital_record(self, hours_ago):
+        """Create a vital record with created_at backdated (auto_now_add safe)."""
+        record = MedicalRecord.objects.create(
+            patient=self.patient,
+            hospital=self.hospital,
+            record_type="vital_signs",
+            created_by=self.doctor,
+        )
+        MedicalRecord.objects.filter(pk=record.pk).update(
+            created_at=timezone.now() - timedelta(hours=hours_ago)
+        )
+        record.refresh_from_db()
+        Vital.objects.create(
+            record=record,
+            temperature_c=37.0,
+            pulse_bpm=80,
+            resp_rate=16,
+            bp_systolic=120,
+            bp_diastolic=80,
+            spo2_percent=98,
+            recorded_by=self.doctor,
+        )
+        return record
 
     def test_vitals_overdue_with_no_recorded_vitals(self):
         """Test overdue detection when no vitals have been recorded."""
@@ -80,48 +106,21 @@ class VitalsOverdueUtilityTests(TestCase):
 
     def test_vitals_not_overdue_within_threshold(self):
         """Test that recent vitals (2h old) are not marked as overdue (4h threshold)."""
-        record = MedicalRecord.objects.create(
-            patient=self.patient,
-            hospital=self.hospital,
-            record_type="vital_signs",
-            created_by=self.doctor,
-            created_at=timezone.now() - timedelta(hours=2)
-        )
-        Vital.objects.create(
-            record=record,
-            temperature_c=37.0,
-            pulse_bpm=80,
-            resp_rate=16,
-            bp_systolic=120,
-            bp_diastolic=80,
-            spo2_percent=98,
-            recorded_by=self.doctor
-        )
+        self._create_vital_record(hours_ago=2)
 
         is_overdue, hours_overdue = is_vitals_overdue(self.admission)
 
         self.assertFalse(is_overdue)
         self.assertIsNone(hours_overdue)
 
-    def test_vitals_overdue_exactly_at_threshold(self):
+    @patch('django.utils.timezone.now')
+    def test_vitals_overdue_exactly_at_threshold(self, mock_now):
         """Test boundary condition: vital recorded exactly 4 hours ago."""
-        record = MedicalRecord.objects.create(
-            patient=self.patient,
-            hospital=self.hospital,
-            record_type="vital_signs",
-            created_by=self.doctor,
-            created_at=timezone.now() - timedelta(hours=4)
-        )
-        Vital.objects.create(
-            record=record,
-            temperature_c=37.0,
-            pulse_bpm=80,
-            resp_rate=16,
-            bp_systolic=120,
-            bp_diastolic=80,
-            spo2_percent=98,
-            recorded_by=self.doctor
-        )
+        import datetime
+        now_val = datetime.datetime.now(datetime.timezone.utc)
+        mock_now.return_value = now_val
+
+        self._create_vital_record(hours_ago=4)
 
         is_overdue, hours_overdue = is_vitals_overdue(self.admission)
 
@@ -130,23 +129,7 @@ class VitalsOverdueUtilityTests(TestCase):
 
     def test_vitals_overdue_past_threshold(self):
         """Test that vitals older than 4 hours are marked overdue."""
-        record = MedicalRecord.objects.create(
-            patient=self.patient,
-            hospital=self.hospital,
-            record_type="vital_signs",
-            created_by=self.doctor,
-            created_at=timezone.now() - timedelta(hours=5)
-        )
-        Vital.objects.create(
-            record=record,
-            temperature_c=37.0,
-            pulse_bpm=80,
-            resp_rate=16,
-            bp_systolic=120,
-            bp_diastolic=80,
-            spo2_percent=98,
-            recorded_by=self.doctor
-        )
+        self._create_vital_record(hours_ago=5)
 
         is_overdue, hours_overdue = is_vitals_overdue(self.admission)
 
@@ -156,23 +139,7 @@ class VitalsOverdueUtilityTests(TestCase):
 
     def test_vitals_overdue_custom_threshold(self):
         """Test overdue detection with custom hours threshold."""
-        record = MedicalRecord.objects.create(
-            patient=self.patient,
-            hospital=self.hospital,
-            record_type="vital_signs",
-            created_by=self.doctor,
-            created_at=timezone.now() - timedelta(hours=6)
-        )
-        Vital.objects.create(
-            record=record,
-            temperature_c=37.0,
-            pulse_bpm=80,
-            resp_rate=16,
-            bp_systolic=120,
-            bp_diastolic=80,
-            spo2_percent=98,
-            recorded_by=self.doctor
-        )
+        self._create_vital_record(hours_ago=6)
 
         # With 4-hour threshold: overdue
         is_overdue, _ = is_vitals_overdue(self.admission, hours_threshold=4)
@@ -266,32 +233,17 @@ class VitalsOverdueUtilityTests(TestCase):
 
     def test_get_latest_vital_object(self):
         """Test retrieving the latest Vital object."""
-        # Create two vitals (older and newer)
-        record1 = MedicalRecord.objects.create(
-            patient=self.patient,
-            hospital=self.hospital,
-            record_type="vital_signs",
-            created_by=self.doctor,
-            created_at=timezone.now() - timedelta(hours=4)
-        )
-        Vital.objects.create(
-            record=record1,
-            temperature_c=37.0,
-            pulse_bpm=80,
-            resp_rate=16,
-            bp_systolic=120,
-            bp_diastolic=80,
-            spo2_percent=98,
-            recorded_by=self.doctor
-        )
-
+        self._create_vital_record(hours_ago=4)
         record2 = MedicalRecord.objects.create(
             patient=self.patient,
             hospital=self.hospital,
             record_type="vital_signs",
             created_by=self.doctor,
+        )
+        MedicalRecord.objects.filter(pk=record2.pk).update(
             created_at=timezone.now() - timedelta(hours=2)
         )
+        record2.refresh_from_db()
         vital2 = Vital.objects.create(
             record=record2,
             temperature_c=37.5,
@@ -300,7 +252,7 @@ class VitalsOverdueUtilityTests(TestCase):
             bp_systolic=125,
             bp_diastolic=82,
             spo2_percent=97,
-            recorded_by=self.doctor
+            recorded_by=self.doctor,
         )
 
         latest = get_latest_vital(self.patient)

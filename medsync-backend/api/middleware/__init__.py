@@ -232,3 +232,27 @@ class CSPMiddleware:
             response["Content-Security-Policy"] = csp_string
 
         return response
+
+
+class RateLimitHeaderMiddleware:
+    """
+    Reads request._throttle_info populated by SafeRateLimitHeadersMixin
+    and attaches X-RateLimit-Limit and X-RateLimit-Remaining headers to the response.
+    """
+
+    def __init__(self, get_response):
+        self.get_response = get_response
+
+    def __call__(self, request):
+        response = self.get_response(request)
+
+        throttle_info = getattr(request, "_throttle_info", None)
+        if throttle_info:
+            # Find the most restrictive throttle (lowest remaining)
+            most_restrictive = min(throttle_info, key=lambda x: x["remaining"])
+            response["X-RateLimit-Limit"] = str(most_restrictive["limit"])
+            response["X-RateLimit-Remaining"] = str(most_restrictive["remaining"])
+            if most_restrictive.get("retry_after"):
+                response["Retry-After"] = str(most_restrictive["retry_after"])
+
+        return response

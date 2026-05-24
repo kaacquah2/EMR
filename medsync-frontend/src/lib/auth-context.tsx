@@ -276,6 +276,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         }
       }
       document.cookie = "medsync_session=; path=/; max-age=0";
+      document.cookie = "medsync_role=; path=/; max-age=0";
       window.location.href = "/login";
     }
   }, [state.accessToken, state.refreshToken]);
@@ -322,6 +323,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       // Note: HttpOnly cannot be set from JavaScript; must be configured on backend via Set-Cookie header
       const maxAge = 8 * 60 * 60; // 8 hours in seconds
       document.cookie = `medsync_session=1; path=/; max-age=${maxAge}; SameSite=Strict; Secure`;
+      if (tokens.user_profile?.role) {
+        document.cookie = `medsync_role=${tokens.user_profile.role}; path=/; max-age=${maxAge}; SameSite=Strict; Secure`;
+      }
     }
   }, []);
 

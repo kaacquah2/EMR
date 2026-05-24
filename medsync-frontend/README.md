@@ -541,7 +541,7 @@ Super Admin detects suspicious activity
 
 **Playwright E2E:** Role-based flows; backend and frontend must be running; set `E2E_*_EMAIL` / `E2E_*_PASSWORD` per role (and optionally `E2E_MFA_BACKUP_CODE`, `PLAYWRIGHT_BASE_URL`). Run from `medsync-frontend`: `npm run test:e2e` or `npm run test:e2e:ui`. Scenarios: receptionist (appointments), doctor (encounter + lab order), lab tech (submit result), hospital admin (no clinical records), super admin (view-as + register with hospital). CI: set credentials and ensure services are up before `npm run test:e2e`.
 
-**Test layout:** `tests/` (auth, roles, workflows, security, scoping, ux, network, pages, fixtures, utils); `e2e/` (auth helpers, role-based.spec). Use `getByRole`/`getByLabel`/`getByText`; optional `data-testid`. Seeded users per role (e.g. backend `setup_dev`) with env credentials.
+**Test layout:** `tests/` (auth, roles, workflows, scenarios, security, scoping, ux, network, fixtures, utils). Shared helpers live in `tests/utils/auth.ts`. Use `getByRole`/`getByLabel`/`getByText`; optional `data-testid`. Seeded users per role (e.g. backend `setup_dev`) with env credentials.
 
 **QA summary:** Pre-deployment QA (codebase review) confirms multi-tenancy, role-aware APIs, audit logging, interop; route guard and hospital_admin restricted patient view are in place; worklist and patient Labs tab use 45s visibility-aware polling; central route guard blocks restricted paths before content renders. Conditional go for controlled rollout.
 
@@ -625,8 +625,8 @@ See backend `README.md` [Audit & Critical Fixes](#audit--critical-fixes) section
 - **Time:** 1 hour
 
 #### [MEDIUM #2] Incomplete E2E Test Coverage
-- **File:** `e2e/` directory
-- **Issue:** Playwright setup exists but tests cover only basic flows (login, patient search)
+- **File:** `tests/` directory
+- **Issue:** Playwright setup exists but many flows require live credentials and seeded data
 - **Gap:** Cross-facility access, referral workflows, role-specific dashboards not tested
 - **Suggested fix:** Expand E2E tests to cover critical user workflows
 - **Time:** 4-6 hours

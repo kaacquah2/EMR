@@ -73,13 +73,10 @@ class TestAIAnalyzePatient:
     def test_analyze_patient_doctor_success(self, api_client, doctor_user, patient):
         api_client.force_authenticate(user=doctor_user)
         res = api_client.post(f"/api/v1/ai/analyze-patient/{patient.id}", {}, format="json")
-        assert res.status_code == 200
-        data = res.json()
-        assert "patient_id" in data
-        assert "risk_analysis" in data
-        assert "triage_assessment" in data
-        assert "clinical_summary" in data
-        assert "agents_executed" in data
+        assert res.status_code == 400
+        data = res.json()["data"]
+        assert "message" in data
+        assert "deprecated" in data["message"].lower()
 
     def test_analyze_patient_404_for_unknown(self, api_client, doctor_user):
         api_client.force_authenticate(user=doctor_user)
@@ -98,6 +95,8 @@ class TestAIRiskPrediction:
         res = api_client.post(f"/api/v1/ai/risk-prediction/{patient.id}", {}, format="json")
         assert res.status_code == 200
         data = res.json()
+        if "data" in data:
+            data = data["data"]
         assert "risk_predictions" in data
         assert "top_risk_disease" in data
         assert "top_risk_score" in data
@@ -114,6 +113,8 @@ class TestAITriage:
         )
         assert res.status_code == 200
         data = res.json()
+        if "data" in data:
+            data = data["data"]
         assert data["triage_level"] in ("critical", "high", "medium", "low")
         assert "esi_level" in data
         assert "recommended_action" in data

@@ -449,8 +449,12 @@ class TestBreakGlassAbuseFlagging:
                 accessed_by=doctor,
                 reason_code="life_threatening_emergency",
                 reason=f"Legitimate emergency {i+1}",
-                created_at=timezone.now() - timedelta(hours=i),
             )
+            # Bypass auto_now_add using update
+            BreakGlassLog.objects.filter(id=bg_log.id).update(
+                created_at=timezone.now() - timedelta(hours=i)
+            )
+            bg_log.refresh_from_db()
             logs.append(bg_log)
 
         # These are spread out (hours apart), not rapid
@@ -488,7 +492,7 @@ class TestBreakGlassAbuseFlagging:
             resource_type="BreakGlassLog",
             resource_id=str(global_patient.id),
             hospital=hospital,
-            details={"pattern": "5 accesses in 15 minutes"},
+            extra_data={"pattern": "5 accesses in 15 minutes"},
         )
 
         # Verify audit log

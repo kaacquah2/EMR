@@ -1,7 +1,7 @@
 from io import BytesIO
 from rest_framework import status
 from django.conf import settings
-from rest_framework.decorators import api_view, permission_classes
+from rest_framework.decorators import api_view, permission_classes, throttle_classes
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from django.http import HttpResponse
@@ -11,7 +11,14 @@ from reportlab.lib.units import inch
 from reportlab.pdfgen import canvas as pdf_canvas
 from django.views.decorators.cache import cache_control
 from patients.models import Patient, Allergy
-from records.models import Diagnosis, Prescription, LabResult, Vital
+from records.models import (
+    Diagnosis,
+    Prescription,
+    LabResult,
+    Vital,
+    ChronicDiseaseProgram,
+    FamilyLink,
+)
 from api.utils import (
     get_patient_queryset,
     get_medical_record_queryset,
@@ -32,6 +39,7 @@ from api.serializers import (
     VitalSerializer,
     MedicalRecordSerializer,
 )
+from api.rate_limiting import PatientSearchThrottle
 
 
 
@@ -42,6 +50,7 @@ from api.serializers import (
 @cache_control(max_age=30, private=True)
 @api_view(["GET"])
 @permission_classes([IsAuthenticated])
+@throttle_classes([PatientSearchThrottle])
 def patient_search(request):
     q = (request.GET.get("q") or request.GET.get("name") or "").strip()
     ghana_id = request.GET.get("ghana_health_id", "").strip()
@@ -56,8 +65,6 @@ def patient_search(request):
         qs = qs.filter(
             Q(full_name__icontains=q)
             | Q(ghana_health_id__icontains=q)
-            | Q(phone__icontains=q)
-            | Q(nhis_number__icontains=q)
         )
     else:
         return Response({"data": [], "next_cursor": None, "has_more": False})
@@ -518,3 +525,64 @@ def patient_export_pdf(request, pk):
     resp = HttpResponse(buf.getvalue(), content_type="application/pdf")
     resp["Content-Disposition"] = f'attachment; filename="patient_{patient.ghana_health_id or patient.id}_record.pdf"'
     return resp
+
+
+@api_view(["GET", "POST"])
+@permission_classes([IsAuthenticated])
+def patient_chronic_programs(request, pk):
+    patient = get_patient_queryset(request.user, get_effective_hospital(request)).filter(id=pk).first()
+    if not patient:
+        return Response({"message": "Patient not found"}, status=status.HTTP_404_NOT_FOUND)
+    
+    if request.method == "GET":
+        from api.serializers import ChronicDiseaseProgramSerializer
+        programs = patient.chronic_programs.all()
+        return Response({"data": ChronicDiseaseProgramSerializer(programs, many=True).data})
+    
+    if request.method == "POST":
+        if request.user.role != "doctor":
+            return Response({"message": "Permission denied"}, status=status.HTTP_403_FORBIDDEN)
+        hospital = get_request_hospital(request)
+        data = request.data
+        from api.serializers import ChronicDiseaseProgramSerializer
+        program = ChronicDiseaseProgram.objects.create(
+            patient=patient,
+            hospital=hospital,
+            disease_name=data.get("disease_name"),
+            enrolled_by=request.user,
+            status=data.get("status", "active"),
+            notes=data.get("notes"),
+        )
+        return Response(ChronicDiseaseProgramSerializer(program).data, status=status.HTTP_201_CREATED)
+
+
+@api_view(["GET", "POST"])
+@permission_classes([IsAuthenticated])
+def patient_family_links(request, pk):
+    patient = get_patient_queryset(request.user, get_effective_hospital(request)).filter(id=pk).first()
+    if not patient:
+        return Response({"message": "Patient not found"}, status=status.HTTP_404_NOT_FOUND)
+    
+    if request.method == "GET":
+        from api.serializers import FamilyLinkSerializer
+        links = patient.links_from.all() | patient.links_to.all()
+        return Response({"data": FamilyLinkSerializer(links.distinct(), many=True).data})
+    
+    if request.method == "POST":
+        if request.user.role not in ("doctor", "nurse", "receptionist"):
+            return Response({"message": "Permission denied"}, status=status.HTTP_403_FORBIDDEN)
+        data = request.data
+        to_patient_id = data.get("to_patient_id")
+        to_patient = get_patient_queryset(request.user, get_effective_hospital(request)).filter(id=to_patient_id).first()
+        if not to_patient:
+            return Response({"message": "Target patient not found"}, status=status.HTTP_404_NOT_FOUND)
+        
+        from api.serializers import FamilyLinkSerializer
+        link = FamilyLink.objects.create(
+            from_patient=patient,
+            to_patient=to_patient,
+            relationship_type=data.get("relationship_type"),
+            is_emergency_contact=data.get("is_emergency_contact", False),
+            notes=data.get("notes"),
+        )
+        return Response(FamilyLinkSerializer(link).data, status=status.HTTP_201_CREATED)

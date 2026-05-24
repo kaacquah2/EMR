@@ -1019,7 +1019,7 @@ def create_walk_in(request):
     if request.user.role not in ('receptionist', 'nurse', 'hospital_admin', 'super_admin'):
         return Response({'message': 'Permission denied'}, status=status.HTTP_403_FORBIDDEN)
     
-    hospital = get_effective_hospital(request)
+    hospital = get_request_hospital(request)
     if not hospital:
         return Response({'message': 'No hospital context'}, status=status.HTTP_400_BAD_REQUEST)
     
@@ -1053,8 +1053,9 @@ def create_walk_in(request):
     if doctor_id:
         try:
             from core.models import User
-            doctor = User.objects.get(id=doctor_id, hospital=hospital, role='doctor', is_active=True)
-        except:
+            doctor = User.objects.get(id=doctor_id, hospital=hospital, role='doctor', account_status='active')
+        except Exception as e:
+            print("ERROR FETCHING DOCTOR:", e)
             return Response({'message': 'Doctor not found'}, status=status.HTTP_404_NOT_FOUND)
     
     # Get current queue position for walk-ins today
@@ -1092,7 +1093,7 @@ def create_walk_in(request):
         extra_data={'queue_position': queue_position, 'urgency': urgency},
     )
     
-    doctor_name = doctor.get_full_name() if doctor else 'Unassigned'
+    doctor_name = doctor.full_name if doctor else 'Unassigned'
     
     return Response({
         'id': str(appointment.id),
@@ -1145,7 +1146,7 @@ def walk_in_queue(request):
     if request.user.role not in ('receptionist', 'nurse', 'doctor', 'hospital_admin', 'super_admin'):
         return Response({'message': 'Permission denied'}, status=status.HTTP_403_FORBIDDEN)
     
-    hospital = get_effective_hospital(request)
+    hospital = get_request_hospital(request)
     if not hospital:
         return Response({'message': 'No hospital context'}, status=status.HTTP_400_BAD_REQUEST)
     
@@ -1159,6 +1160,8 @@ def walk_in_queue(request):
     else:
         queue_date = timezone.now().date()
     
+    from django.db.models import Case, When, IntegerField
+    
     # Get walk-ins ordered by urgency then queue position
     walk_ins = Appointment.objects.filter(
         hospital=hospital,
@@ -1167,7 +1170,13 @@ def walk_in_queue(request):
     ).exclude(
         status__in=['completed', 'cancelled', 'no_show']
     ).select_related('patient', 'provider').order_by(
-        'urgency',  # emergency first (lexicographic: 'emergency' < 'routine' < 'urgent')
+        Case(
+            When(urgency='emergency', then=1),
+            When(urgency='urgent', then=2),
+            When(urgency='routine', then=3),
+            default=4,
+            output_field=IntegerField(),
+        ),
         'queue_position',
     )
     
@@ -1182,7 +1191,7 @@ def walk_in_queue(request):
             'urgency': appt.urgency,
             'status': appt.status,
             'department': appt.provider.department_link.department.name if appt.provider and hasattr(appt.provider, 'department_link') else None,
-            'doctor': appt.provider.get_full_name() if appt.provider else 'Unassigned',
+            'doctor': appt.provider.full_name if appt.provider else 'Unassigned',
             'checked_in_at': appt.created_at.isoformat(),
             'wait_time_minutes': int((timezone.now() - appt.created_at).total_seconds() / 60),
         })
@@ -1207,12 +1216,12 @@ def doctor_availability(request, doctor_id):
     if request.user.role not in ('receptionist', 'nurse', 'doctor', 'hospital_admin', 'super_admin'):
         return Response({'message': 'Permission denied'}, status=status.HTTP_403_FORBIDDEN)
     
-    hospital = get_effective_hospital(request)
+    hospital = get_request_hospital(request)
     
     # Validate doctor
     from core.models import User
     try:
-        doctor = User.objects.get(id=doctor_id, role='doctor', is_active=True)
+        doctor = User.objects.get(id=doctor_id, role='doctor', account_status='active')
     except User.DoesNotExist:
         return Response({'message': 'Doctor not found'}, status=status.HTTP_404_NOT_FOUND)
     
@@ -1283,7 +1292,7 @@ def doctor_availability(request, doctor_id):
     
     return Response({
         'doctor_id': str(doctor.id),
-        'doctor_name': doctor.get_full_name(),
+        'doctor_name': doctor.full_name,
         'date': query_date.isoformat(),
         'work_hours': {
             'start': work_start.strftime('%H:%M'),
@@ -1308,7 +1317,7 @@ def department_doctors(request, department_id):
     if request.user.role not in ('receptionist', 'nurse', 'hospital_admin', 'super_admin'):
         return Response({'message': 'Permission denied'}, status=status.HTTP_403_FORBIDDEN)
     
-    hospital = get_effective_hospital(request)
+    hospital = get_request_hospital(request)
     
     from core.models import Department, User
     
@@ -1326,7 +1335,7 @@ def department_doctors(request, department_id):
         hospital=department.hospital,
         role='doctor',
         department=department,
-        is_active=True,
+        account_status='active',
     )
     
     doctor_data = []
@@ -1342,7 +1351,7 @@ def department_doctors(request, department_id):
         
         doctor_data.append({
             'id': str(doc.id),
-            'name': doc.get_full_name(),
+            'name': doc.full_name,
             'email': doc.email,
             'specialization': getattr(doc, 'specialization', None),
             'today_booked': today_appointments,

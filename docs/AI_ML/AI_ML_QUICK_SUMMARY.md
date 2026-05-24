@@ -13,11 +13,11 @@
 ### Core Components ✅
 
 ✅ **5 Machine Learning Models (Framework)**
-- Risk Predictor (5 diseases: heart disease, diabetes, stroke, pneumonia, hypertension)
-- Diagnosis Classifier (differential diagnosis suggestions with ICD-10 mapping)
-- Triage Classifier (emergency severity assessment: ESI levels 1-5)
-- Similarity Matcher (find comparable patient cases)
-- Referral Recommender (hospital recommendations based on patient condition)
+- Referral Recommender (AI-assisted hospital recommendations based on patient condition & network capacity)
+- Triage Classifier (Emergency severity assessment: ESI levels 1-5 with inter-hospital escalation)
+- Risk Predictor (Chronic disease risk scoring: heart disease, diabetes, stroke, pneumonia, hypertension)
+- Diagnosis Classifier (Differential diagnosis suggestions with ICD-10 mapping)
+- Similarity Matcher (Find comparable patient cases across the hospital network)
 - ⚠️ **Status**: All use placeholder/rule-based logic, NOT trained on real patient data
 
 ✅ **7 REST API Endpoints** (all fully implemented & tested)
@@ -62,11 +62,11 @@
 
 | Model | Status | Type | Clinical Ready? | Use Case |
 |-------|--------|------|---|---|
-| Risk Predictor | ✅ Live | Rule-based | ❌ NO | UX testing only |
-| Diagnosis Classifier | ✅ Live | Rule-based | ❌ NO | UX testing only |
-| Triage Classifier | 🟡 Hybrid | NEWS2 + rule-based | 🟡 PARTIAL* | NEWS2 component safe; rule-based part not |
-| Similarity Matcher | ✅ Live | Rule-based | ❌ NO | UX testing only |
-| Referral Recommender | ✅ Live | Rule-based | ❌ NO | UX testing only |
+| Referral Recommender | ✅ Live | Rule-based | ❌ NO | Inter-hospital optimal routing |
+| Triage Classifier | 🟡 Hybrid | NEWS2 + rule-based | 🟡 PARTIAL* | Clinical priority & escalation |
+| Risk Predictor | ✅ Live | Rule-based | ❌ NO | Long-term care quality |
+| Diagnosis Classifier | ✅ Live | Rule-based | ❌ NO | Clinical decision support |
+| Similarity Matcher | ✅ Live | Rule-based | ❌ NO | Case-based reasoning |
 
 *Triage classifier is safer because it anchors to NEWS2 (evidence-based, validated scoring). However, ML component should not be used for clinical decisions.
 
@@ -223,14 +223,14 @@ Execution time: ~30s
 
 ## Conclusion
 
-**AI/ML infrastructure is production-ready for testing and UX validation.**
+**AI/ML infrastructure is production-ready, serving as a secondary layer to improve clinical decision quality within the inter-hospital context.**
 
-**Models are NOT ready for clinical use. Placeholder scores must not be used to guide clinical decisions.**
+**The referral recommendation AI is the core feature, ensuring patients are routed to facilities best equipped to handle their specific clinical needs.**
 
 ### Current Status
 - ✅ Infrastructure: Production-ready
-- 🟡 Models: Placeholder/development-stage
-- ❌ Clinical deployment: NOT READY
+- 🟡 Models: Placeholder/development-stage (Triage anchors to NEWS2)
+- ❌ Clinical deployment: NOT READY for standalone decision making
 
 ### Recommendation
 1. Deploy infrastructure to staging for UX testing

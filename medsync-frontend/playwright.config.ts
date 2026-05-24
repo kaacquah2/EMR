@@ -1,12 +1,12 @@
 import { defineConfig } from "@playwright/test";
 
 /**
- * MedSync E2E: role-based, workflow-driven tests.
+ * MedSync E2E: role-based, workflow-driven tests under tests/.
  * Requires backend + frontend running. Set E2E_* env for credentials.
  */
 export default defineConfig({
-  testDir: ".",
-  testMatch: ["tests/**/*.spec.ts", "e2e/**/*.spec.ts"],
+  testDir: "./tests",
+  testMatch: ["**/*.spec.ts"],
   fullyParallel: true,
   forbidOnly: !!process.env.CI,
   retries: process.env.CI ? 2 : 0,
@@ -31,10 +31,10 @@ export default defineConfig({
     { name: "roles", testMatch: "**/roles/**/*.spec.ts" },
     { name: "security", testMatch: "**/security/**/*.spec.ts" },
     { name: "workflows", testMatch: "**/workflows/**/*.spec.ts" },
+    { name: "scenarios", testMatch: "**/scenarios/**/*.spec.ts" },
     { name: "scoping", testMatch: "**/scoping/**/*.spec.ts" },
     { name: "ux", testMatch: "**/ux/**/*.spec.ts" },
     { name: "network", testMatch: "**/network/**/*.spec.ts" },
-    { name: "all", testMatch: "**/*.spec.ts" },
   ],
   timeout: 30_000,
   expect: { timeout: 10_000 },
