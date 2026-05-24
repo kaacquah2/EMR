@@ -10,3 +10,4 @@ class ApiConfig(AppConfig):
         import api.signals_alerts  # noqa
         import api.signals_cds  # noqa
         import api.signals_pharmacy  # noqa
+        import api.checks  # noqa

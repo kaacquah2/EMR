@@ -359,17 +359,6 @@ DEV_PERMISSION_BYPASS_EMAILS = [
     if e.strip()
 ]
 
-def check_bypass_emails_guard(bypass_emails, debug):
-    """Ensure that dev bypass emails are not configured in production mode."""
-    if bypass_emails and not debug:
-        from django.core.exceptions import ImproperlyConfigured
-        raise ImproperlyConfigured(
-            "CRITICAL SECURITY RISK: DEV_PERMISSION_BYPASS_EMAILS/BYPASS_EMAILS is set while DEBUG is False. "
-            "RBAC bypass is only allowed in development mode. Clear this setting for production."
-        )
-
-# CRITICAL SECURITY: Dev bypass must NEVER be non-empty in production (DEBUG=False)
-check_bypass_emails_guard(DEV_PERMISSION_BYPASS_EMAILS, DEBUG)
 
 REST_FRAMEWORK = {
     "DEFAULT_AUTHENTICATION_CLASSES": [

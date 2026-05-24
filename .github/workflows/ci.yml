@@ -52,6 +52,7 @@ jobs:
         run: pip install -r requirements-local.txt
       - name: Run migration linter
         env:
+          DEBUG: "True"
           SECRET_KEY: ${{ secrets.DJANGO_SECRET_KEY || 'django-insecure-ci-test-key-replace-in-prod' }}
           DATABASE_URL: ${{ secrets.DATABASE_URL || 'sqlite:///:memory:' }}
           FIELD_ENCRYPTION_KEY: ${{ secrets.FIELD_ENCRYPTION_KEY || 'ci-test-encryption-key-32-chars-long-at-least' }}
