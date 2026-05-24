@@ -24,6 +24,9 @@ jobs:
           pip install -r requirements-local.txt
           export DEBUG=False
           export SECRET_KEY=test-key
+          export DATABASE_URL=postgres://user:pass@host/db
+          export FIELD_ENCRYPTION_KEY=ci-test-encryption-key-32-chars-long-at-least
+          export AUDIT_LOG_SIGNING_KEY=ci-test-audit-signing-key
           export DEV_PERMISSION_BYPASS_EMAILS=test@example.com
           if python manage.py check 2>&1 | grep -q "CRITICAL SECURITY RISK"; then
             echo "Security guard is working."
