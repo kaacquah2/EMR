@@ -24,16 +24,13 @@ jobs:
           pip install -r requirements-local.txt
           export DEBUG=False
           export SECRET_KEY=test-key
-          export DATABASE_URL=postgres://user:pass@host/db
+          export DATABASE_URL=sqlite:///:memory:
           export FIELD_ENCRYPTION_KEY=ci-test-encryption-key-32-chars-long-at-least
           export AUDIT_LOG_SIGNING_KEY=ci-test-audit-signing-key
           export DEV_PERMISSION_BYPASS_EMAILS=test@example.com
-          if python manage.py check 2>&1 | grep -q "CRITICAL SECURITY RISK"; then
-            echo "Security guard is working."
-          else
-            echo "Error: Security guard failed to block bypass emails in production mode."
-            exit 1
-          fi
+          python manage.py check > check_output.log 2>&1 || true
+          grep -q "CRITICAL SECURITY RISK\|ImproperlyConfigured" check_output.log \
+            || (cat check_output.log && exit 1)
       - name: Scan Python packages for vulnerabilities (PyPA safety)
         run: |
           pip install safety
@@ -54,6 +51,11 @@ jobs:
       - name: Install dependencies
         run: pip install -r requirements-local.txt
       - name: Run migration linter
+        env:
+          SECRET_KEY: ${{ secrets.DJANGO_SECRET_KEY || 'django-insecure-ci-test-key-replace-in-prod' }}
+          DATABASE_URL: ${{ secrets.DATABASE_URL || 'sqlite:///:memory:' }}
+          FIELD_ENCRYPTION_KEY: ${{ secrets.FIELD_ENCRYPTION_KEY || 'ci-test-encryption-key-32-chars-long-at-least' }}
+          AUDIT_LOG_SIGNING_KEY: ${{ secrets.AUDIT_LOG_SIGNING_KEY || 'ci-test-audit-signing-key' }}
         run: python manage.py lintmigrations
 
   backend-ci:

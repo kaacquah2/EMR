@@ -434,3 +434,23 @@ class TestRateLimitFailClosed(TestCase):
         assert remaining == 0
 
 
+class TestBypassEmailsProductionGuard(TestCase):
+    """Test that check_bypass_emails_guard raises ImproperlyConfigured when bypass emails are set with DEBUG=False."""
+
+    def test_guard_raises_on_bypass_emails_in_production(self):
+        from medsync_backend.settings import check_bypass_emails_guard
+        from django.core.exceptions import ImproperlyConfigured
+
+        # 1. DEBUG=False, bypass_emails not empty -> should raise ImproperlyConfigured
+        with pytest.raises(ImproperlyConfigured) as exc_info:
+            check_bypass_emails_guard(["test@example.com"], debug=False)
+        assert "CRITICAL SECURITY RISK" in str(exc_info.value)
+
+        # 2. DEBUG=True, bypass_emails not empty -> should pass
+        check_bypass_emails_guard(["test@example.com"], debug=True)
+
+        # 3. DEBUG=False, bypass_emails empty -> should pass
+        check_bypass_emails_guard([], debug=False)
+
+
+

@@ -352,18 +352,24 @@ CDS_RULES_CACHE_TTL = config("CDS_RULES_CACHE_TTL", default=3600, cast=int)
 # All other users receive a one-time code by email after password login.
 # Example:
 # DEV_PERMISSION_BYPASS_EMAILS=admin@medsync.gh,doctor@medsync.gh,hospital_admin@medsync.gh,nurse@medsync.gh,receptionist@medsync.gh,lab_technician@medsync.gh,doctor2@medsync.gh
+_raw_bypass_emails = _str_config("DEV_PERMISSION_BYPASS_EMAILS") or _str_config("BYPASS_EMAILS")
 DEV_PERMISSION_BYPASS_EMAILS = [
     e.strip().lower()
-    for e in _str_config("DEV_PERMISSION_BYPASS_EMAILS").split(",")
+    for e in _raw_bypass_emails.split(",")
     if e.strip()
 ]
+
+def check_bypass_emails_guard(bypass_emails, debug):
+    """Ensure that dev bypass emails are not configured in production mode."""
+    if bypass_emails and not debug:
+        from django.core.exceptions import ImproperlyConfigured
+        raise ImproperlyConfigured(
+            "CRITICAL SECURITY RISK: DEV_PERMISSION_BYPASS_EMAILS/BYPASS_EMAILS is set while DEBUG is False. "
+            "RBAC bypass is only allowed in development mode. Clear this setting for production."
+        )
+
 # CRITICAL SECURITY: Dev bypass must NEVER be non-empty in production (DEBUG=False)
-if DEV_PERMISSION_BYPASS_EMAILS and not DEBUG:
-    from django.core.exceptions import ImproperlyConfigured
-    raise ImproperlyConfigured(
-        "CRITICAL SECURITY RISK: DEV_PERMISSION_BYPASS_EMAILS is set while DEBUG is False. "
-        "RBAC bypass is only allowed in development mode. Clear this setting for production."
-    )
+check_bypass_emails_guard(DEV_PERMISSION_BYPASS_EMAILS, DEBUG)
 
 REST_FRAMEWORK = {
     "DEFAULT_AUTHENTICATION_CLASSES": [
