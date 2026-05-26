@@ -21,6 +21,9 @@ _VERCEL = os.environ.get("VERCEL") == "1"
 
 # Default False so production is safe if env is unset. Set DEBUG=True for local dev only.
 DEBUG = config("DEBUG", default=False, cast=bool)
+ENV = config("ENV", default="development")
+LLM_MODE = config("LLM_MODE", default="mock")
+
 
 # SECRET_KEY: no insecure default when DEBUG=False. Accept SECRET_KEY or DJANGO_SECRET_KEY
 # (os.environ first so Railway/Render-style names work; empty/whitespace counts as unset).
@@ -135,7 +138,9 @@ MIDDLEWARE = [
     "django.middleware.csrf.CsrfViewMiddleware",
     "django.contrib.auth.middleware.AuthenticationMiddleware",
     "django_otp.middleware.OTPMiddleware",
+    "api.middleware.SessionIdleTimeoutMiddleware",
     "shared.permissions.PermissionEnforcementMiddleware",
+
     "api.middleware.ForcedPasswordChangeMiddleware",
     "api.middleware.ViewAsHospitalMiddleware",
     "api.middleware.BreakGlassExpiryMiddleware",
@@ -222,6 +227,13 @@ if _VERCEL:
             "LOCATION": "vercel-locmem",
         }
     }
+elif _redis_url:
+    CACHES = {
+        "default": {
+            "BACKEND": "django.core.cache.backends.redis.RedisCache",
+            "LOCATION": _redis_url,
+        }
+    }
 else:
     CACHES = {
         "default": {
@@ -231,6 +243,15 @@ else:
     }
 
 AUTH_USER_MODEL = "core.User"
+
+# Password Hashers - Argon2id by default per OWASP 2025 and HIPAA recommendations
+PASSWORD_HASHERS = [
+    "django.contrib.auth.hashers.Argon2PasswordHasher",
+    "django.contrib.auth.hashers.PBKDF2PasswordHasher",
+    "django.contrib.auth.hashers.PBKDF2SHA1PasswordHasher",
+    "django.contrib.auth.hashers.BCryptSHA256PasswordHasher",
+]
+
 
 # Roles that should only see basic demographics (PII masking) per MedSync Specs
 NON_CLINICAL_PII_MASK_ROLES = (
@@ -666,6 +687,10 @@ if not AUDIT_LOG_SIGNING_KEY and not DEBUG:
     from django.core.exceptions import ImproperlyConfigured
     raise ImproperlyConfigured("AUDIT_LOG_SIGNING_KEY is required in production.")
 
+# Database backup monitoring (health check + future Celery pg_dump task)
+BACKUP_ENABLED = config("BACKUP_ENABLED", default=False, cast=bool)
+BACKUP_MAX_AGE_HOURS = config("BACKUP_MAX_AGE_HOURS", default=26, cast=int)
+
 # Optional external integration webhooks (fire-and-forget notify; no PHI in payload by default)
 PHARMACY_WEBHOOK_URL = config("PHARMACY_WEBHOOK_URL", default="")
 PACS_CALLBACK_URL = config("PACS_CALLBACK_URL", default="")
@@ -714,6 +739,11 @@ else:
 SESSION_COOKIE_SECURE = _SECURE_HTTPS if DEBUG else True
 SESSION_COOKIE_HTTPONLY = True
 SESSION_COOKIE_SAMESITE = "Strict"
+
+# HIPAA compliance: Session idle timeout (15 minutes of inactivity)
+SESSION_COOKIE_AGE = 900
+SESSION_SAVE_EVERY_REQUEST = True
+
 CSRF_COOKIE_SECURE = _SECURE_HTTPS if DEBUG else True
 CSRF_COOKIE_HTTPONLY = True  # FIXED: Now HttpOnly to prevent XSS cookie theft
 CSRF_COOKIE_SAMESITE = "Strict"  # FIXED: Changed from Lax to Strict
@@ -818,3 +848,44 @@ DAPHNE_APPLICATION_CLOSE_TIMEOUT = 5 if DEBUG else 2
 # Production (DEBUG=False): True → hard-fail for security
 # ============================================================================
 PERMISSION_FAIL_CLOSED_UNKNOWN_ENDPOINTS = not DEBUG
+
+# Django admin URL path (non-guessable in production). No leading slash.
+ADMIN_URL = _str_config("ADMIN_URL", "admin/").strip("/") + "/"
+
+# ============================================================================
+# STRUCTURED LOGGING (JSON to stdout for log aggregation)
+# ============================================================================
+_LOG_LEVEL = _str_config("LOG_LEVEL", "DEBUG" if DEBUG else "INFO")
+LOGGING = {
+    "version": 1,
+    "disable_existing_loggers": False,
+    "formatters": {
+        "json": {
+            "format": (
+                '{"time":"%(asctime)s","level":"%(levelname)s",'
+                '"logger":"%(name)s","message":"%(message)s"}'
+            ),
+            "datefmt": "%Y-%m-%dT%H:%M:%S",
+        },
+        "verbose": {
+            "format": "{levelname} {asctime} {name} {message}",
+            "style": "{",
+        },
+    },
+    "handlers": {
+        "console": {
+            "class": "logging.StreamHandler",
+            "formatter": "json" if not DEBUG else "verbose",
+        },
+    },
+    "root": {
+        "handlers": ["console"],
+        "level": _LOG_LEVEL,
+    },
+    "loggers": {
+        "django": {"handlers": ["console"], "level": "INFO", "propagate": False},
+        "django.request": {"handlers": ["console"], "level": "WARNING", "propagate": False},
+        "medsync": {"handlers": ["console"], "level": _LOG_LEVEL, "propagate": False},
+        "medsync.rbac": {"handlers": ["console"], "level": "INFO", "propagate": False},
+    },
+}

@@ -1,0 +1,18 @@
+# Railway deployment manifest — MedSync backend
+# https://docs.railway.app/reference/config-as-code
+
+[build]
+builder = "DOCKERFILE"
+dockerfilePath = "medsync-backend/Dockerfile"
+watchPatterns = ["medsync-backend/**"]
+
+[deploy]
+startCommand = "daphne -b 0.0.0.0 -p $PORT medsync_backend.asgi:application"
+healthcheckPath = "/api/v1/health"
+healthcheckTimeout = 30
+restartPolicyType = "ON_FAILURE"
+restartPolicyMaxRetries = 5
+numReplicas = 1
+
+# Run migrations before each deploy (Railway pre-deploy hook)
+preDeployCommand = "python manage.py migrate --noinput"

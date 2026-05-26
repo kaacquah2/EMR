@@ -8,7 +8,7 @@ from api.views.root_views import api_root, favicon
 urlpatterns = [
     path("", api_root),
     path("favicon.ico", favicon),
-    path("admin/", admin.site.urls),
+    path(settings.ADMIN_URL, admin.site.urls),
     path("api/v1/", include("api.urls")),
 ]
 if settings.DEBUG:

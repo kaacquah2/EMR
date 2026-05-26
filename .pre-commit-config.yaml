@@ -7,6 +7,16 @@ repos:
       - id: check-yaml
       - id: check-added-large-files
 
+  - repo: local
+    rev: local
+    hooks:
+      - id: block-insecure-secrets
+        name: Block known insecure secret strings
+        entry: python scripts/precommit_block_insecure_secrets.py
+        language: python
+        pass_filenames: true
+        files: \.(py|yml|yaml|env|example|txt|json|toml)$
+
   - repo: https://github.com/psf/black
     rev: 24.1.1
     hooks:

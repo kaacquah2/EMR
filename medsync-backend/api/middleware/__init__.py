@@ -256,3 +256,39 @@ class RateLimitHeaderMiddleware:
                 response["Retry-After"] = str(most_restrictive["retry_after"])
 
         return response
+
+
+class SessionIdleTimeoutMiddleware:
+    """
+    HIPAA Compliant Inactivity Timeout Middleware.
+    Updates/extends the user's activity key in the cache for all authenticated requests.
+    """
+
+    def __init__(self, get_response):
+        self.get_response = get_response
+
+    def __call__(self, request):
+        user = request.user
+        if not user or not user.is_authenticated:
+            # Resolve user from Bearer token if present
+            auth_header = request.META.get("HTTP_AUTHORIZATION", "")
+            if auth_header.startswith("Bearer "):
+                from rest_framework_simplejwt.authentication import JWTAuthentication
+                try:
+                    auth_result = JWTAuthentication().authenticate(request)
+                    if auth_result:
+                        user, _ = auth_result
+                except Exception:
+                    pass
+
+        if user and user.is_authenticated:
+            # Skip updating activity for token refresh requests
+            if not request.path.startswith("/api/v1/auth/refresh"):
+                # Update user's last activity key in cache (extending to 15 minutes)
+                from django.core.cache import cache
+                cache_key = f"user:last_activity:{user.id}"
+                cache.set(cache_key, "active", timeout=900)  # 15 minutes
+
+
+        return self.get_response(request)
+

@@ -65,7 +65,8 @@ def _can_access_patient_fhir(request, patient):
         valid_consent = Consent.objects.filter(
             global_patient__facility_profiles__patient=patient,
             granted_to_facility=request.user.hospital,
-            is_active=True
+            is_active=True,
+            withdrawn_at__isnull=True,
         ).exclude(
             expires_at__lt=timezone.now()
         ).first()
@@ -881,3 +882,82 @@ def fhir_observation_list(request):
     }
     
     return Response(bundle, status=status.HTTP_200_OK)
+
+
+@api_view(["GET"])
+@permission_classes([IsAuthenticated])
+def fhir_capability_statement(request):
+    """
+    FHIR R4 CapabilityStatement (mandatory metadata for partner discovery).
+    GET /api/v1/fhir/metadata
+    """
+    if request.user.role not in _FHIR_ALLOWED_ROLES:
+        return Response(
+            {
+                "resourceType": "OperationOutcome",
+                "issue": [{"severity": "error", "code": "forbidden"}],
+            },
+            status=status.HTTP_403_FORBIDDEN,
+        )
+
+    base = request.build_absolute_uri("/api/v1/fhir").rstrip("/")
+    now = timezone.now().isoformat()
+
+    resources = [
+        ("Patient", ["read"], [{"name": "everything", "definition": f"{base}/Patient/{{id}}/$everything"}]),
+        ("Encounter", ["read"], []),
+        ("Condition", ["read"], []),
+        ("MedicationRequest", ["read"], []),
+        ("Observation", ["read"], []),
+        ("DiagnosticReport", ["read"], []),
+        ("Bundle", ["read"], []),
+        ("CapabilityStatement", ["read"], []),
+    ]
+
+    statement = {
+        "resourceType": "CapabilityStatement",
+        "id": "medsync",
+        "url": f"{base}/metadata",
+        "version": "1.0.0",
+        "name": "MedSyncEMR",
+        "title": "MedSync EMR FHIR R4 Server",
+        "status": "active",
+        "date": now,
+        "publisher": "MedSync",
+        "description": "Inter-hospital EMR FHIR read API for Ghana health facilities.",
+        "kind": "instance",
+        "software": {"name": "MedSync", "version": "1.0"},
+        "implementation": {"description": "MedSync Django REST FHIR layer", "url": base},
+        "fhirVersion": "4.0.1",
+        "format": ["json"],
+        "rest": [
+            {
+                "mode": "server",
+                "documentation": "Read-only FHIR R4 resources with consent enforcement.",
+                "security": {
+                    "service": [
+                        {
+                            "coding": [
+                                {
+                                    "system": "http://hl7.org/fhir/restful-security-service",
+                                    "code": "OAuth",
+                                }
+                            ]
+                        }
+                    ],
+                    "description": "JWT bearer authentication via MedSync API.",
+                },
+                "resource": [
+                    {
+                        "type": rtype,
+                        "interaction": [{"code": code} for code in interactions],
+                        **({"operation": operations} if operations else {}),
+                        "versioning": "no-version",
+                        "readHistory": False,
+                    }
+                    for rtype, interactions, operations in resources
+                ],
+            }
+        ],
+    }
+    return Response(statement, status=status.HTTP_200_OK)

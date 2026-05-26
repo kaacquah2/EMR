@@ -21,11 +21,17 @@ import json
 import hashlib
 import secrets
 import time
+from django.core.cache import cache
 from django.test import TestCase, override_settings
 from django.utils import timezone
 from rest_framework.test import APIClient
 from core.models import User, Hospital, MFASession, BackupCodeRateLimit
 from api.rate_limiting import MFAUserThrottle
+
+
+def _clear_rate_limit_cache():
+    """Isolate throttle state between tests (shared cache + IP)."""
+    cache.clear()
 
 
 @pytest.mark.django_db
@@ -79,6 +85,7 @@ class TestCriticalFix2RateLimitTempPassword(TestCase):
     """Test that temp password endpoint has rate limiting applied."""
 
     def setUp(self):
+        _clear_rate_limit_cache()
         self.client = APIClient()
         self.hospital = Hospital.objects.create(name="Test Hospital", nhis_code="TEST001")
         self.user = User.objects.create_user(
@@ -218,6 +225,7 @@ class TestHighFix2AccountLockoutRaceCondition(TestCase):
     """Test that account lockout uses atomic F() expressions."""
 
     def setUp(self):
+        _clear_rate_limit_cache()
         self.client = APIClient()
         self.hospital = Hospital.objects.create(name="Test Hospital", nhis_code="TEST001")
         self.user = User.objects.create_user(
@@ -359,6 +367,7 @@ class TestSecurityFixesIntegration(TestCase):
     """Integration test verifying all security fixes work together."""
 
     def setUp(self):
+        _clear_rate_limit_cache()
         self.client = APIClient()
         self.hospital = Hospital.objects.create(name="Test Hospital", nhis_code="TEST001")
         self.user = User.objects.create_user(
@@ -458,6 +467,139 @@ class TestBypassEmailsProductionGuard(TestCase):
         with self.settings(DEV_PERMISSION_BYPASS_EMAILS=[], DEBUG=False):
             errors = check_bypass_emails_guard(None)
             assert len(errors) == 0
+
+
+class TestProductionReadinessArgon2PasswordHasher(TestCase):
+    """Test that Argon2 is configured as the default password hasher."""
+
+    def test_argon2_is_default_hasher(self):
+        from django.contrib.auth.hashers import get_hasher
+        hasher = get_hasher()
+        self.assertEqual(hasher.algorithm, 'argon2')
+
+
+class TestProductionReadinessLLMModeGuard(TestCase):
+    """Test that startup guard raises ImproperlyConfigured in production if mock LLM mode is active."""
+
+    def test_guard_raises_on_mock_llm_in_production(self):
+        from django.core.exceptions import ImproperlyConfigured
+        from django.apps import apps
+        config = apps.get_app_config('api')
+        
+        # Test condition: ENV=production, LLM_MODE=mock
+        with self.settings(ENV='production', LLM_MODE='mock'):
+            with self.assertRaises(ImproperlyConfigured) as context:
+                config.ready()
+            self.assertIn("LLM_MODE=mock is not allowed when ENV=production", str(context.exception))
+
+        # Test condition: ENV=production, LLM_MODE=bedrock (should pass)
+        with self.settings(ENV='production', LLM_MODE='bedrock'):
+            # Should not raise ImproperlyConfigured
+            config.ready()
+
+        # Test condition: ENV=development, LLM_MODE=mock (should pass)
+        with self.settings(ENV='development', LLM_MODE='mock'):
+            # Should not raise ImproperlyConfigured
+            config.ready()
+
+
+
+class TestAnomalyDetectionCache(TestCase):
+    """Test that patient access anomaly detection correctly uses the cache."""
+
+    def setUp(self):
+        self.user_id = "test-user-uuid"
+        from api.middleware.anomaly_detection import reset_patient_access
+        reset_patient_access(self.user_id)
+
+    def tearDown(self):
+        from api.middleware.anomaly_detection import reset_patient_access
+        reset_patient_access(self.user_id)
+
+    def test_track_patient_access_uses_cache(self):
+        from api.middleware.anomaly_detection import track_patient_access
+        # Access first patient -> not anomaly, count should be 1
+        is_anomaly, count = track_patient_access(self.user_id, "patient-1")
+        self.assertFalse(is_anomaly)
+        self.assertEqual(count, 1)
+
+        # Access same patient again -> count remains 1
+        is_anomaly, count = track_patient_access(self.user_id, "patient-1")
+        self.assertFalse(is_anomaly)
+        self.assertEqual(count, 1)
+
+        # Access second patient -> count becomes 2
+        is_anomaly, count = track_patient_access(self.user_id, "patient-2")
+        self.assertFalse(is_anomaly)
+        self.assertEqual(count, 2)
+
+    def test_anomaly_detected_above_threshold(self):
+        from api.middleware.anomaly_detection import track_patient_access
+        from api.middleware import anomaly_detection
+        original_threshold = anomaly_detection.PATIENT_ACCESS_THRESHOLD
+        
+        try:
+            # Set a very low threshold for testing
+            anomaly_detection.PATIENT_ACCESS_THRESHOLD = 2
+            
+            # Access 1st, 2nd, 3rd patients
+            track_patient_access(self.user_id, "p-1")
+            track_patient_access(self.user_id, "p-2")
+            is_anomaly, count = track_patient_access(self.user_id, "p-3")
+            
+            self.assertTrue(is_anomaly)
+            self.assertEqual(count, 3)
+        finally:
+            anomaly_detection.PATIENT_ACCESS_THRESHOLD = original_threshold
+
+
+class TestSessionIdleTimeout(TestCase):
+    """Test session inactivity timeout validation."""
+
+    def setUp(self):
+        self.client = APIClient()
+        self.hospital = Hospital.objects.create(name="Timeout Test Hospital", nhis_code="TIME01")
+        self.user = User.objects.create_user(
+            email="timeout@medsync.local",
+            password="SecurePassword123!@#",
+            hospital=self.hospital,
+            role="doctor",
+            account_status="active",
+        )
+        self.user_id = str(self.user.id)
+        from django.core.cache import cache
+        cache.delete(f"user:last_activity:{self.user_id}")
+
+    def tearDown(self):
+        from django.core.cache import cache
+        cache.delete(f"user:last_activity:{self.user_id}")
+
+    def test_refresh_token_fails_after_inactivity(self):
+        # 1. Generate token
+        from rest_framework_simplejwt.tokens import RefreshToken
+        refresh = RefreshToken.for_user(self.user)
+        refresh_token_str = str(refresh)
+        access_token_str = str(refresh.access_token)
+
+        # Set Bearer token in credentials to pass PermissionEnforcementMiddleware
+        self.client.credentials(HTTP_AUTHORIZATION=f'Bearer {access_token_str}')
+
+        # Activity cache key is missing (simulating 15 minutes of inactivity)
+        response = self.client.post('/api/v1/auth/refresh', {'refresh_token': refresh_token_str})
+        self.assertEqual(response.status_code, 401)
+        resp_data = response.data if hasattr(response, 'data') else json.loads(response.content)
+        self.assertIn("Session expired due to inactivity", resp_data['message'])
+
+        # 2. Simulate activity (set key in cache)
+        from api.views.auth_views import update_user_activity
+        update_user_activity(self.user_id)
+
+        # Refresh should now succeed
+        response = self.client.post('/api/v1/auth/refresh', {'refresh_token': refresh_token_str})
+        self.assertEqual(response.status_code, 200)
+
+
+
 
 
 

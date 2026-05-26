@@ -116,6 +116,21 @@ class FacilityPatient(models.Model):
         ]
 
 
+class ConsentScope(models.Model):
+    """Granular resource types a patient may exclude from cross-facility sharing."""
+
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    name = models.CharField(
+        max_length=100,
+        unique=True,
+        help_text="e.g. HIV, MentalHealth, Condition, Observation",
+    )
+    description = models.TextField(blank=True, null=True)
+
+    def __str__(self):
+        return self.name
+
+
 class Consent(models.Model):
     """Consent for a facility to access a global patient's records."""
 
@@ -137,6 +152,18 @@ class Consent(models.Model):
     scope = models.CharField(max_length=20, choices=SCOPE_CHOICES)
     expires_at = models.DateTimeField(null=True, blank=True)
     is_active = models.BooleanField(default=True)
+    excluded_scopes = models.ManyToManyField(
+        ConsentScope, blank=True, related_name="consents_excluded"
+    )
+    withdrawn_at = models.DateTimeField(null=True, blank=True)
+    withdrawn_by = models.ForeignKey(
+        User,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="consents_withdrawn",
+    )
+    withdrawal_reason = models.TextField(blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:
@@ -147,12 +174,30 @@ class Consent(models.Model):
     def is_expired(self):
         """Check if consent has expired."""
         if self.expires_at is None:
-            return False  # No expiry = never expires
+            return False
         return timezone.now() > self.expires_at
 
     def is_valid(self):
-        """Check if consent is both active and not expired."""
-        return self.is_active and not self.is_expired()
+        """Check if consent is active, not expired, and not withdrawn."""
+        return self.is_active and not self.is_expired() and self.withdrawn_at is None
+
+    def withdraw(self, user, reason: str = ""):
+        """Patient-initiated or facility revocation with audit trail (NDPA §26)."""
+        if not self.is_active and self.withdrawn_at:
+            return self
+        self.is_active = False
+        self.withdrawn_at = timezone.now()
+        self.withdrawn_by = user
+        self.withdrawal_reason = reason or ""
+        self.save(
+            update_fields=[
+                "is_active",
+                "withdrawn_at",
+                "withdrawn_by",
+                "withdrawal_reason",
+            ]
+        )
+        return self
 
 
 

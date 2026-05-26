@@ -662,6 +662,8 @@ class ConsentSerializer(serializers.ModelSerializer):
             "scope",
             "expires_at",
             "is_active",
+            "withdrawn_at",
+            "withdrawal_reason",
             "created_at",
         ]
 

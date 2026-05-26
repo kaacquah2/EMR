@@ -1,10 +1,10 @@
 # Stage 1: Build dependencies
-FROM python:3.12-slim as builder
+FROM python:3.12-slim AS builder
 
 WORKDIR /app
 
-ENV PYTHONDONTWRITEBYTECODE 1
-ENV PYTHONUNBUFFERED 1
+ENV PYTHONDONTWRITEBYTECODE=1
+ENV PYTHONUNBUFFERED=1
 
 RUN apt-get update && apt-get install -y \
     build-essential \
@@ -19,10 +19,15 @@ FROM python:3.12-slim
 
 WORKDIR /app
 
+ENV PYTHONDONTWRITEBYTECODE=1
+ENV PYTHONUNBUFFERED=1
+
 RUN apt-get update && apt-get install -y \
     libpq5 \
     curl \
-    && rm -rf /var/lib/apt/lists/*
+    && rm -rf /var/lib/apt/lists/* \
+    && groupadd --gid 1000 medsync \
+    && useradd --uid 1000 --gid medsync --create-home --shell /usr/sbin/nologin medsync
 
 COPY --from=builder /app/wheels /wheels
 COPY --from=builder /app/requirements-local.txt .
@@ -30,8 +35,21 @@ RUN pip install --no-cache /wheels/*
 
 COPY . .
 
-# Default command (can be overridden in docker-compose)
-HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
+# Collect static assets at build time (WhiteNoise serves them in production)
+RUN DEBUG=True SECRET_KEY=build-collectstatic-only \
+    DATABASE_URL=sqlite:////tmp/build.db \
+    FIELD_ENCRYPTION_KEY=build-time-encryption-key-32-chars-min \
+    AUDIT_LOG_SIGNING_KEY=build-time-audit-signing-key-min \
+    python manage.py collectstatic --noinput
+
+RUN chown -R medsync:medsync /app
+
+USER medsync
+
+EXPOSE 8000
+
+HEALTHCHECK --interval=30s --timeout=10s --start-period=30s --retries=3 \
   CMD curl -f http://localhost:8000/api/v1/health || exit 1
 
-CMD ["python", "manage.py", "runserver", "0.0.0.0:8000"]
+# ASGI via Daphne (Channels/WebSockets). Override in compose for dev hot-reload.
+CMD ["daphne", "-b", "0.0.0.0", "-p", "8000", "medsync_backend.asgi:application"]

@@ -118,8 +118,9 @@ def build_health_payload(*, deep: bool = False) -> tuple[dict, bool]:
     else:
         audit_obj = {"status": "skipped", **audit_extra}
 
-    # Backup (placeholder; no scheduler in codebase yet)
-    backup_obj = {"status": "ok", "last_run": timezone.now().isoformat()}
+    from api.services.backup_status import get_backup_health
+
+    backup_obj = get_backup_health()
 
     top_status = "ok" if db_ok else "unhealthy"
     services = {

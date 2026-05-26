@@ -382,6 +382,12 @@ PERMISSION_MATRIX = {
         "super_admin": ["GET", "POST"],
     },
     # FHIR endpoints (read-only for authorized roles)
+    "fhir/metadata": {
+        "doctor": ["GET"],
+        "hospital_admin": ["GET"],
+        "super_admin": ["GET"],
+        "nurse": ["GET"],
+    },
     "fhir/Patient": {
         "doctor": ["GET"],
         "hospital_admin": ["GET"],

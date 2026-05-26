@@ -297,3 +297,13 @@ def encounter_b(db, hospital_b, patient_b, doctor_b):
         status="active",
         created_at=timezone.now(),
     )
+
+
+@pytest.fixture(autouse=True)
+def _clear_rate_limit_cache_between_tests():
+    """Prevent DRF throttle history leaking across tests (shared cache + IP)."""
+    from django.core.cache import cache
+
+    cache.clear()
+    yield
+    cache.clear()

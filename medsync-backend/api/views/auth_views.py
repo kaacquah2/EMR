@@ -61,6 +61,16 @@ def get_tokens_for_user(user, request=None):
     return refresh
 
 
+def update_user_activity(user_id):
+    """
+    HIPAA compliance: Update the user's last activity cache key with a 15-minute TTL.
+    """
+    from django.core.cache import cache
+    cache_key = f"user:last_activity:{user_id}"
+    cache.set(cache_key, "active", timeout=900)  # 15 minutes
+
+
+
 def _mfa_use_authenticator_only(email: str) -> bool:
     """Dev seed accounts: fake inboxes — MFA via TOTP app only, not email OTP."""
     e = (email or "").strip().lower()
@@ -171,6 +181,7 @@ def login(request):
         audit_log(user, "LOGIN", resource_type="PASSWORD", request=request,
                   extra_data={"has_passkey": True, "skipped_mfa": True})
         refresh = get_tokens_for_user(user, request)
+        update_user_activity(user.id)
         return Response({
             "access_token": str(refresh.access_token),
             "refresh_token": str(refresh),
@@ -178,6 +189,7 @@ def login(request):
             "hospital_id": str(user.hospital_id) if user.hospital_id else None,
             "user_profile": _user_to_dict(user),
         })
+
 
     # ==================== PASSKEY RULE #2: Password + MFA is the fallback ====================
     # No passkey registered → require MFA if enabled
@@ -474,7 +486,9 @@ def mfa_verify(request):
 
     mfa_session.delete()
     refresh = get_tokens_for_user(user, request)
+    update_user_activity(user.id)
     audit_log(user, "LOGIN", request=request)
+
     return Response({
         "access_token": str(refresh.access_token),
         "refresh_token": str(refresh),
@@ -621,7 +635,9 @@ def activate(request):
         
         audit_log(user, "ACCOUNT_ACTIVATED", extra_data={"mfa_grace_period": True}, request=request)
         refresh = get_tokens_for_user(user, request)
+        update_user_activity(user.id)
         return Response({
+
             "access_token": str(refresh.access_token),
             "refresh_token": str(refresh),
             "role": user.role,
@@ -654,7 +670,9 @@ def activate(request):
     user.save()
     audit_log(user, "ACCOUNT_ACTIVATED", request=request)
     refresh = get_tokens_for_user(user, request)
+    update_user_activity(user.id)
     return Response({
+
         "access_token": str(refresh.access_token),
         "refresh_token": str(refresh),
         "role": user.role,
@@ -868,6 +886,8 @@ def reset_password(request):
 
     # Generate new tokens (invalidates old ones automatically via JWT expiry)
     refresh = get_tokens_for_user(user, request)
+    update_user_activity(user.id)
+
 
     return Response({
         "message": "Password reset successful. You can now log in with your new password.",
@@ -942,7 +962,9 @@ def login_with_temp_password(request):
 
     # Return access token - frontend will enforce password change
     refresh = get_tokens_for_user(user, request)
+    update_user_activity(user.id)
     audit_log(user, "LOGIN", request=request)
+
 
     return Response({
         "access_token": str(refresh.access_token),
@@ -1016,7 +1038,18 @@ def refresh(request):
         from django.contrib.auth import get_user_model
         User = get_user_model()
         user_id = token.payload.get('user_id')
+        
+        # HIPAA Inactivity Timeout Check
+        from django.core.cache import cache
+        cache_key = f"user:last_activity:{user_id}"
+        if not cache.get(cache_key):
+            return Response(
+                {"message": "Session expired due to inactivity. Please log in again."},
+                status=status.HTTP_401_UNAUTHORIZED,
+            )
+            
         user = User.objects.get(id=user_id)
+
         
         # Check for concurrent use from different IP or user agent
         client_ip = get_client_ip(request)
@@ -1063,6 +1096,8 @@ def refresh(request):
                 )
 
         new_refresh = get_tokens_for_user(user, request)
+        update_user_activity(user.id)
+
         
         # Blacklist the old one since it has been rotated
         try:
@@ -1532,6 +1567,8 @@ def passkey_auth_complete(request):
         
         # Issue JWT tokens
         refresh = get_tokens_for_user(user, request)
+        update_user_activity(user.id)
+
         
         # Clear session
         del request.session['passkey_auth_challenge']

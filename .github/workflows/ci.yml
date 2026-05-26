@@ -6,6 +6,12 @@ on:
   pull_request:
     branches: [main, master, develop, staging]
 
+# Non-production placeholders for test jobs (not GitHub secrets).
+env:
+  SECRET_KEY: ci-guard-bypass-check-secret-not-for-deploy
+  FIELD_ENCRYPTION_KEY: ci-guard-field-encryption-key-32chars
+  AUDIT_LOG_SIGNING_KEY: ci-guard-audit-signing-key-value
+
 jobs:
   security-check:
     runs-on: ubuntu-latest
@@ -17,24 +23,38 @@ jobs:
             echo "Error: .env.example contains real-looking emails."
             exit 1
           fi
+      - name: Reject known insecure secret strings in tracked files
+        run: |
+          set -e
+          patterns=(
+            'django-insecure-dev-key'
+            'django-insecure-ci-test-key'
+            'ci-test-encryption-key-32-chars-long-at-least'
+          )
+          for pat in "${patterns[@]}"; do
+            if git grep -n "$pat" -- ':!*.md' ':!.github/workflows/ci.yml' ':!MedSync_EMR_Master_Prompt.md' 2>/dev/null; then
+              echo "ERROR: Insecure pattern found: $pat"
+              exit 1
+            fi
+          done
+          echo "No known insecure secret patterns in source."
       - name: Check DEV_PERMISSION_BYPASS_EMAILS guard
         run: |
-          # This test ensures that if someone tries to set bypass emails with DEBUG=False, the app fails
           cd medsync-backend
           pip install -r requirements-local.txt
           export DEBUG=False
-          export SECRET_KEY=test-key
+          export SECRET_KEY="ci-guard-bypass-check-secret-not-for-deploy"
           export DATABASE_URL=sqlite:///:memory:
-          export FIELD_ENCRYPTION_KEY=ci-test-encryption-key-32-chars-long-at-least
-          export AUDIT_LOG_SIGNING_KEY=ci-test-audit-signing-key
+          export FIELD_ENCRYPTION_KEY="ci-guard-field-encryption-key-32chars"
+          export AUDIT_LOG_SIGNING_KEY="ci-guard-audit-signing-key-value"
           export DEV_PERMISSION_BYPASS_EMAILS=test@example.com
           python manage.py check > check_output.log 2>&1 || true
           grep -q "CRITICAL SECURITY RISK\|ImproperlyConfigured" check_output.log \
             || (cat check_output.log && exit 1)
-      - name: Scan Python packages for vulnerabilities (PyPA safety)
+      - name: Scan Python packages for vulnerabilities (pip-audit)
         run: |
-          pip install safety
-          safety check --full-report
+          pip install pip-audit
+          pip-audit -r medsync-backend/requirements-local.txt
 
   migration-linter:
     runs-on: ubuntu-latest
@@ -53,10 +73,7 @@ jobs:
       - name: Run migration linter
         env:
           DEBUG: "True"
-          SECRET_KEY: ${{ secrets.DJANGO_SECRET_KEY || 'django-insecure-ci-test-key-replace-in-prod' }}
-          DATABASE_URL: ${{ secrets.DATABASE_URL || 'sqlite:///:memory:' }}
-          FIELD_ENCRYPTION_KEY: ${{ secrets.FIELD_ENCRYPTION_KEY || 'ci-test-encryption-key-32-chars-long-at-least' }}
-          AUDIT_LOG_SIGNING_KEY: ${{ secrets.AUDIT_LOG_SIGNING_KEY || 'ci-test-audit-signing-key' }}
+          DATABASE_URL: "sqlite:///:memory:"
         run: python manage.py lintmigrations
 
   backend-ci:
@@ -66,11 +83,8 @@ jobs:
       run:
         working-directory: medsync-backend
     env:
-      SECRET_KEY: "django-insecure-ci-test-key-replace-in-prod"
       DEBUG: "True"
       DATABASE_URL: "sqlite:///:memory:"
-      FIELD_ENCRYPTION_KEY: "ci-test-encryption-key-32-chars-long-at-least"
-      AUDIT_LOG_SIGNING_KEY: "ci-test-audit-signing-key"
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -80,17 +94,17 @@ jobs:
           cache-dependency-path: medsync-backend/requirements-local.txt
       - name: Install dependencies
         run: pip install -r requirements-local.txt
-      - name: Pytest
-        run: python -m pytest api/tests/ -q --tb=short
+      - name: Django system check
+        run: python manage.py check
+      - name: Apply migrations (smoke)
+        run: python manage.py migrate --noinput
+      - name: Pytest with coverage
+        run: python -m pytest api/tests/ -q --tb=short --cov=api --cov=core --cov=records --cov=interop --cov=shared --cov-fail-under=50 --cov-report=term-missing
       - name: RBAC & Policy Checks
         run: |
           python manage.py test api.tests.test_rbac_coverage --verbosity=2 --keepdb
           python manage.py test api.tests.test_alert_policy --verbosity=2 --keepdb
           python manage.py test api.tests.test_phi_encryption --verbosity=2 --keepdb
-      - name: pip-audit
-        run: |
-          pip install pip-audit
-          pip-audit -r requirements-local.txt
 
   frontend-ci:
     runs-on: ubuntu-latest
@@ -122,30 +136,101 @@ jobs:
       - uses: actions/checkout@v4
       - name: Docker Compose Test
         run: |
-          docker compose up -d
-          # Wait for services to be healthy
-          sleep 30
+          docker compose up -d --build
+          sleep 45
           docker compose ps
-          # Basic check: backend is up
           curl -f http://localhost:8000/api/v1/health || exit 1
           docker compose down
 
-  deploy-staging:
+  pre-deploy:
     runs-on: ubuntu-latest
     needs: [integration-tests]
-    if: github.ref == 'refs/heads/staging'
+    if: github.ref == 'refs/heads/staging' || github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master'
+    defaults:
+      run:
+        working-directory: medsync-backend
+    env:
+      SECRET_KEY: ${{ secrets.DJANGO_SECRET_KEY }}
+      DEBUG: "False"
+      ENV: "production"
+      DATABASE_URL: ${{ secrets.DATABASE_URL }}
+      FIELD_ENCRYPTION_KEY: ${{ secrets.FIELD_ENCRYPTION_KEY }}
+      AUDIT_LOG_SIGNING_KEY: ${{ secrets.AUDIT_LOG_SIGNING_KEY }}
+      REDIS_URL: ${{ secrets.REDIS_URL }}
+      LLM_MODE: "bedrock"
     steps:
-      - name: Deploy to Staging (Railway/Vercel Placeholder)
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install dependencies
+        run: pip install -r requirements-local.txt
+      - name: Production setup (migrations + validation)
         run: |
-          echo "Deploying to staging environment..."
-          # Add actual deployment commands here (e.g., railway up, vercel deploy)
+          if [ -z "$DATABASE_URL" ]; then
+            echo "DATABASE_URL secret not set — skipping production migrate (configure for deploy branches)."
+            exit 0
+          fi
+          python manage.py setup_production --skip-collectstatic
+
+  deploy-staging:
+    runs-on: ubuntu-latest
+    needs: [pre-deploy]
+    if: github.ref == 'refs/heads/staging'
+    environment: staging
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install Railway CLI
+        run: npm install -g @railway/cli
+      - name: Deploy backend to Railway (staging)
+        env:
+          RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
+        run: |
+          if [ -z "$RAILWAY_TOKEN" ]; then
+            echo "::error::RAILWAY_TOKEN secret is required for staging deploy."
+            exit 1
+          fi
+          railway link ${{ secrets.RAILWAY_STAGING_SERVICE_ID }} --environment staging
+          railway up --service medsync-backend --detach
+      - name: Deploy frontend to Vercel (staging)
+        env:
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+        run: |
+          if [ -z "$VERCEL_TOKEN" ]; then
+            echo "::warning::VERCEL_TOKEN not set — skipping frontend deploy."
+            exit 0
+          fi
+          npm install -g vercel
+          cd medsync-frontend
+          vercel deploy --token "$VERCEL_TOKEN" --yes
 
   deploy-production:
     runs-on: ubuntu-latest
-    needs: [integration-tests]
+    needs: [pre-deploy]
     if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master'
+    environment: production
     steps:
-      - name: Deploy to Production (Railway/Vercel Placeholder)
+      - uses: actions/checkout@v4
+      - name: Install Railway CLI
+        run: npm install -g @railway/cli
+      - name: Deploy backend to Railway (production)
+        env:
+          RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
         run: |
-          echo "Deploying to production environment..."
-          # Add actual deployment commands here
+          if [ -z "$RAILWAY_TOKEN" ]; then
+            echo "::error::RAILWAY_TOKEN secret is required for production deploy."
+            exit 1
+          fi
+          railway link ${{ secrets.RAILWAY_PRODUCTION_SERVICE_ID }} --environment production
+          railway up --service medsync-backend --detach
+      - name: Deploy frontend to Vercel (production)
+        env:
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+        run: |
+          if [ -z "$VERCEL_TOKEN" ]; then
+            echo "::warning::VERCEL_TOKEN not set — skipping frontend deploy."
+            exit 0
+          fi
+          npm install -g vercel
+          cd medsync-frontend
+          vercel deploy --prod --token "$VERCEL_TOKEN" --yes

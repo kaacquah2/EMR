@@ -1,6 +1,9 @@
 import uuid
+from datetime import timedelta
+
 from django.db import models
 from django.db.models import F
+from django.utils import timezone
 from core.models import Hospital, User, Department, LabUnit, Ward
 from patients.models import Patient
 from django_cryptography.fields import encrypt
@@ -17,6 +20,7 @@ class MedicalRecord(models.Model):
         ("immunisation", "Immunisation"),
         ("procedure_note", "Procedure Note"),
         ("notifiable_disease", "Notifiable Disease"),
+        ("care_plan", "Care Plan"),
     ]
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     patient = models.ForeignKey(Patient, on_delete=models.CASCADE)
@@ -24,6 +28,11 @@ class MedicalRecord(models.Model):
     record_type = models.CharField(max_length=20, choices=RECORD_TYPES)
     created_by = models.ForeignKey(User, on_delete=models.PROTECT)
     created_at = models.DateTimeField(auto_now_add=True)
+    retention_until = models.DateTimeField(
+        null=True,
+        blank=True,
+        help_text="Ghana MoH minimum retention end date (10y adult / 25y paediatric).",
+    )
     record_version = models.IntegerField(default=0)
     is_amended = models.BooleanField(default=False)
     amended_record = models.ForeignKey(
@@ -39,12 +48,50 @@ class MedicalRecord(models.Model):
     def save(self, *args, **kwargs):
         if self._state.adding:
             self.record_version = 1
+            if self.retention_until is None and self.patient_id:
+                self.retention_until = self.compute_retention_until(self.patient)
         elif self.pk:
             current = MedicalRecord.objects.only("record_version").get(pk=self.pk)
             self.record_version = current.record_version + 1
         else:
             self.record_version = 1
         super().save(*args, **kwargs)
+
+    @staticmethod
+    def compute_retention_until(patient) -> timezone.datetime:
+        """MoH retention: 25 years from majority for paediatric, else 10 years from creation."""
+        from datetime import date, datetime
+
+        now = timezone.now()
+        dob = getattr(patient, "date_of_birth", None)
+        if isinstance(dob, str):
+            try:
+                dob = date.fromisoformat(dob[:10])
+            except ValueError:
+                dob = None
+        elif isinstance(dob, datetime):
+            dob = dob.date()
+
+        if not dob:
+            return now + timedelta(days=10 * 365)
+
+        today = date.today()
+        age_years = today.year - dob.year - (
+            (today.month, today.day) < (dob.month, dob.day)
+        )
+        if age_years < 18:
+            years_until_majority = 18 - age_years
+            return now + timedelta(days=(25 + years_until_majority) * 365)
+        return now + timedelta(days=10 * 365)
+
+    def assert_deletable(self):
+        """Raise ValidationError if legal retention period is still active."""
+        from django.core.exceptions import ValidationError
+
+        if self.retention_until and timezone.now() < self.retention_until:
+            raise ValidationError(
+                "Record cannot be deleted — legal retention period is still active."
+            )
 
     @staticmethod
     def update_if_version(record_id, expected_version, **fields):
@@ -225,6 +272,12 @@ class LabResult(models.Model):
 
 
 class Vital(models.Model):
+    AVPU_CHOICES = [
+        ("A", "Alert"),
+        ("V", "Voice"),
+        ("P", "Pain"),
+        ("U", "Unresponsive"),
+    ]
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     record = models.OneToOneField(MedicalRecord, on_delete=models.CASCADE)
     temperature_c = encrypt(models.DecimalField(max_digits=4, decimal_places=1, null=True, blank=True))
@@ -236,7 +289,51 @@ class Vital(models.Model):
     weight_kg = encrypt(models.DecimalField(max_digits=5, decimal_places=1, null=True, blank=True))
     height_cm = encrypt(models.DecimalField(max_digits=5, decimal_places=1, null=True, blank=True))
     bmi = encrypt(models.DecimalField(max_digits=4, decimal_places=1, null=True, blank=True))
+    gcs_score = encrypt(
+        models.IntegerField(
+            null=True, blank=True, help_text="Glasgow Coma Scale total (3-15)"
+        )
+    )
+    avpu_score = encrypt(
+        models.CharField(
+            max_length=2,
+            choices=AVPU_CHOICES,
+            null=True,
+            blank=True,
+            help_text="AVPU scale score",
+        )
+    )
+    pain_score = encrypt(
+        models.IntegerField(
+            null=True, blank=True, help_text="Pain score 0-10 (NRS)"
+        )
+    )
+    news2_score = encrypt(
+        models.IntegerField(
+            null=True, blank=True, help_text="National Early Warning Score 2 (0-20)"
+        )
+    )
     recorded_by = models.ForeignKey(User, on_delete=models.PROTECT)
+
+    def compute_news2_score(self, on_supplemental_o2: bool = False) -> int:
+        from api.vitals_utils import calculate_news2
+
+        consciousness = self.avpu_score or "A"
+        score, _ = calculate_news2(
+            self.resp_rate,
+            self.spo2_percent,
+            on_supplemental_o2,
+            self.bp_systolic,
+            self.pulse_bpm,
+            consciousness,
+            self.temperature_c,
+        )
+        return score
+
+    def save(self, *args, **kwargs):
+        if self.news2_score is None:
+            self.news2_score = self.compute_news2_score()
+        super().save(*args, **kwargs)
 
 
 class NursingNote(models.Model):
@@ -846,3 +943,165 @@ class FamilyLink(models.Model):
 
     def __str__(self):
         return f"{self.from_patient} is {self.relationship_type} of {self.to_patient}"
+
+
+class CarePlan(models.Model):
+    STATUS_CHOICES = [
+        ("draft", "Draft"),
+        ("active", "Active"),
+        ("suspended", "Suspended"),
+        ("completed", "Completed"),
+        ("entered-in-error", "Entered in Error"),
+        ("cancelled", "Cancelled"),
+        ("unknown", "Unknown"),
+    ]
+    INTENT_CHOICES = [
+        ("proposal", "Proposal"),
+        ("plan", "Plan"),
+        ("order", "Order"),
+        ("option", "Option"),
+    ]
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    record = models.OneToOneField(
+        MedicalRecord, on_delete=models.CASCADE, related_name="care_plan"
+    )
+    title = models.CharField(max_length=255)
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default="active")
+    intent = models.CharField(max_length=20, choices=INTENT_CHOICES, default="plan")
+    description = models.TextField(blank=True, null=True)
+    period_start = models.DateTimeField(null=True, blank=True)
+    period_end = models.DateTimeField(null=True, blank=True)
+    goals = models.JSONField(default=list, blank=True)
+    activities = models.JSONField(default=list, blank=True)
+
+
+class FamilyHistory(models.Model):
+    RELATIONSHIP_CHOICES = [
+        ("father", "Father"),
+        ("mother", "Mother"),
+        ("sibling", "Sibling"),
+        ("grandparent", "Grandparent"),
+        ("uncle", "Uncle"),
+        ("aunt", "Aunt"),
+        ("other", "Other"),
+    ]
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    patient = models.ForeignKey(
+        Patient, on_delete=models.CASCADE, related_name="family_histories"
+    )
+    relationship = models.CharField(max_length=30, choices=RELATIONSHIP_CHOICES)
+    relative_name = models.CharField(max_length=100, blank=True, null=True)
+    condition_name = models.CharField(max_length=200)
+    icd10_code = models.CharField(max_length=10, blank=True, null=True)
+    onset_age = models.IntegerField(null=True, blank=True)
+    is_deceased = models.BooleanField(default=False)
+    notes = models.TextField(blank=True, null=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+
+class SocialDeterminantsOfHealth(models.Model):
+    EDUCATION_CHOICES = [
+        ("none", "No formal education"),
+        ("primary", "Primary Education"),
+        ("secondary", "Secondary/High School"),
+        ("tertiary", "Tertiary/University"),
+        ("unknown", "Unknown"),
+    ]
+    WATER_CHOICES = [
+        ("piped_indoor", "Piped water (indoor)"),
+        ("piped_yard", "Piped water (yard/borehole)"),
+        ("public_tap", "Public tap/standpipe"),
+        ("surface_water", "Surface water (river/stream)"),
+        ("tanker", "Water tanker/vendor"),
+    ]
+    SANITATION_CHOICES = [
+        ("flush_toilet", "Flush toilet (private)"),
+        ("shared_latrine", "Shared toilet/latrine"),
+        ("public_toilet", "Public toilet"),
+        ("open_defecation", "No facility/open defecation"),
+    ]
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    patient = models.OneToOneField(
+        Patient, on_delete=models.CASCADE, related_name="sdoh"
+    )
+    occupation = models.CharField(max_length=150, blank=True, null=True)
+    education_level = models.CharField(
+        max_length=20, choices=EDUCATION_CHOICES, default="unknown"
+    )
+    water_access = models.CharField(
+        max_length=20, choices=WATER_CHOICES, default="piped_indoor"
+    )
+    sanitation = models.CharField(
+        max_length=20, choices=SANITATION_CHOICES, default="flush_toilet"
+    )
+    distance_to_facility_km = models.DecimalField(
+        max_digits=5, decimal_places=1, null=True, blank=True
+    )
+    has_health_insurance = models.BooleanField(default=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+
+class ImagingStudy(models.Model):
+    STATUS_CHOICES = [
+        ("registered", "Registered"),
+        ("available", "Available"),
+        ("cancelled", "Cancelled"),
+        ("entered-in-error", "Entered in Error"),
+    ]
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    patient = models.ForeignKey(
+        Patient, on_delete=models.CASCADE, related_name="imaging_studies"
+    )
+    hospital = models.ForeignKey(
+        Hospital, on_delete=models.PROTECT, related_name="imaging_studies"
+    )
+    radiology_order = models.ForeignKey(
+        RadiologyOrder,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="imaging_studies",
+    )
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default="available")
+    started = models.DateTimeField(null=True, blank=True)
+    modality = models.CharField(max_length=50, help_text="e.g., CT, MR, US, DX")
+    description = models.CharField(max_length=255, blank=True, null=True)
+    number_of_series = models.PositiveIntegerField(default=1)
+    number_of_instances = models.PositiveIntegerField(default=1)
+    series = models.JSONField(default=list, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+
+class DHIMS2Report(models.Model):
+    STATUS_CHOICES = [
+        ("draft", "Draft"),
+        ("submitted", "Submitted"),
+        ("failed", "Failed"),
+    ]
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    hospital = models.ForeignKey(
+        Hospital, on_delete=models.PROTECT, related_name="dhims2_reports"
+    )
+    month = models.CharField(max_length=7, help_text="Format YYYY-MM")
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default="draft")
+    indicators = models.JSONField(default=dict)
+    submitted_at = models.DateTimeField(null=True, blank=True)
+    submitted_by = models.ForeignKey(
+        User,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="submitted_dhims2_reports",
+    )
+    response_metadata = models.JSONField(default=dict, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        unique_together = ("hospital", "month")
+
+    def __str__(self):
+        return f"DHIMS2 Report - {self.hospital.name} ({self.month}) - {self.status}"

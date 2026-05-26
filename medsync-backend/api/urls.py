@@ -197,6 +197,7 @@ urlpatterns = [
     path("billing/invoices/<uuid:invoice_id>/pay", billing_views.record_payment),
     path("billing/invoices/<uuid:invoice_id>/submit-nhis", billing_views.submit_nhis_claim),
     path("patients/<uuid:patient_id>/billing-history", billing_views.patient_billing_history),
+    path("fhir/metadata", fhir_views.fhir_capability_statement),
     path("fhir/Patient", fhir_views.fhir_patient_list),
     path("fhir/Patient/<uuid:pk>/$everything", fhir_views.fhir_patient_everything),
     path("fhir/Patient/<uuid:pk>", fhir_views.fhir_patient_read),

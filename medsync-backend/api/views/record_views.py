@@ -375,6 +375,16 @@ def create_vitals(request):
         bmi = None
         if w and h and float(h) > 0:
             bmi = round(float(w) / (float(h) / 100) ** 2, 1)
+        consciousness = data.get("consciousness_level") or data.get("avpu_score") or "A"
+        news2_preview, news2_risk_level = calculate_news2(
+            data.get("resp_rate"),
+            data.get("spo2_percent"),
+            bool(data.get("on_supplemental_o2", False)),
+            data.get("bp_systolic"),
+            data.get("pulse_bpm"),
+            consciousness,
+            data.get("temperature_c"),
+        )
         vital = Vital.objects.create(
             record=record,
             temperature_c=data.get("temperature_c"),
@@ -386,27 +396,23 @@ def create_vitals(request):
             weight_kg=data.get("weight_kg"),
             height_cm=data.get("height_cm"),
             bmi=bmi,
+            gcs_score=data.get("gcs_score"),
+            avpu_score=data.get("avpu_score") or consciousness,
+            pain_score=data.get("pain_score"),
+            news2_score=news2_preview,
             recorded_by=request.user,
         )
-        
-        # Extract vital values for scoring
+
         systolic_bp = vital.bp_systolic
         resp_rate = vital.resp_rate
         spo2 = vital.spo2_percent
         temp = vital.temperature_c
         pulse = vital.pulse_bpm
-        
-        # Calculate qSOFA (Sepsis Risk Assessment)
-        qsofa_score, qsofa_criteria = calculate_qsofa(systolic_bp, resp_rate)
-        
-        # Calculate NEWS2 (Comprehensive Acute Illness Assessment)
-        news2_score, news2_risk_level = calculate_news2(
-            resp_rate, spo2,
-            bool(data.get("on_supplemental_o2", False)),
-            systolic_bp, pulse,
-            data.get("consciousness_level", "A"),
-            temp
+
+        qsofa_score, qsofa_criteria = calculate_qsofa(
+            systolic_bp, resp_rate, gcs_score=vital.gcs_score
         )
+        news2_score = vital.news2_score or news2_preview
         
         # Initialize response data with scores
         response_data = {
@@ -2271,4 +2277,48 @@ def auto_detect_favorites(request):
         'message': f'Added {created_count} new favorites based on prescribing history',
         'detected_count': len(top_prescriptions),
     })
+
+# ---------------------------------------------------------------------------
+# DHIMS-2 Reporting
+# ---------------------------------------------------------------------------
+@api_view(['POST'])
+@permission_classes([IsAuthenticated])
+def compile_and_submit_dhims2(request):
+    if request.user.role not in ("hospital_admin", "super_admin"):
+        return Response({"message": "Permission denied"}, status=status.HTTP_403_FORBIDDEN)
+        
+    hospital = get_request_hospital(request)
+    if not hospital:
+        return Response({"message": "No hospital assigned"}, status=status.HTTP_400_BAD_REQUEST)
+        
+    month = request.data.get("month")
+    if not month:
+        return Response({"message": "month is required (format YYYY-MM)"}, status=status.HTTP_400_BAD_REQUEST)
+        
+    from api.tasks.dhims2_tasks import compile_and_submit_dhims2_report
+    from api.tasks.fallback import can_use_celery
+    if can_use_celery():
+        task = compile_and_submit_dhims2_report.delay(str(hospital.id), month)
+        return Response({"message": "DHIMS-2 compilation and submission task queued", "task_id": task.id}, status=status.HTTP_202_ACCEPTED)
+    else:
+        res = compile_and_submit_dhims2_report(str(hospital.id), month)
+        return Response(res, status=status.HTTP_200_OK)
+
+
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def list_dhims2_reports(request):
+    if request.user.role not in ("hospital_admin", "super_admin"):
+        return Response({"message": "Permission denied"}, status=status.HTTP_403_FORBIDDEN)
+        
+    hospital = get_request_hospital(request)
+    if not hospital:
+        return Response({"message": "No hospital assigned"}, status=status.HTTP_400_BAD_REQUEST)
+        
+    from records.models import DHIMS2Report
+    from api.serializers import DHIMS2ReportSerializer
+    qs = DHIMS2Report.objects.filter(hospital=hospital).order_by('-month')
+    return Response(DHIMS2ReportSerializer(qs, many=True).data)
+
+
 

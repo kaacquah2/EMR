@@ -173,14 +173,14 @@ def revoke_consent(request, pk: str) -> Union[RevokeOk, RevokeErr]:
                 403,
             )
 
-    if not consent.is_active:
+    if not consent.is_active and consent.withdrawn_at:
         return consent, None
 
-    consent.is_active = False
-    consent.save(update_fields=["is_active"])
+    reason = (request.data.get("withdrawal_reason") or "").strip()
+    consent.withdraw(user=request.user, reason=reason)
     log_event(
         request.user,
-        "CROSS_FACILITY_ACCESS_REVOKED",
+        "CONSENT_WITHDRAWN",
         resource_type="consent",
         resource_id=consent.id,
         hospital=get_request_hospital(request),
@@ -188,6 +188,7 @@ def revoke_consent(request, pk: str) -> Union[RevokeOk, RevokeErr]:
         extra_data={
             "global_patient_id": str(consent.global_patient_id),
             "granted_to_facility_id": str(consent.granted_to_facility_id),
+            "withdrawal_reason": reason,
         },
     )
     return consent, None
