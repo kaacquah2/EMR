@@ -11,8 +11,6 @@ from datetime import timedelta
 from django.utils import timezone
 
 from api.models import DrugStock, StockAlert
-from api.signals_alerts import broadcast_stock_alert
-
 logger = logging.getLogger(__name__)
 
 
@@ -51,7 +49,6 @@ def check_expiring_stock_task():
                 severity='warning' if days_to_expiry > 7 else 'critical',
                 status='active',
             )
-            broadcast_stock_alert(alert)
             alert_count += 1
             logger.info("Expiry alert created for %s at %s", stock.drug_name, stock.hospital.name)
 
@@ -80,7 +77,6 @@ def check_expiring_stock_task():
                 severity='critical',
                 status='active',
             )
-            broadcast_stock_alert(alert)
             alert_count += 1
             logger.critical("EXPIRED STOCK ALERT for %s at %s", stock.drug_name, stock.hospital.name)
 

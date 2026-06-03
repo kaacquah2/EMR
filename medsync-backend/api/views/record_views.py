@@ -646,8 +646,6 @@ def create_vitals_batch(request):
         )
 
     from api.utils import audit_log
-    from api.signals_alerts import broadcast_alert_created
-
     results = {"created": 0, "failed": 0, "items": []}
 
     for vital_data in vitals_list:
@@ -779,7 +777,6 @@ def create_vitals_batch(request):
                     resource_type="vitals",
                     resource_id=record.id,
                 )
-                broadcast_alert_created(alert)
             if spO2 and float(spO2) < 90:
                 alert = ClinicalAlert.objects.create(
                     patient=patient,
@@ -790,7 +787,6 @@ def create_vitals_batch(request):
                     resource_type="vitals",
                     resource_id=record.id,
                 )
-                broadcast_alert_created(alert)
             if pulse and (float(pulse) > 130 or float(pulse) < 50):
                 alert = ClinicalAlert.objects.create(
                     patient=patient,
@@ -801,7 +797,6 @@ def create_vitals_batch(request):
                     resource_type="vitals",
                     resource_id=record.id,
                 )
-                broadcast_alert_created(alert)
 
             results["created"] += 1
             results["items"].append({

@@ -51,7 +51,7 @@ const TOUR_STEPS: TourStep[] = [
   },
   {
     title: "Clinical Decision Support",
-    description: "Our AI-powered engine monitors vitals and drug interactions to keep patients safe. Look for the pulse icon for automated insights.",
+    description: "Rule-based clinical alerts monitor vitals and drug interactions to keep patients safe. Look for the pulse icon for real-time insights.",
     icon: <Activity />,
     color: "bg-rose-500",
   },

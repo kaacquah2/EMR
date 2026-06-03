@@ -56,9 +56,6 @@ export const navByRole: Record<string, NavItem[]> = {
   nurse: [
     COMMON_NAV.dashboard,
     COMMON_NAV.emergencyQueue,
-    { href: "/patients/vitals/new", label: "Record Vitals" },
-    { href: "/worklist/dispense", label: "Dispense Medications" },
-    { href: "/records/nursing-note", label: "Nursing Notes" },
     { href: "/worklist/handover", label: "Shift Handover" },
     COMMON_NAV.alerts,
   ],
