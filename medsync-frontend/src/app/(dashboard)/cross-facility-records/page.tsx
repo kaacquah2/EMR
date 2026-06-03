@@ -172,16 +172,10 @@ export default function CrossFacilityRecordsPage() {
               <ShieldAlert className="h-5 w-5 text-amber-500" />
               Emergency Access
             </h2>
-            <p className="text-sm text-slate-500 dark:text-slate-400 mb-4 leading-relaxed">
-              If a patient is unconscious or in a life-threatening emergency, use Break-Glass access to view records immediately.
+            <p className="text-sm text-slate-500 dark:text-slate-400 leading-relaxed">
+              If a patient is unconscious or in a life-threatening emergency, search for the patient above.
+              On the patient detail page you will be presented with a Break-Glass option if you do not have consent.
             </p>
-            <Button 
-              variant="outline" 
-              className="w-full border-amber-200 text-amber-700 hover:bg-amber-50 hover:border-amber-300 dark:border-amber-900/30 dark:text-amber-500 dark:hover:bg-amber-950/20"
-              onClick={() => router.push("/cross-facility-records/break-glass")}
-            >
-              <ShieldAlert className="mr-2 h-4 w-4" /> Break-Glass Portal
-            </Button>
           </Card>
 
           <Card className="p-6">

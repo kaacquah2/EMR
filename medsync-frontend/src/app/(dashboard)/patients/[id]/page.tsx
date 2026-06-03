@@ -421,11 +421,20 @@ export default function PatientPage() {
               <ul className="space-y-2">
                 {encounters.map((e) => (
                   <li key={e.id} className="rounded-lg border border-slate-200 dark:border-slate-800 p-3">
-                    <span className="font-medium capitalize">{e.encounter_type?.replace("_", " ")}</span>
-                    <span className="ml-2 text-sm text-slate-500 dark:text-slate-500">
-                      {e.encounter_date ? new Date(e.encounter_date).toLocaleString() : ""}
-                    </span>
-                    {e.created_by && <span className="ml-2 text-xs text-[#94A3B8]">by {e.created_by}</span>}
+                    <div className="flex items-center justify-between gap-2">
+                      <div>
+                        <span className="font-medium capitalize">{e.encounter_type?.replace("_", " ")}</span>
+                        <span className="ml-2 text-sm text-slate-500 dark:text-slate-500">
+                          {e.encounter_date ? new Date(e.encounter_date).toLocaleString() : ""}
+                        </span>
+                        {e.created_by && <span className="ml-2 text-xs text-[#94A3B8]">by {e.created_by}</span>}
+                      </div>
+                      {isDoctor && (
+                        <Link href={`/patients/${id}/encounter/${e.id}`}>
+                          <Button size="sm" variant="secondary">SOAP note</Button>
+                        </Link>
+                      )}
+                    </div>
                     {e.notes && <p className="mt-1 text-sm text-slate-500 dark:text-slate-500">{e.notes}</p>}
                     {e.discharge_summary && (
                       <p className="mt-2 text-sm text-[#475569] border-t border-slate-200 dark:border-slate-800 pt-2 whitespace-pre-wrap">
