@@ -333,8 +333,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     setState(next);
     if (typeof window !== "undefined") {
       saveStoredAuth(next, options?.rememberMe);
+      const maxAge = 8 * 60 * 60; // 8 hours in seconds
+      // medsync_session gates server-side layout access (dashboard/layout.tsx + middleware.ts)
+      document.cookie = `medsync_session=1; path=/; max-age=${maxAge}; SameSite=Strict`;
       if (tokens.user_profile?.role) {
-        const maxAge = 8 * 60 * 60; // 8 hours in seconds
         document.cookie = `medsync_role=${tokens.user_profile.role}; path=/; max-age=${maxAge}; SameSite=Strict; Secure`;
       }
     }
