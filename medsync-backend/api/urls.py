@@ -7,7 +7,6 @@ from api.views import (
     encounter_views,
     appointment_views,
     admin_views,
-    admin_ai_views,
     alert_views,
     lab_views,
     admission_views,
@@ -24,9 +23,6 @@ from api.views import (
     break_glass_views,
     nurse_views,
     password_recovery_views,
-    ai_views,
-    ai_admin_views,
-    task_views,
     shift_views,
     batch_operations_views,
     mar_views,
@@ -313,40 +309,6 @@ urlpatterns = [
          password_recovery_views.force_password_reset_initiate),
     path("superadmin/password-resets/suspicious", password_recovery_views.get_suspicious_resets),
 
-    # AI Model Versioning & Retraining Pipeline
-    path("superadmin/ai-models", ai_admin_views.AIModelManagementViewSet.as_view({'get': 'list'})),
-    path("superadmin/ai-models/retrain", ai_admin_views.AIModelManagementViewSet.as_view({'post': 'retrain'})),
-    path("superadmin/ai-models/<uuid:pk>", ai_admin_views.AIModelManagementViewSet.as_view({'get': 'retrieve'})),
-    path("superadmin/ai-models/<uuid:pk>/approve", ai_admin_views.AIModelManagementViewSet.as_view({'post': 'approve'})),
-    path("superadmin/ai-models/retrain/<str:task_id>/status", ai_admin_views.AIModelManagementViewSet.as_view({'get': 'retrain_status'})),
-
-    # PHASE 8: AI Intelligence Module
-    path("ai/status", ai_views.ai_status),
-    path("ai/analyze-patient/<uuid:patient_id>", ai_views.start_async_analysis),
-    path("ai/risk-prediction/<uuid:patient_id>", ai_views.predict_patient_risk),
-    path("ai/clinical-decision-support/<uuid:patient_id>", ai_views.get_clinical_decision_support),
-    path("ai/analysis-history/<uuid:patient_id>", ai_views.get_analysis_history),
-    # Async AI analysis endpoints
-    path("ai/async-analysis/<uuid:patient_id>", ai_views.start_async_analysis),
-    path("ai/async-analysis/status/<uuid:job_id>", ai_views.get_async_analysis_status),
-    
-    # PHASE 8.3: AI Clinical Deployment Management
-    path("admin/ai/enable", admin_ai_views.enable_clinical_ai),
-    path("admin/ai/status", admin_ai_views.get_ai_deployment_status),
-    path("admin/ai/history", admin_ai_views.get_ai_deployment_history),
-    path("admin/ai/disable", admin_ai_views.disable_clinical_ai),
-    # WEEK 1: New AI Admin Management Endpoints
-    path("admin/ai/deployment/status", ai_admin_views.ai_deployment_status),
-    path("admin/ai/deployment/approve", ai_admin_views.approve_ai_deployment),
-    path("admin/ai/deployment/<uuid:approval_id>/revoke", ai_admin_views.revoke_ai_deployment),
-    path("admin/ai/recommendations/<uuid:patient_id>/audit-trail", ai_admin_views.ai_recommendation_audit_trail),
-    path("admin/ai/performance-metrics", ai_admin_views.ai_performance_metrics),
-
-    # PHASE 9: Celery Task Status Endpoints
-    path("tasks", task_views.task_list),
-    path("tasks/<str:task_id>", task_views.task_status),
-    path("tasks/<str:task_id>/result", task_views.task_result),
-    
     # PHASE 5.1: Push Notifications Backend
     path("admin/bed-management", admin_views.bed_management_dashboard),
     path("admissions/<uuid:admission_id>/transfer", admin_views.patient_transfer),

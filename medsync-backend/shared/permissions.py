@@ -452,55 +452,6 @@ PERMISSION_MATRIX = {
         "hospital_admin": ["POST"],
         "super_admin": ["POST"],
     },
-    # AI Intelligence Module (Phase 8)
-    "ai/analyze-patient/<pk>": {
-        "doctor": ["POST"],
-        "nurse": ["POST"],
-        "hospital_admin": ["POST"],
-        "super_admin": ["POST"],
-    },
-    "ai/risk-prediction/<pk>": {
-        "doctor": ["POST"],
-        "nurse": ["POST"],
-        "super_admin": ["POST"],
-    },
-    "ai/clinical-decision-support/<pk>": {
-        "doctor": ["POST"],
-        "super_admin": ["POST"],
-    },
-    "ai/triage/<pk>": {
-        "doctor": ["POST"],
-        "nurse": ["POST"],
-        "super_admin": ["POST"],
-    },
-    "ai/find-similar-patients/<pk>": {
-        "doctor": ["POST"],
-        "super_admin": ["POST"],
-    },
-    "ai/referral-recommendation/<pk>": {
-        "doctor": ["POST"],
-        "hospital_admin": ["POST"],
-        "super_admin": ["POST"],
-    },
-    "ai/analysis-history/<pk>": {
-        "doctor": ["GET"],
-        "nurse": ["GET"],
-        "super_admin": ["GET"],
-    },
-    "ai/async-analysis/<pk>": {
-        "doctor": ["POST"],
-        "hospital_admin": ["POST"],
-        "super_admin": ["POST"],
-    },
-    "ai/async-analysis/status/<pk>": {
-        "doctor": ["GET"],
-        "hospital_admin": ["GET"],
-        "nurse": ["GET"],
-        "super_admin": ["GET"],
-    },
-    "ai/status": {
-        "super_admin": ["GET"],
-    },
     # Additional auth/account flows
     "auth/activate-setup": {"public": ["GET", "POST"]},
     "auth/login-temp-password": {"public": ["POST"]},
@@ -943,39 +894,6 @@ PERMISSION_MATRIX = {
     "superadmin/users/<pk>/force-password-reset": {"super_admin": ["POST"]},
     "superadmin/users/<pk>/force-password-reset-initiate": {"super_admin": ["POST"]},
     "superadmin/password-resets/suspicious": {"super_admin": ["GET"]},
-    "tasks": {
-        "doctor": ["GET"],
-        "nurse": ["GET"],
-        "lab_technician": ["GET"],
-        "receptionist": ["GET"],
-        "radiology_technician": ["GET"],
-        "billing_staff": ["GET"],
-        "ward_clerk": ["GET"],
-        "hospital_admin": ["GET"],
-        "super_admin": ["GET"],
-    },
-    "tasks/<pk>": {
-        "doctor": ["GET"],
-        "nurse": ["GET"],
-        "lab_technician": ["GET"],
-        "receptionist": ["GET"],
-        "radiology_technician": ["GET"],
-        "billing_staff": ["GET"],
-        "ward_clerk": ["GET"],
-        "hospital_admin": ["GET"],
-        "super_admin": ["GET"],
-    },
-    "tasks/<pk>/result": {
-        "doctor": ["GET"],
-        "nurse": ["GET"],
-        "lab_technician": ["GET"],
-        "receptionist": ["GET"],
-        "radiology_technician": ["GET"],
-        "billing_staff": ["GET"],
-        "ward_clerk": ["GET"],
-        "hospital_admin": ["GET"],
-        "super_admin": ["GET"],
-    },
     "auth/setup-totp": {"authenticated": ["POST"]},
     "auth/passkey/check": {"public": ["POST"]},
     "encounter-templates": {
@@ -1111,66 +1029,6 @@ PERMISSION_MATRIX = {
         "super_admin": ["POST"],
     },
     "batch-operations/summary": {
-        "hospital_admin": ["GET"],
-        "super_admin": ["GET"],
-    },
-    "superadmin/ai-models": {
-        "super_admin": ["GET"],
-    },
-    "superadmin/ai-models/retrain": {
-        "super_admin": ["POST"],
-    },
-    "superadmin/ai-models/<uuid:pk>": {
-        "super_admin": ["GET"],
-    },
-    "superadmin/ai-models/<uuid:pk>/approve": {
-        "super_admin": ["POST"],
-    },
-    "superadmin/ai-models/retrain/<str:task_id>/status": {
-        "super_admin": ["GET"],
-    },
-    "ai/antibiotic-guidance": {
-        "doctor": ["POST"],
-        "super_admin": ["POST"],
-    },
-    "ai/no-show-risk": {
-        "receptionist": ["POST"],
-        "hospital_admin": ["POST"],
-        "super_admin": ["POST"],
-    },
-    "admin/ai/enable": {
-        "hospital_admin": ["POST"],
-        "super_admin": ["POST"],
-    },
-    "admin/ai/status": {
-        "hospital_admin": ["GET"],
-        "super_admin": ["GET"],
-    },
-    "admin/ai/history": {
-        "hospital_admin": ["GET"],
-        "super_admin": ["GET"],
-    },
-    "admin/ai/disable": {
-        "hospital_admin": ["POST"],
-        "super_admin": ["POST"],
-    },
-    "admin/ai/deployment/status": {
-        "hospital_admin": ["GET"],
-        "super_admin": ["GET"],
-    },
-    "admin/ai/deployment/approve": {
-        "hospital_admin": ["POST"],
-        "super_admin": ["POST"],
-    },
-    "admin/ai/deployment/<uuid:approval_id>/revoke": {
-        "hospital_admin": ["POST"],
-        "super_admin": ["POST"],
-    },
-    "admin/ai/recommendations/<uuid:patient_id>/audit-trail": {
-        "hospital_admin": ["GET"],
-        "super_admin": ["GET"],
-    },
-    "admin/ai/performance-metrics": {
         "hospital_admin": ["GET"],
         "super_admin": ["GET"],
     },
