@@ -202,6 +202,25 @@ PASSWORD_HASHERS = [
     "django.contrib.auth.hashers.BCryptSHA256PasswordHasher",
 ]
 
+# Password validation — applied by Django admin + any code that calls validate_password().
+# The custom api/password_policy.py enforces strength in all auth flows; these validators
+# provide a second line of defence for Django's own set_password()/create_user() paths.
+AUTH_PASSWORD_VALIDATORS = [
+    {
+        "NAME": "django.contrib.auth.password_validation.UserAttributeSimilarityValidator",
+    },
+    {
+        "NAME": "django.contrib.auth.password_validation.MinimumLengthValidator",
+        "OPTIONS": {"min_length": 12},
+    },
+    {
+        "NAME": "django.contrib.auth.password_validation.CommonPasswordValidator",
+    },
+    {
+        "NAME": "django.contrib.auth.password_validation.NumericPasswordValidator",
+    },
+]
+
 
 # Roles that should only see basic demographics (PII masking) per MedSync Specs
 NON_CLINICAL_PII_MASK_ROLES = (
@@ -218,13 +237,11 @@ NON_CLINICAL_PII_MASK_ROLES = (
 THROTTLE_ANON = config("THROTTLE_ANON", default="60/hour")
 THROTTLE_USER = config("THROTTLE_USER", default="1000/hour")
 
-# RBAC Fail-Closed Mode: Security-first API endpoint protection
-# Default: False (fail-open) for safe development
-# Production: Set to True ONLY after RBAC coverage is verified 100%
-# See README.md section "RBAC Security: Fail-Closed Mode" for runbook
+# RBAC Fail-Closed Mode: deny requests to endpoints not in the permission matrix.
+# Override to False via env var only when actively debugging RBAC gaps.
 PERMISSION_FAIL_CLOSED_UNKNOWN_ENDPOINTS = config(
     "PERMISSION_FAIL_CLOSED_UNKNOWN_ENDPOINTS",
-    default=False,  # Changed from True to False for safety
+    default=True,  # Fail-closed: deny unknown endpoints. Set to False only when debugging RBAC gaps.
     cast=bool,
 )
 
