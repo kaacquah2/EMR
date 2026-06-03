@@ -4,7 +4,6 @@ from typing import cast
 
 from decouple import config
 import dj_database_url
-from celery.schedules import crontab
 
 
 def _str_config(key: str, default: str = "") -> str:
@@ -83,9 +82,6 @@ def _has_pkg(name):
     except ImportError:
         return False
     return True
-_HAS_DAPHNE = _has_pkg("daphne")
-_HAS_CHANNELS = _has_pkg("channels")
-
 INSTALLED_APPS = [
     "django.contrib.admin",
     "django.contrib.auth",
@@ -99,8 +95,6 @@ INSTALLED_APPS = [
     "corsheaders",
     "django_otp",
     "django_otp.plugins.otp_totp",
-    "django_celery_beat",
-    "django_celery_results",
     "drf_spectacular",
     "core",
     "patients",
@@ -109,10 +103,6 @@ INSTALLED_APPS = [
     "shared.apps.SharedConfig",
     "api",
 ]
-if _HAS_DAPHNE:
-    INSTALLED_APPS.insert(0, "daphne")
-if _HAS_CHANNELS:
-    INSTALLED_APPS.insert(INSTALLED_APPS.index("rest_framework"), "channels")
 if DEBUG and _has_pkg("debug_toolbar"):
     INSTALLED_APPS += ["debug_toolbar"]
 
@@ -145,27 +135,6 @@ if DEBUG and _has_pkg("debug_toolbar"):
 
 ROOT_URLCONF = "medsync_backend.urls"
 WSGI_APPLICATION = "medsync_backend.wsgi.application"
-if _HAS_CHANNELS:
-    ASGI_APPLICATION = "medsync_backend.asgi.application"
-# Production: set REDIS_URL so real-time alerts (WebSocket) are broadcast across ASGI workers.
-# InMemoryChannelLayer is single-process only; Redis is required for multi-worker deployments.
-_redis_url = _str_config("REDIS_URL")
-if _HAS_CHANNELS:
-    if _redis_url:
-        CHANNEL_LAYERS = {
-            "default": {
-                "BACKEND": "channels_redis.core.RedisChannelLayer",
-                "CONFIG": {"hosts": [_redis_url]},
-            }
-        }
-    elif DEBUG:
-        CHANNEL_LAYERS = {"default": {"BACKEND": "channels.layers.InMemoryChannelLayer"}}
-    else:
-        from django.core.exceptions import ImproperlyConfigured
-        raise ImproperlyConfigured(
-            "REDIS_URL is required for Channels in production. "
-            "InMemoryChannelLayer does not work across multiple workers."
-        )
 
 # Database: Postgres (Neon) required for production (pgcrypto, RLS, concurrent writes).
 # SQLite used only when DEBUG=True and DATABASE_URL is unset (local dev only).
@@ -205,20 +174,14 @@ else:
         "DATABASE_URL is required in production. SQLite does not support pgcrypto, RLS, "
         "or safe concurrent writes. Use Neon (PostgreSQL) and set DATABASE_URL."
     )
-# Database cache so MFA token survives runserver restarts (login -> mfa-verify). Run once: python manage.py createcachetable
-# Vercel: no stable DB + no migrate for cache table — use in-memory cache (MFA may not survive cold starts).
+# Database-backed cache for MFA tokens and rate limiting.
+# Run once: python manage.py createcachetable
+# Vercel: no stable DB for cache table — use in-memory (MFA may not survive cold starts).
 if _VERCEL:
     CACHES = {
         "default": {
             "BACKEND": "django.core.cache.backends.locmem.LocMemCache",
             "LOCATION": "vercel-locmem",
-        }
-    }
-elif _redis_url:
-    CACHES = {
-        "default": {
-            "BACKEND": "django.core.cache.backends.redis.RedisCache",
-            "LOCATION": _redis_url,
         }
     }
 else:
@@ -700,82 +663,6 @@ CSRF_TRUSTED_ORIGINS = [
 # Django Debug Toolbar (DEBUG only): N+1 and query optimization
 if DEBUG:
     INTERNAL_IPS = ["127.0.0.1", "::1"]
-
-# ============================================================================
-# CELERY CONFIGURATION (Async Task Queue)
-# ============================================================================
-_celery_broker_url = config("CELERY_BROKER_URL", default="redis://127.0.0.1:6379/0")
-_celery_result_backend = config("CELERY_RESULT_BACKEND", default="redis://127.0.0.1:6379/0")
-
-CELERY_BROKER_URL = _celery_broker_url
-CELERY_RESULT_BACKEND = _celery_result_backend
-CELERY_ACCEPT_CONTENT = ["json"]
-CELERY_TASK_SERIALIZER = "json"
-CELERY_RESULT_SERIALIZER = "json"
-CELERY_TIMEZONE = "UTC"
-CELERY_TASK_TRACK_STARTED = True
-CELERY_TASK_TIME_LIMIT = 30 * 60  # 30 minutes hard limit
-CELERY_BROKER_CONNECTION_RETRY_ON_STARTUP = True
-
-# Task-specific timeouts
-CELERY_TASK_SOFT_TIME_LIMIT = 5 * 60  # 5 minutes soft limit (gives tasks time to cleanup)
-CELERY_TASK_ACKS_LATE = True  # Acknowledge after task completion (prevents task loss)
-CELERY_WORKER_PREFETCH_MULTIPLIER = 1  # Process one task at a time
-
-# TASK ROUTING & DEAD-LETTER QUEUE (DLQ)
-# Critical clinical tasks are routed to a dedicated queue.
-# Failed tasks are routed to the DLQ for manual inspection.
-from kombu import Queue, Exchange
-
-CELERY_TASK_DEFAULT_QUEUE = "default"
-CELERY_TASK_DEFAULT_EXCHANGE = "default"
-CELERY_TASK_DEFAULT_ROUTING_KEY = "default"
-
-CELERY_TASK_QUEUES = (
-    Queue("default", Exchange("default"), routing_key="default"),
-    Queue("clinical", Exchange("clinical"), routing_key="clinical"),
-    Queue("dlq", Exchange("dlq"), routing_key="dlq"),
-)
-
-CELERY_TASK_ROUTES = {
-    "api.tasks.appointment_tasks.*": {"queue": "clinical"},
-    "api.tasks.ai_tasks.*": {"queue": "clinical"},
-}
-
-# Retry policy for failed tasks
-CELERY_TASK_MAX_RETRIES = 3
-CELERY_TASK_DEFAULT_RETRY_DELAY = 5  # Start with 5 seconds
-
-# Celery Beat Schedule (Scheduled Tasks)
-# Tasks run at specified intervals (e.g., no-show auto-marking every 15 minutes)
-CELERY_BEAT_SCHEDULE = {
-    'mark-no-shows-every-15-minutes': {
-        'task': 'api.tasks.appointment_tasks.mark_no_shows_task',
-        'schedule': crontab(minute='*/15'),  # Every 15 minutes
-        'options': {'expires': 600}  # Expires in 10 minutes if not run
-    }
-}
-
-# Celery Result Backend Configuration (for tracking task status)
-CELERY_RESULT_EXPIRES = 3600  # Results expire after 1 hour
-
-# ============================================================================
-# DAPHNE ASGI SERVER CONFIGURATION (Development & Production)
-# ============================================================================
-# Daphne is the ASGI server for WebSocket support (Django Channels).
-# In development, Daphne uses Django's autoreloader for hot-reload.
-# This configuration ensures graceful shutdown during file reload.
-# 
-# Key settings:
-# - application_close_timeout: Time to wait for app instance to shut down gracefully (seconds).
-#   Default is 2; we increase to 5 to allow pending requests to complete before killing tasks.
-# - ping_interval: WebSocket ping interval (seconds). Higher values reduce load.
-# - ping_timeout: Time to wait for pong response before closing connection (seconds).
-# 
-# See: https://daphne.readthedocs.io/en/latest/
-# Development: longer timeout to allow requests to finish during reload
-# Production: shorter timeout (hard kill after 2 seconds if not graceful)
-DAPHNE_APPLICATION_CLOSE_TIMEOUT = 5 if DEBUG else 2
 
 # Django admin URL path (non-guessable in production). No leading slash.
 ADMIN_URL = _str_config("ADMIN_URL", "admin/").strip("/") + "/"

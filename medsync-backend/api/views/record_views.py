@@ -2300,14 +2300,11 @@ def compile_and_submit_dhims2(request):
     if not month:
         return Response({"message": "month is required (format YYYY-MM)"}, status=status.HTTP_400_BAD_REQUEST)
         
-    from api.tasks.dhims2_tasks import compile_and_submit_dhims2_report
-    from api.tasks.fallback import can_use_celery
-    if can_use_celery():
-        task = compile_and_submit_dhims2_report.delay(str(hospital.id), month)
-        return Response({"message": "DHIMS-2 compilation and submission task queued", "task_id": task.id}, status=status.HTTP_202_ACCEPTED)
-    else:
-        res = compile_and_submit_dhims2_report(str(hospital.id), month)
-        return Response(res, status=status.HTTP_200_OK)
+    # DHIMS-2 submission not implemented in this version
+    return Response(
+        {"message": "DHIMS-2 automated submission is not available in this release."},
+        status=status.HTTP_501_NOT_IMPLEMENTED,
+    )
 
 
 @api_view(['GET'])

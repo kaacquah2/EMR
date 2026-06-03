@@ -13,14 +13,6 @@ services:
       timeout: 5s
       retries: 5
 
-  redis:
-    image: redis:7-alpine
-    healthcheck:
-      test: ["CMD", "redis-cli", "ping"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
-
   backend:
     build:
       context: ./medsync-backend
@@ -30,51 +22,15 @@ services:
       - .env.docker
     environment:
       - DATABASE_URL=postgresql://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB:-medsync}
-      - REDIS_URL=redis://redis:6379/0
-      - CELERY_BROKER_URL=redis://redis:6379/0
-      - CELERY_RESULT_BACKEND=redis://redis:6379/0
     depends_on:
       db:
-        condition: service_healthy
-      redis:
         condition: service_healthy
     ports:
       - "8000:8000"
-    command: daphne -b 0.0.0.0 -p 8000 medsync_backend.asgi:application
-
-  celery:
-    build:
-      context: ./medsync-backend
-    env_file:
-      - .env.docker
-    environment:
-      - DATABASE_URL=postgresql://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB:-medsync}
-      - REDIS_URL=redis://redis:6379/0
-      - CELERY_BROKER_URL=redis://redis:6379/0
-      - CELERY_RESULT_BACKEND=redis://redis:6379/0
-    depends_on:
-      db:
-        condition: service_healthy
-      redis:
-        condition: service_healthy
-    command: celery -A medsync_backend worker --loglevel=info
-
-  celery-beat:
-    build:
-      context: ./medsync-backend
-    env_file:
-      - .env.docker
-    environment:
-      - DATABASE_URL=postgresql://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB:-medsync}
-      - REDIS_URL=redis://redis:6379/0
-      - CELERY_BROKER_URL=redis://redis:6379/0
-      - CELERY_RESULT_BACKEND=redis://redis:6379/0
-    depends_on:
-      db:
-        condition: service_healthy
-      redis:
-        condition: service_healthy
-    command: celery -A medsync_backend beat --loglevel=info --scheduler django_celery_beat.schedulers:DatabaseScheduler
+    # WSGI server — no Redis/Celery required.
+    # The no-show cron (*/15 * * * *  python manage.py mark_no_shows) should be
+    # configured on the host or in a lightweight cron container.
+    command: gunicorn medsync_backend.wsgi --bind 0.0.0.0:8000 --workers 4 --timeout 120
 
   frontend:
     build:
