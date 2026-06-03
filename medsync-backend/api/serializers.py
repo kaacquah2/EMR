@@ -885,7 +885,7 @@ class EncounterDraftCreateUpdateSerializer(serializers.ModelSerializer):
 
 
 class TaskStatusSerializer(serializers.Serializer):
-    """Serializer for Celery task status response."""
+    """Serializer for async task status response."""
     task_id = serializers.CharField()
     status = serializers.CharField()  # PENDING, STARTED, SUCCESS, FAILURE, RETRY
     result = serializers.JSONField(required=False, allow_null=True)

@@ -325,10 +325,7 @@ NHIS_TIMEOUT_SECONDS = config("NHIS_TIMEOUT_SECONDS", default=10, cast=int)
 NHIS_MAX_RETRIES = config("NHIS_MAX_RETRIES", default=3, cast=int)
 NHIS_CIRCUIT_BREAKER_THRESHOLD = config("NHIS_CIRCUIT_BREAKER_THRESHOLD", default=5, cast=int)
 
-# ============================================================================
-# CDS RULES CACHE (Redis)
-# ============================================================================
-# TTL in seconds for the CDS rules cache (cds:active_rules:all key).
+# TTL in seconds for the in-memory CDS rules cache (cds:active_rules:all key).
 # On ClinicalRule save, the cache is immediately invalidated via signal.
 # Default: 3600 (1 hour) — increase in production if rules rarely change.
 CDS_RULES_CACHE_TTL = config("CDS_RULES_CACHE_TTL", default=3600, cast=int)
@@ -612,7 +609,7 @@ if not AUDIT_LOG_SIGNING_KEY and not DEBUG:
     from django.core.exceptions import ImproperlyConfigured
     raise ImproperlyConfigured("AUDIT_LOG_SIGNING_KEY is required in production.")
 
-# Database backup monitoring (health check + future Celery pg_dump task)
+# Database backup monitoring (health check)
 BACKUP_ENABLED = config("BACKUP_ENABLED", default=False, cast=bool)
 BACKUP_MAX_AGE_HOURS = config("BACKUP_MAX_AGE_HOURS", default=26, cast=int)
 
