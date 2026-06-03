@@ -1,11 +1,11 @@
 """
 Comprehensive end-to-end integration test covering:
 1. Break-glass with time-window enforcement (15-minute window)
-2. Celery task execution (eager mode)
+2. Async task execution (PDF export, no-show marking)
 3. No-show auto-marking with override window
 4. Multi-hospital isolation
 """
-from django.test import TestCase, override_settings
+from django.test import TestCase
 from django.utils import timezone
 from datetime import timedelta
 from rest_framework.test import APIClient
@@ -198,16 +198,10 @@ class BreakGlassTimeWindowIntegrationTestCase(TestCase):
         self.assertNotIn(log2.id, h1_logs.values_list("id", flat=True))
 
 
-@override_settings(
-    CELERY_ALWAYS_EAGER=True,
-    CELERY_EAGER_PROPAGATES_EXCEPTIONS=True,
-    CELERY_BROKER_URL="memory://",
-    CELERY_RESULT_BACKEND="cache+memory://",
-)
-class CeleryTaskExecutionIntegrationTestCase(TestCase):
+class TaskExecutionIntegrationTestCase(TestCase):
     """
-    Scenario 2: Celery Task Execution (Eager Mode)
-    Tests that Celery tasks execute synchronously in test environment.
+    Scenario 2: Task Execution
+    Tests that async tasks execute correctly when called directly (sync fallback path).
     """
 
     def setUp(self):
@@ -260,9 +254,9 @@ class CeleryTaskExecutionIntegrationTestCase(TestCase):
         self.assertEqual(result["status"], "error")
         self.assertIn("not found", result["message"].lower())
 
-    def test_celery_task_direct_execution(self):
+    def test_task_direct_execution_full(self):
         """
-        Test: Verify task can be called directly (eager mode).
+        Test: Verify full-format task can be called directly.
         """
         result = export_patient_pdf_task(str(self.patient.id), format_type="full")
 
@@ -272,20 +266,7 @@ class CeleryTaskExecutionIntegrationTestCase(TestCase):
         # Either success or error, but should have status
         self.assertIn(result["status"], ["success", "error"])
 
-    def test_celery_eager_mode_configuration(self):
-        """
-        Test: Verify Celery is configured for eager mode in tests.
-        """
-        from django.conf import settings
 
-        # Check that eager mode is enabled
-        self.assertTrue(
-            settings.CELERY_ALWAYS_EAGER,
-            "CELERY_ALWAYS_EAGER should be True in test settings"
-        )
-
-
-@override_settings(CELERY_ALWAYS_EAGER=True)
 class NoShowAutoMarkingIntegrationTestCase(TestCase):
     """
     Scenario 3: No-Show Auto-Marking
@@ -514,7 +495,6 @@ class NoShowAutoMarkingIntegrationTestCase(TestCase):
         self.assertNotIn(appointment.id, to_mark.values_list("id", flat=True))
 
 
-@override_settings(CELERY_ALWAYS_EAGER=True)
 class MultiHospitalIsolationIntegrationTestCase(TestCase):
     """
     Scenario 4: Multi-Hospital Isolation
@@ -804,12 +784,6 @@ class MultiHospitalIsolationIntegrationTestCase(TestCase):
 # End-to-End Combined Scenario: All three phases in sequence
 # ============================================================================
 
-@override_settings(
-    CELERY_ALWAYS_EAGER=True,
-    CELERY_EAGER_PROPAGATES_EXCEPTIONS=True,
-    CELERY_BROKER_URL="memory://",
-    CELERY_RESULT_BACKEND="cache+memory://",
-)
 class EndToEndThreePhaseIntegrationTestCase(TestCase):
     """
     Complete end-to-end scenario testing all three phases together.
