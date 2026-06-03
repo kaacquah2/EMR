@@ -19,13 +19,14 @@ MEDIUM Fixes:
 import pytest
 import json
 import hashlib
+import hmac
 import secrets
 import time
 from django.core.cache import cache
 from django.test import TestCase, override_settings
 from django.utils import timezone
 from rest_framework.test import APIClient
-from core.models import User, Hospital, MFASession, BackupCodeRateLimit
+from core.models import AuditLog, User, Hospital, MFASession, BackupCodeRateLimit
 from api.rate_limiting import MFAUserThrottle
 
 
@@ -599,7 +600,98 @@ class TestSessionIdleTimeout(TestCase):
         self.assertEqual(response.status_code, 200)
 
 
+@pytest.mark.django_db
+def test_auditlog_signature_uses_utf8_bytes_for_non_ascii_key():
+    hospital = Hospital.objects.create(name="Audit Test Hospital", region="Greater Accra", nhis_code="AUD001")
+    user = User.objects.create_user(
+        email="audit@test.com",
+        password="TempPass123!@#",
+        role="doctor",
+        full_name="Dr Audit",
+        hospital=hospital,
+    )
 
+    from django.test import override_settings
+
+    with override_settings(AUDIT_LOG_SIGNING_KEY="påsswørd"):
+        entry = AuditLog.objects.create(
+            user=user,
+            action="LOGIN",
+            resource_type="User",
+            resource_id="abc123",
+            hospital=hospital,
+        )
+
+    data = f"0{user.id}LOGINUserabc123"
+    expected = hmac.new(
+        "påsswørd".encode("utf-8"),
+        data.encode("utf-8"),
+        hashlib.sha256,
+    ).hexdigest()
+    assert entry.signature == expected
+
+
+def test_permission_fail_closed_setting_respects_env_value(monkeypatch):
+    monkeypatch.setenv("DEBUG", "False")
+    monkeypatch.setenv("PERMISSION_FAIL_CLOSED_UNKNOWN_ENDPOINTS", "False")
+    monkeypatch.setenv("DATABASE_URL", "postgresql://user:pass@localhost:5432/medsync")
+    monkeypatch.setenv("WEBAUTHN_ORIGIN", "https://localhost:3000")
+
+    import importlib
+    import medsync_backend.settings as settings_module
+
+    reloaded = importlib.reload(settings_module)
+    assert reloaded.PERMISSION_FAIL_CLOSED_UNKNOWN_ENDPOINTS is False
+
+
+def test_auditlog_action_choices_include_current_runtime_actions():
+    field = AuditLog._meta.get_field("action")
+    assert field.max_length == 50
+
+    choices = {value for value, _label in field.choices}
+    expected = {
+        "ACCOUNT_LOCKED",
+        "USER_DEACTIVATED",
+        "ARCHIVE_HOSPITAL",
+        "AI_APPROVAL_GRANT",
+        "AI_APPROVAL_REVOKE",
+        "AI_FEATURE_BLOCKED",
+        "AI_ANALYSIS_FAILED",
+        "AI_ANALYSIS_START_ASYNC",
+        "AI_RISK_PREDICTION",
+        "AI_CDS",
+        "AI_TRIAGE",
+        "AI_SIMILARITY_SEARCH",
+        "AI_REFERRAL_RECOMMENDATION",
+        "AI_HISTORY_VIEW",
+        "AI_ANTIBIOTIC_GUIDANCE",
+        "AI_DEPLOYMENT_ENABLED",
+        "AI_DEPLOYMENT_DISABLED",
+        "AI_DRIFT_WARNING",
+        "AI_DRIFT_CRITICAL",
+        "FAILED_OBJECT_ACCESS",
+        "MFA_FAILED",
+        "RATE_LIMIT_HIT",
+        "BREAK_GLASS_EXPIRED_ACCESS",
+        "BREAK_GLASS_ABUSE_DETECTED",
+        "NO_SHOW_AUTO_MARKED",
+        "NO_SHOW_OVERRIDE",
+        "SEND_REMINDER",
+        "ACKNOWLEDGE_CDS_ALERT",
+        "TRIAGE_ASSIGN",
+        "ED_ROOM_ASSIGN",
+    }
+
+    assert expected.issubset(choices)
+
+
+def test_integrations_package_exports_and_nhis_client_imports():
+    from api.integrations import notify_pharmacy_dispense, notify_pacs_result
+    from api.integrations.nhis_client import NHISClient
+
+    assert callable(notify_pharmacy_dispense)
+    assert callable(notify_pacs_result)
+    assert NHISClient is not None
 
 
 

@@ -126,52 +126,52 @@ class Migration(migrations.Migration):
         migrations.AlterField(
             model_name='aianalysis',
             name='additional_context',
-            field=models.JSONField(blank=True, default=api.models._default_dict),
+            field=models.JSONField(blank=True, default=dict),
         ),
         migrations.AlterField(
             model_name='aianalysis',
             name='agents_executed',
-            field=models.JSONField(blank=True, default=api.models._default_list, help_text='Names of AI agents that executed'),
+            field=models.JSONField(blank=True, default=list, help_text='Names of AI agents that executed'),
         ),
         migrations.AlterField(
             model_name='aianalysis',
             name='alerts',
-            field=models.JSONField(default=api.models._default_list, help_text='Clinical alerts generated'),
+            field=models.JSONField(default=list, help_text='Clinical alerts generated'),
         ),
         migrations.AlterField(
             model_name='aianalysis',
             name='recommended_actions',
-            field=models.JSONField(default=api.models._default_list, help_text='List of recommended clinical actions'),
+            field=models.JSONField(default=list, help_text='List of recommended clinical actions'),
         ),
         migrations.AlterField(
             model_name='diagnosissuggestion',
             name='matching_symptoms',
-            field=models.JSONField(blank=True, default=api.models._default_list),
+            field=models.JSONField(blank=True, default=list),
         ),
         migrations.AlterField(
             model_name='diagnosissuggestion',
             name='recommended_tests',
-            field=models.JSONField(blank=True, default=api.models._default_list),
+            field=models.JSONField(blank=True, default=list),
         ),
         migrations.AlterField(
             model_name='diseaseriskprediction',
             name='contributing_factors',
-            field=models.JSONField(blank=True, default=api.models._default_list, help_text='List of factors that contributed to this prediction'),
+            field=models.JSONField(blank=True, default=list, help_text='List of factors that contributed to this prediction'),
         ),
         migrations.AlterField(
             model_name='diseaseriskprediction',
             name='recommendations',
-            field=django.contrib.postgres.fields.ArrayField(base_field=models.TextField(), blank=True, default=api.models._default_list, help_text='Clinical recommendations for this disease', size=None),
+            field=django.contrib.postgres.fields.ArrayField(base_field=models.TextField(), blank=True, default=list, help_text='Clinical recommendations for this disease', size=None),
         ),
         migrations.AlterField(
             model_name='patientsimilaritymatch',
             name='matching_conditions',
-            field=models.JSONField(blank=True, default=api.models._default_list),
+            field=models.JSONField(blank=True, default=list),
         ),
         migrations.AlterField(
             model_name='triageassessment',
             name='indicators',
-            field=models.JSONField(blank=True, default=api.models._default_list, help_text='List of indicators that determined triage level'),
+            field=models.JSONField(blank=True, default=list, help_text='List of indicators that determined triage level'),
         ),
         migrations.AddField(
             model_name='bulkinvitationjob',
@@ -240,3 +240,4 @@ class Migration(migrations.Migration):
             unique_together={('batch_job', 'row_number')},
         ),
     ]
+

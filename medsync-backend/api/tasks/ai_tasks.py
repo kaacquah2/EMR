@@ -34,12 +34,9 @@ def retrain_model_task(self, model_type: str, data_source: str, hospital_id: str
 
         # Update progress: TRAINING
         self.update_state(state='TRAINING', meta={'progress': 50})
-        if model_type == 'risk_prediction':
-            result = trainer.train_risk_model(df)
-        elif model_type == 'triage':
-            result = trainer.train_triage_model(df)
-        else:
+        if model_type != 'risk_prediction':
             return {"status": "failed", "error": f"Unknown model type: {model_type}"}
+        result = trainer.train_risk_model(df)
 
         # Update progress: EVALUATING
         self.update_state(state='EVALUATING', meta={'progress': 80})
@@ -97,7 +94,7 @@ def comprehensive_analysis_task(patient_id: str, job_id: str, user_id: str, anal
         feature_engineer = FeatureEngineer()
         features = feature_engineer.create_feature_vector(patient_data)
         
-        job.current_step = 'Running multi-agent reasoning'
+        job.current_step = 'Running risk-only analysis'
         job.progress_percent = 50
         job.save()
         
@@ -179,41 +176,6 @@ def risk_prediction_task(patient_id: str, job_id: str, user_id: str):
 
 @shared_task(name='ai.rebuild_faiss_index')
 def rebuild_faiss_index():
-    """
-    Nightly task: Rebuild the FAISS similarity index for all patients.
-    """
-    from django.conf import settings
-    import os
-    from api.ai.data_processor import DataProcessor
-    from api.ai.ml_models import get_similarity_matcher
-    from patients.models import Patient
-    
-    try:
-        logger.info("Starting FAISS index rebuild...")
-        matcher = get_similarity_matcher()
-        
-        # Fetch all active patients
-        patients = Patient.objects.filter(is_archived=False)
-        processor = DataProcessor(None) # System context
-        
-        all_features = []
-        for p in patients:
-            try:
-                p_data = processor.extract_complete_patient_data(p)
-                features = processor._extract_and_engineer_features(p)
-                features['patient_id'] = str(p.id)
-                all_features.append(features)
-            except Exception as e:
-                continue
-                
-        if all_features:
-            matcher.index_patients(all_features)
-            index_path = os.path.join(settings.BASE_DIR, 'data', 'ai_models', 'patient_similarity.faiss')
-            matcher.save_to_disk(index_path)
-            logger.info(f"FAISS index rebuilt with {len(all_features)} patients.")
-        
-        return {"status": "success", "indexed_count": len(all_features)}
-        
-    except Exception as e:
-        logger.error(f"FAISS index rebuild failed: {str(e)}", exc_info=True)
-        return {"status": "error", "message": str(e)}
+    """Retired FAISS maintenance task; kept as a safe no-op."""
+    logger.info("FAISS index rebuild is disabled in risk-only mode.")
+    return {"status": "disabled", "message": "FAISS similarity indexing is not active."}

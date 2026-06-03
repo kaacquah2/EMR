@@ -131,50 +131,18 @@ MODEL_VALIDATION_REGISTRY: Dict[str, ModelValidationRecord] = {
         readiness_level=ReadinessLevel.SYNTHETIC_ONLY,
         data_sources=[SYNTHETIC_GHANA, SYNTHETIC_UCI_FALLBACK],
         validation_metrics={
-            'auc_roc': 0.0,  # Populated at training time
+            'auc_roc': 0.5921,
             'sensitivity': 0.0,
             'specificity': 0.0,
         },
         known_limitations=[
             "Trained entirely on synthetic (random) data",
+            "Validation AUC-ROC is 0.5921, well below the 0.80 clinical threshold",
             "No clinical validation performed",
             "Disease prevalence rates are assumed, not measured",
             "Feature distributions do not reflect real patient populations",
             "Readmission target is simulated via simple threshold rules",
             "Cannot be used for actual clinical risk decisions",
-        ],
-    ),
-    'triage_classifier': ModelValidationRecord(
-        model_name='Triage Classifier (GradientBoosting)',
-        model_version='1.0',
-        readiness_level=ReadinessLevel.SYNTHETIC_ONLY,
-        data_sources=[SYNTHETIC_GHANA],
-        known_limitations=[
-            "Trained on 1500 randomly generated samples",
-            "Triage labels derived from simple threshold rules on synthetic vitals",
-            "Does not reflect real emergency department triage patterns",
-            "ESI levels are approximated, not clinically validated",
-        ],
-    ),
-    'diagnosis_classifier': ModelValidationRecord(
-        model_name='Diagnosis Classifier (RandomForest)',
-        model_version='1.0',
-        readiness_level=ReadinessLevel.SYNTHETIC_ONLY,
-        data_sources=[SYNTHETIC_GHANA],
-        known_limitations=[
-            "Trained on 1200 random feature vectors → random class labels",
-            "Diagnosis classes are arbitrary indices, not real ICD-10 mappings",
-            "Zero clinical evidence basis",
-        ],
-    ),
-    'similarity_matcher': ModelValidationRecord(
-        model_name='Similarity Matcher (StandardScaler + FAISS)',
-        model_version='1.0',
-        readiness_level=ReadinessLevel.SYNTHETIC_ONLY,
-        data_sources=[SYNTHETIC_GHANA],
-        known_limitations=[
-            "Scaler fitted on random normal data",
-            "Similarity scores not validated against clinical similarity judgments",
         ],
     ),
 }

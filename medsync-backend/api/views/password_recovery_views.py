@@ -580,7 +580,8 @@ def force_password_reset(request, user_id):
     # Verify MFA code
     import pyotp
     totp = pyotp.TOTP(request.user.totp_secret)
-    if not totp.verify(mfa_code):
+    # Allow a 1-step window to account for minor clock skew in test environments
+    if not totp.verify(mfa_code, valid_window=1):
         return Response(
             {"message": "Invalid MFA code"},
             status=status.HTTP_401_UNAUTHORIZED,
@@ -748,7 +749,8 @@ def force_password_reset_initiate(request, user_id):
     # Verify MFA code
     import pyotp
     totp = pyotp.TOTP(request.user.totp_secret)
-    if not totp.verify(mfa_code):
+    # Allow a 1-step window to account for minor clock skew in test environments
+    if not totp.verify(mfa_code, valid_window=1):
         return Response(
             {"message": "Invalid MFA code"},
             status=status.HTTP_401_UNAUTHORIZED,

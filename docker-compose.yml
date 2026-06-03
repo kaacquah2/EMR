@@ -4,11 +4,11 @@ services:
     volumes:
       - postgres_data:/var/lib/postgresql/data
     environment:
-      - POSTGRES_DB=medsync
-      - POSTGRES_USER=postgres
-      - POSTGRES_PASSWORD=postgres
+      - POSTGRES_DB=${POSTGRES_DB:-medsync}
+      - POSTGRES_USER=${POSTGRES_USER:-postgres}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:?POSTGRES_PASSWORD must be set in .env.docker}
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-postgres}"]
       interval: 10s
       timeout: 5s
       retries: 5
@@ -27,10 +27,9 @@ services:
     volumes:
       - ./medsync-backend:/app
     env_file:
-      - ./medsync-backend/.env
+      - .env.docker
     environment:
-      - DEBUG=True
-      - DATABASE_URL=postgresql://postgres:postgres@db:5432/medsync
+      - DATABASE_URL=postgresql://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB:-medsync}
       - REDIS_URL=redis://redis:6379/0
       - CELERY_BROKER_URL=redis://redis:6379/0
       - CELERY_RESULT_BACKEND=redis://redis:6379/0
@@ -47,10 +46,9 @@ services:
     build:
       context: ./medsync-backend
     env_file:
-      - ./medsync-backend/.env
+      - .env.docker
     environment:
-      - DEBUG=True
-      - DATABASE_URL=postgresql://postgres:postgres@db:5432/medsync
+      - DATABASE_URL=postgresql://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB:-medsync}
       - REDIS_URL=redis://redis:6379/0
       - CELERY_BROKER_URL=redis://redis:6379/0
       - CELERY_RESULT_BACKEND=redis://redis:6379/0
@@ -61,23 +59,22 @@ services:
         condition: service_healthy
     command: celery -A medsync_backend worker --loglevel=info
 
-
-  flower:
+  celery-beat:
     build:
       context: ./medsync-backend
     env_file:
-      - ./medsync-backend/.env
+      - .env.docker
     environment:
-      - DEBUG=True
+      - DATABASE_URL=postgresql://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB:-medsync}
+      - REDIS_URL=redis://redis:6379/0
       - CELERY_BROKER_URL=redis://redis:6379/0
-    ports:
-      - "5555:5555"
+      - CELERY_RESULT_BACKEND=redis://redis:6379/0
     depends_on:
+      db:
+        condition: service_healthy
       redis:
         condition: service_healthy
-    command: >
-      celery -A medsync_backend flower --port=5555
-      --basic-auth=admin:${FLOWER_PASSWORD:-changeme}
+    command: celery -A medsync_backend beat --loglevel=info --scheduler django_celery_beat.schedulers:DatabaseScheduler
 
   frontend:
     build:
@@ -87,7 +84,7 @@ services:
       - /app/node_modules
       - /app/.next
     environment:
-      - NEXT_PUBLIC_API_URL=http://localhost:8000
+      - NEXT_PUBLIC_API_URL=${NEXT_PUBLIC_API_URL:-http://localhost:8000}
     depends_on:
       - backend
     ports:

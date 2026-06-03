@@ -13,7 +13,7 @@ logger = logging.getLogger(__name__)
 
 class PIIDetectedError(Exception):
     """Raised when PII columns are detected in a dataset intended for ML training."""
-    pass
+    __slots__ = ()
 
 class DatasetValidationReport:
     def __init__(self, passed: bool, errors: List[str], warnings: List[str]):

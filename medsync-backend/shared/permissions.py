@@ -38,8 +38,14 @@ PERMISSION_MATRIX = {
     "auth/forgot-password": {"public": ["POST"]},
     "auth/reset-password": {"public": ["POST"]},
     "auth/refresh": {"authenticated": ["POST"]},
+    "auth/refresh-cookie": {"authenticated": ["POST"]},
     "auth/logout": {"authenticated": ["POST"]},
+    "auth/logout-cookie": {"authenticated": ["POST"]},
     "auth/me": {"authenticated": ["GET"]},
+    "auth/csrf-token": {"authenticated": ["POST"]},
+    # Step-up endpoints
+    "auth/step-up/request": {"authenticated": ["POST"]},
+    "auth/step-up/verify": {"authenticated": ["POST"]},
     # WebAuthn/Passkey endpoints
     "auth/passkey/register/begin": {"authenticated": ["POST"]},
     "auth/passkey/register/complete": {"authenticated": ["POST"]},

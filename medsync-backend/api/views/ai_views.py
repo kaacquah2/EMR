@@ -94,7 +94,7 @@ def build_ai_status_payload() -> dict:
     model_paths = getattr(settings, "MODEL_PATHS", {}) or {}
     checks: dict = {}
     present = 0
-    for key in ("triage_classifier", "risk_predictor", "diagnosis_classifier"):
+    for key in ("risk_predictor",):
         path = model_paths.get(key)
         configured = bool(path)
         exists = bool(path and os.path.exists(path))
@@ -126,10 +126,12 @@ def build_ai_status_payload() -> dict:
         "avg_response_ms": avg_ms,
         "target_response_ms": target_ms,
         "modules": {
-            "triage": "active" if checks.get("triage_classifier", {}).get("present") else "inactive",
             "risk_prediction": "active" if checks.get("risk_predictor", {}).get("present") else "inactive",
-            "similarity_search": "active",
-            "comprehensive": "active",
+            "triage": "disabled",
+            "clinical_decision_support": "disabled",
+            "similarity_search": "disabled",
+            "referral_recommendation": "disabled",
+            "comprehensive": "disabled",
         },
         "uptime_7d_pct": None if enabled else 0,
         "models": checks,
@@ -151,99 +153,6 @@ def ai_status(request: Request) -> Response:
 @throttle_classes([AIEndpointThrottle, AIHospitalThrottle, AIThrottle])
 @requires_role('doctor', 'nurse', 'hospital_admin', 'super_admin')
 @ai_governance_clinical('comprehensive_analysis', model_version='1.0.0-placeholder')
-def analyze_patient_comprehensive(request: Request, patient_id: str) -> Response:
-    """
-    Run comprehensive multi-agent analysis on patient.
-
-    ⚠️  DEPRECATION: Synchronous analysis is deprecated. Please use POST /api/v1/ai/async-analysis instead.
-    """
-    return Response({"data": {
-        "message": "Synchronous comprehensive analysis is deprecated due to resource intensity. Please use the async endpoint.",
-        "async_endpoint": "/api/v1/ai/async-analysis/",
-        "patient_id": patient_id
-    }}, status=status.HTTP_400_BAD_REQUEST)
-
-    # Legacy code (unreachable)
-    try:
-        data_processor = DataProcessor(request.user)
-        patient = data_processor._get_patient_or_raise(patient_id)
-        patient_data = data_processor.extract_complete_patient_data(patient)
-        
-        # Engineer features
-        feature_engineer = FeatureEngineer()
-        features = feature_engineer.create_feature_vector(patient_data)
-
-
-        # Get chief complaint from query or latest encounter
-        body: Any = request.data
-        chief_complaint = _as_str(body.get("chief_complaint", ""), "")
-        if not chief_complaint:
-            from records.models import Encounter
-
-            latest_encounter = (
-                _model(Encounter)
-                .objects.filter(patient=patient, hospital=data_processor.effective_hospital)
-                .order_by("-encounter_date")
-                .first()
-            )
-            if latest_encounter:
-                chief_complaint = latest_encounter.chief_complaint or ""
-
-        # Run orchestrator
-        orchestrator = get_orchestrator()
-        analysis_result = orchestrator.analyze_patient_comprehensive(
-            patient_data,
-            features,
-            chief_complaint=chief_complaint,
-            include_similarity=include_similarity,
-            include_referral=include_referral,
-        )
-
-        # Persist analysis for history and audit
-        hospital = get_request_hospital(request)
-        if hospital:
-            try:
-                save_comprehensive_analysis(
-                    patient=patient,
-                    hospital=hospital,
-                    user=request.user,
-                    analysis_result=analysis_result,
-                    chief_complaint=chief_complaint,
-                )
-            except Exception as persist_err:
-                logger.warning(f"Failed to persist AI analysis (continuing): {persist_err}")
-
-        # Audit log
-        AuditLog.objects.create(
-            user=request.user,
-            action='AI_ANALYSIS',
-            resource_type='Patient',
-            resource_id=patient_id,
-            hospital=hospital,
-            ip_address=request.META.get('REMOTE_ADDR', '127.0.0.1'),
-            user_agent=request.META.get('HTTP_USER_AGENT', ''),
-            extra_data={
-                'analysis_type': 'comprehensive',
-                'agents': analysis_result.get('agents_executed', []),
-            }
-        )
-
-        logger.info(f"Comprehensive analysis for patient {patient_id} completed")
-        return Response(analysis_result, status=status.HTTP_200_OK)
-
-    except AIServiceException as e:
-        logger.warning(f"AI Service error: {e}")
-        return Response({'error': str(e)}, status=status.HTTP_400_BAD_REQUEST)
-    except _model(Patient).DoesNotExist:
-        return Response({'error': f'Patient {patient_id} not found'}, status=status.HTTP_404_NOT_FOUND)
-    except Exception as e:
-        logger.error(f"Error in comprehensive analysis: {e}")
-        return Response(
-            {'error': 'Analysis failed. Please try again.'},
-            status=status.HTTP_500_INTERNAL_SERVER_ERROR
-        )
-
-
 @api_view(['POST'])
 @throttle_classes([AIEndpointThrottle, AIHospitalThrottle, AIThrottle])
 @requires_role('doctor', 'nurse', 'super_admin')
@@ -604,17 +513,6 @@ def start_async_analysis(request: Request, patient_id: str) -> Response:
         valid_types = [
             'comprehensive',
             'risk_prediction',
-            'clinical_decision_support',
-            'triage',
-            'similarity_search',
-            'referral',
-            # NEW TYPES
-            'differentials',
-            'encounter_summary',
-            'discharge_summary',
-            'readmission_risk',
-            'icd10_suggest',
-            'ward_forecast',
         ]
         if analysis_type not in valid_types:
             return Response({'error': f'Invalid analysis type. Must be one of: {valid_types}'},

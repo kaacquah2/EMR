@@ -1,0 +1,33 @@
+# Production/runtime dependencies for the backend.
+# Keep requirements-local.txt as the development superset.
+
+Django>=4.2,<5
+djangorestframework>=3.14
+djangorestframework-simplejwt>=5.3
+django-cors-headers>=4.3
+django-otp>=1.4
+pyotp>=2.9
+python-decouple>=3.8
+boto3>=1.34.0
+webauthn>=1.14
+fhir.resources>=8.2.0
+icd10-cm>=0.0.5
+psycopg[binary]>=3.1
+dj-database-url>=2.1
+redis>=5.0
+Pillow>=10.0
+reportlab>=4.0
+channels>=4.0
+channels-redis>=4.2
+daphne>=4.0
+scikit-learn>=1.3.0
+xgboost>=2.0.0,<3
+numpy>=1.24.0
+pandas>=2.0.0
+joblib>=1.3.0
+celery>=5.3.0
+django-celery-beat>=2.5.0
+django-celery-results>=2.5.0
+kombu>=5.3.0
+django-cryptography>=1.1
+argon2-cffi>=23.1.0

@@ -226,10 +226,6 @@ class StartAsyncAnalysisTest(AsyncAIAnalysisSetupMixin, TestCase):
         valid_types = [
             'comprehensive',
             'risk_prediction',
-            'clinical_decision_support',
-            'triage',
-            'similarity_search',
-            'referral'
         ]
 
         for analysis_type in valid_types:
@@ -776,5 +772,4 @@ class AuditLoggingTest(AsyncAIAnalysisSetupMixin, TestCase):
         self.assertEqual(latest_log.action, 'AI_ANALYSIS_START_ASYNC')
         self.assertEqual(latest_log.resource_type, 'Patient')
         self.assertEqual(latest_log.user, self.doctor1)
-
 

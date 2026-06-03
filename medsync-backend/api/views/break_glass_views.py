@@ -12,6 +12,7 @@ from core.models import AuditLog, User
 from interop.models import GlobalPatient, BreakGlassLog
 from api.utils import get_global_patient_queryset, get_effective_hospital, get_request_hospital
 from api.serializers import BreakGlassLogSerializer
+from api.decorators import requires_step_up
 
 
 def _interop_role_ok(user):
@@ -41,6 +42,7 @@ def _audit_emergency(user, global_patient_id, request, hospital=None):
 
 @api_view(["POST"])
 @permission_classes([IsAuthenticated])
+@requires_step_up(action="break_glass")
 def break_glass_create(request):
     if not _interop_role_ok(request.user):
         return Response(
@@ -87,8 +89,8 @@ def break_glass_create(request):
             status=status.HTTP_404_NOT_FOUND,
         )
 
-    # Set expires_at to 15 minutes from now (or configured window)
-    window_minutes = getattr(settings, "BREAK_GLASS_WINDOW_MINUTES", 240)
+    # Set expires_at based on settings.BREAK_GLASS_WINDOW_MINUTES (single source of truth)
+    window_minutes = getattr(settings, "BREAK_GLASS_WINDOW_MINUTES", 15)
     expires_at = timezone.now() + timedelta(minutes=window_minutes)
 
     log = BreakGlassLog.objects.create(

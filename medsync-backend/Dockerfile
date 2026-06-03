@@ -11,8 +11,8 @@ RUN apt-get update && apt-get install -y \
     libpq-dev \
     && rm -rf /var/lib/apt/lists/*
 
-COPY requirements-local.txt .
-RUN pip wheel --no-cache-dir --no-deps --wheel-dir /app/wheels -r requirements-local.txt
+COPY requirements.txt .
+RUN pip wheel --no-cache-dir --no-deps --wheel-dir /app/wheels -r requirements.txt
 
 # Stage 2: Final image
 FROM python:3.12-slim
@@ -30,7 +30,7 @@ RUN apt-get update && apt-get install -y \
     && useradd --uid 1000 --gid medsync --create-home --shell /usr/sbin/nologin medsync
 
 COPY --from=builder /app/wheels /wheels
-COPY --from=builder /app/requirements-local.txt .
+COPY --from=builder /app/requirements.txt .
 RUN pip install --no-cache /wheels/*
 
 COPY . .

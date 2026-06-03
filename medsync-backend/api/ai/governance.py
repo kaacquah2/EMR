@@ -37,27 +37,27 @@ AI_RATE_LIMIT_WINDOW = 60  # Window in seconds
 
 class AIGovernanceError(Exception):
     """Raised when AI governance check fails."""
-    pass
+    __slots__ = ()
 
 
 class AIDisabledError(AIGovernanceError):
     """Raised when AI is disabled for the hospital."""
-    pass
+    __slots__ = ()
 
 
 class AIRateLimitError(AIGovernanceError):
     """Raised when AI rate limit is exceeded."""
-    pass
+    __slots__ = ()
 
 
 class AIClinicalFeaturesDisabledError(AIGovernanceError):
     """Raised when clinical AI features are not enabled globally or for the hospital."""
-    pass
+    __slots__ = ()
 
 
 class AIModelDriftError(AIGovernanceError):
     """Raised when model drift exceeds safe thresholds."""
-    pass
+    __slots__ = ()
 
 
 def check_model_drift_health(model_name: str = 'risk_predictor') -> None:

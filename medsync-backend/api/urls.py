@@ -14,6 +14,7 @@ from api.views import (
     bed_views,
     dashboard_views,
     report_views,
+    billing_views,
     fhir_views,
     superadmin_views,
     audit_views,
@@ -28,14 +29,11 @@ from api.views import (
     task_views,
     shift_views,
     batch_operations_views,
-    push_views,
-    emergency_views,
-    pharmacy_views,
-    pharmacy_stock_views,
-    billing_views,
     mar_views,
+    emergency_views,
     vitals_monitoring_views,
     cds_views,
+    step_up_views,
 )
 
 urlpatterns = [
@@ -52,18 +50,12 @@ urlpatterns = [
     path("auth/refresh", auth_views.refresh),
     path("auth/logout", auth_views.logout),
     path("auth/me", auth_views.me),
-    # WebAuthn/Passkey endpoints
-    path("auth/passkey/check", auth_views.passkey_check),
-    path("auth/passkey/register/begin", auth_views.passkey_register_begin),
-    path("auth/passkey/register/complete", auth_views.passkey_register_complete),
-    path("auth/passkey/auth/begin", auth_views.passkey_auth_begin),
-    path("auth/passkey/auth/complete", auth_views.passkey_auth_complete),
-    path("auth/passkeys", auth_views.list_passkeys),
-    path("auth/passkeys/<uuid:pk>", auth_views.delete_passkey),
-    path("auth/passkeys/<uuid:pk>/rename", auth_views.rename_passkey),
-    # Admin passkey management
-    path("admin/users/<uuid:user_id>/passkeys", auth_views.admin_list_user_passkeys),
-    path("admin/users/<uuid:user_id>/passkeys/reset", auth_views.admin_reset_user_passkeys),
+    path("auth/step-up/request", step_up_views.step_up_request),
+    path("auth/step-up/verify", step_up_views.step_up_verify),
+    # PHASE 3: HttpOnly Cookie-Based Authentication
+    path("auth/refresh-cookie", auth_views.refresh_with_cookie),
+    path("auth/logout-cookie", auth_views.logout_with_cookie),
+    path("auth/csrf-token", auth_views.get_csrf_token_endpoint),
     path("patients/search/", patient_views.patient_search),
     path("patients/duplicate-check", patient_views.patient_duplicate_check),
     path("patients", patient_views.patient_create),
@@ -206,8 +198,10 @@ urlpatterns = [
     path("fhir/Condition", fhir_views.fhir_condition_list),
     path("fhir/Condition/<uuid:pk>", fhir_views.fhir_condition_read),
     path("fhir/MedicationRequest", fhir_views.fhir_medication_request_list),
+    path("fhir/MedicationRequest/", fhir_views.fhir_medication_request_create),
     path("fhir/MedicationRequest/<uuid:pk>", fhir_views.fhir_medication_request_read),
     path("fhir/Observation", fhir_views.fhir_observation_list),
+    path("fhir/Observation/", fhir_views.fhir_observation_create),
     path("fhir/Observation/<uuid:pk>", fhir_views.fhir_observation_read),
     path("fhir/DiagnosticReport/<uuid:pk>", fhir_views.fhir_diagnostic_report_read),
     path("hl7/adt", fhir_views.hl7_adt_list),
@@ -328,19 +322,13 @@ urlpatterns = [
 
     # PHASE 8: AI Intelligence Module
     path("ai/status", ai_views.ai_status),
-    path("ai/analyze-patient/<uuid:patient_id>", ai_views.analyze_patient_comprehensive),
+    path("ai/analyze-patient/<uuid:patient_id>", ai_views.start_async_analysis),
     path("ai/risk-prediction/<uuid:patient_id>", ai_views.predict_patient_risk),
     path("ai/clinical-decision-support/<uuid:patient_id>", ai_views.get_clinical_decision_support),
-    path("ai/triage/<uuid:patient_id>", ai_views.triage_patient),
-    path("ai/find-similar-patients/<uuid:patient_id>", ai_views.find_similar_patients),
-    path("ai/referral-recommendation/<uuid:patient_id>", ai_views.recommend_referral_hospital),
     path("ai/analysis-history/<uuid:patient_id>", ai_views.get_analysis_history),
     # Async AI analysis endpoints
     path("ai/async-analysis/<uuid:patient_id>", ai_views.start_async_analysis),
     path("ai/async-analysis/status/<uuid:job_id>", ai_views.get_async_analysis_status),
-    # PHASE 8.2: New synchronous AI endpoints
-    path("ai/antibiotic-guidance", ai_views.antibiotic_guidance),
-    path("ai/no-show-risk", ai_views.no_show_risk),
     
     # PHASE 8.3: AI Clinical Deployment Management
     path("admin/ai/enable", admin_ai_views.enable_clinical_ai),
@@ -373,20 +361,7 @@ urlpatterns = [
     path("cds-alerts/<uuid:alert_id>", cds_views.cds_alert_detail),
     path("cds-alerts/<uuid:alert_id>/acknowledge", cds_views.acknowledge_cds_alert),
     
-    # PHARMACY: Dispensing & Drug Interactions
-    path("pharmacy/worklist", pharmacy_views.pharmacy_worklist),
-    path("pharmacy/dispense/<uuid:prescription_id>", pharmacy_views.dispense_medication),
-    path("pharmacy/statistics", pharmacy_views.pharmacy_statistics),
-    
-    # PHARMACY: Stock Management & Inventory
-    path("pharmacy/stock/", pharmacy_stock_views.stock_list_create),
-    path("pharmacy/stock/<uuid:stock_id>/", pharmacy_stock_views.stock_detail),
-    path("pharmacy/stock/<uuid:stock_id>/adjust/", pharmacy_stock_views.adjust_stock),
-    path("pharmacy/dispensations/", pharmacy_stock_views.dispensation_list),
-    path("pharmacy/reports/low-stock/", pharmacy_stock_views.low_stock_report),
-    path("pharmacy/reports/expiring/", pharmacy_stock_views.expiring_stock_report),
-    path("pharmacy/tasks/check-expiry/", pharmacy_stock_views.check_expiry_manual_trigger),
-    path("pharmacy/prescriptions/<uuid:prescription_id>/dispense-confirm/", pharmacy_stock_views.dispense_confirm),
+    # Pharmacy module: Phase 2.
     
     # MAR: Medication Administration Record
     path("mar/ward/<uuid:ward_id>/due", mar_views.ward_medications_due),

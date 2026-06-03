@@ -4,8 +4,6 @@ from typing import cast
 
 from decouple import config
 import dj_database_url
-import sentry_sdk  # type: ignore[import-untyped]
-from sentry_sdk.integrations.django import DjangoIntegration  # type: ignore[import-untyped]
 from celery.schedules import crontab
 
 
@@ -23,6 +21,12 @@ _VERCEL = os.environ.get("VERCEL") == "1"
 DEBUG = config("DEBUG", default=False, cast=bool)
 ENV = config("ENV", default="development")
 LLM_MODE = config("LLM_MODE", default="mock")
+if _str_config("ENV").lower() == "production" and LLM_MODE == "mock":
+    from django.core.exceptions import ImproperlyConfigured
+    raise ImproperlyConfigured(
+        "LLM_MODE is 'mock' in production. Set LLM_MODE to a real provider "
+        "(e.g. LLM_MODE=bedrock) to prevent stub responses in clinical workflows."
+    )
 
 
 # SECRET_KEY: no insecure default when DEBUG=False. Accept SECRET_KEY or DJANGO_SECRET_KEY
@@ -65,16 +69,6 @@ if _str_config("ENV").lower() == "production" and DEBUG:
     from django.core.exceptions import ImproperlyConfigured
     raise ImproperlyConfigured("Production must not run with DEBUG=True. Set DEBUG=False.")
 
-# Sentry Monitoring (Task 7)
-if _SENTRY_DSN := _str_config("SENTRY_DSN") or None:
-    sentry_sdk.init(
-        dsn=_SENTRY_DSN,
-        integrations=[DjangoIntegration()],
-        traces_sample_rate=0.1,
-        send_default_pii=False,  # PHI SAFETY: Never send PII to Sentry
-        environment=config("ENV", default="development"),
-    )
-
 ALLOWED_HOSTS = [
     h.strip()
     for h in _str_config("ALLOWED_HOSTS", "localhost,127.0.0.1,testserver").split(",")
@@ -114,13 +108,13 @@ INSTALLED_APPS = [
     "django_otp.plugins.otp_totp",
     "django_celery_beat",
     "django_celery_results",
+    "drf_spectacular",
     "core",
     "patients",
     "records",
     "interop",
     "shared.apps.SharedConfig",
     "api",
-    "django_migration_linter",
 ]
 if _HAS_DAPHNE:
     INSTALLED_APPS.insert(0, "daphne")
@@ -138,10 +132,10 @@ MIDDLEWARE = [
     "django.middleware.csrf.CsrfViewMiddleware",
     "django.contrib.auth.middleware.AuthenticationMiddleware",
     "django_otp.middleware.OTPMiddleware",
+    "api.middleware.ForcedPasswordChangeMiddleware",
     "api.middleware.SessionIdleTimeoutMiddleware",
     "shared.permissions.PermissionEnforcementMiddleware",
 
-    "api.middleware.ForcedPasswordChangeMiddleware",
     "api.middleware.ViewAsHospitalMiddleware",
     "api.middleware.BreakGlassExpiryMiddleware",
     "api.middleware.anomaly_detection.AnomalyDetectionMiddleware",
@@ -410,6 +404,23 @@ REST_FRAMEWORK = {
     "DEFAULT_VERSIONING_CLASS": "rest_framework.versioning.URLPathVersioning",
 }
 
+SPECTACULAR_SETTINGS = {
+    "TITLE": "MedSync EMR API",
+    "DESCRIPTION": (
+        "Multi-tenant Electronic Medical Records API. "
+        "Supports JWT + TOTP MFA authentication, RBAC (10 roles), "
+        "FHIR R4 interoperability, and AI-assisted clinical decision support."
+    ),
+    "VERSION": "1.0.0",
+    "SERVE_INCLUDE_SCHEMA": False,
+    "SECURITY": [{"bearerAuth": []}],
+    "COMPONENTS": {
+        "securitySchemes": {
+            "bearerAuth": {"type": "http", "scheme": "bearer", "bearerFormat": "JWT"}
+        }
+    },
+}
+
 from datetime import timedelta
 
 def _jwt_access_minutes():
@@ -500,14 +511,6 @@ MODEL_PATHS = {
     "risk_predictor": config(
         "MODEL_PATH_RISK_PREDICTOR",
         default=str(_ai_models_dir / "risk_predictor.joblib"),
-    ),
-    "diagnosis_classifier": config(
-        "MODEL_PATH_DIAGNOSIS",
-        default=str(_ai_models_dir / "diagnosis_classifier.joblib"),
-    ),
-    "triage_classifier": config(
-        "MODEL_PATH_TRIAGE",
-        default=str(_ai_models_dir / "triage_classifier.joblib"),
     ),
 }
 
@@ -609,11 +612,6 @@ EMAIL_USE_SSL = config("EMAIL_USE_SSL", default=False, cast=bool)
 EMAIL_HOST_USER = config("EMAIL_HOST_USER", default="")
 EMAIL_HOST_PASSWORD = config("EMAIL_HOST_PASSWORD", default="")
 DEFAULT_FROM_EMAIL = config("DEFAULT_FROM_EMAIL", default="medsync@localhost")
-
-# Push Notifications (Web Push / VAPID)
-VAPID_PUBLIC_KEY = config('VAPID_PUBLIC_KEY', default='')
-VAPID_PRIVATE_KEY = config('VAPID_PRIVATE_KEY', default='')
-VAPID_CLAIM_EMAIL = config('VAPID_CLAIM_EMAIL', default='mailto:admin@medsync.gh')
 
 _local_mail_hosts = frozenset(("", "localhost", "127.0.0.1"))
 _smtp_configured = bool(
@@ -808,11 +806,6 @@ CELERY_BEAT_SCHEDULE = {
         'task': 'api.tasks.appointment_tasks.mark_no_shows_task',
         'schedule': crontab(minute='*/15'),  # Every 15 minutes
         'options': {'expires': 600}  # Expires in 10 minutes if not run
-    },
-    'rebuild-faiss-index-nightly': {
-        'task': 'ai.rebuild_faiss_index',
-        'schedule': crontab(hour=2, minute=0),  # Daily at 2 AM
-        'options': {'expires': 3600}  # Expires in 1 hour if not run
     }
 }
 
@@ -836,18 +829,6 @@ CELERY_RESULT_EXPIRES = 3600  # Results expire after 1 hour
 # Development: longer timeout to allow requests to finish during reload
 # Production: shorter timeout (hard kill after 2 seconds if not graceful)
 DAPHNE_APPLICATION_CLOSE_TIMEOUT = 5 if DEBUG else 2
-
-# ============================================================================
-# RBAC-18: Fail-closed mode for unknown API endpoints
-# ============================================================================
-# When True: any /api/* path NOT listed in PERMISSION_MATRIX returns 403.
-# This prevents newly added endpoints from being publicly accessible before
-# they are registered in the permission matrix.
-#
-# Development (DEBUG=True): False → allows rapid iteration without blocking
-# Production (DEBUG=False): True → hard-fail for security
-# ============================================================================
-PERMISSION_FAIL_CLOSED_UNKNOWN_ENDPOINTS = not DEBUG
 
 # Django admin URL path (non-guessable in production). No leading slash.
 ADMIN_URL = _str_config("ADMIN_URL", "admin/").strip("/") + "/"

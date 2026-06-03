@@ -60,18 +60,13 @@ class ModelRegistry:
         # Mapping model names to filenames
         mapping = {
             'risk_predictor': 'xgboost.joblib',
-            'triage_classifier': 'triage_classifier.joblib',
-            'diagnosis_classifier': 'diagnosis_classifier.joblib',
-            'similarity_matcher': 'similarity_matcher.joblib',
             'scaler': 'scaler.joblib'
         }
         
         filename = mapping.get(model_name)
-        if filename:
-            return os.path.join(version_dir, filename)
-            
-        # Fallback to root models if versioned not found
-        return os.path.join(base_ai_dir, f"{model_name}.joblib")
+        if not filename:
+            return None
+        return os.path.join(version_dir, filename)
 
     def clear_cache(self):
         """Clear all loaded models from memory."""

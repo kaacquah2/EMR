@@ -261,8 +261,29 @@ class RateLimitHeaderMiddleware:
 class SessionIdleTimeoutMiddleware:
     """
     HIPAA Compliant Inactivity Timeout Middleware.
-    Updates/extends the user's activity key in the cache for all authenticated requests.
+
+    Enforces a 15-minute idle timeout for authenticated sessions.
+    The activity key is initialised by auth_views.update_user_activity() at
+    login/MFA time. Subsequent requests refresh the TTL. If the key has
+    expired (user idle for >15 min), the request is rejected with 401 even
+    if a valid JWT is still present.
     """
+
+    # These paths are exempt from the idle-timeout check.
+    # logout is included so idle users can still clean up their session.
+    _EXEMPT_PREFIXES = (
+        "/api/v1/auth/login",
+        "/api/v1/auth/mfa",
+        "/api/v1/auth/activate",
+        "/api/v1/auth/forgot-password",
+        "/api/v1/auth/reset-password",
+        "/api/v1/auth/login-temp-password",
+        "/api/v1/auth/change-password-on-login",
+        "/api/v1/auth/passkey",
+        "/api/v1/auth/logout",
+        "/api/v1/auth/me",
+        "/api/v1/health",
+    )
 
     def __init__(self, get_response):
         self.get_response = get_response
@@ -270,7 +291,6 @@ class SessionIdleTimeoutMiddleware:
     def __call__(self, request):
         user = request.user
         if not user or not user.is_authenticated:
-            # Resolve user from Bearer token if present
             auth_header = request.META.get("HTTP_AUTHORIZATION", "")
             if auth_header.startswith("Bearer "):
                 from rest_framework_simplejwt.authentication import JWTAuthentication
@@ -282,13 +302,20 @@ class SessionIdleTimeoutMiddleware:
                     pass
 
         if user and user.is_authenticated:
-            # Skip updating activity for token refresh requests
-            if not request.path.startswith("/api/v1/auth/refresh"):
-                # Update user's last activity key in cache (extending to 15 minutes)
-                from django.core.cache import cache
-                cache_key = f"user:last_activity:{user.id}"
-                cache.set(cache_key, "active", timeout=900)  # 15 minutes
+            from django.core.cache import cache
+            cache_key = f"user:last_activity:{user.id}"
+            is_exempt = any(request.path.startswith(p) for p in self._EXEMPT_PREFIXES)
 
+            if not is_exempt:
+                if cache.get(cache_key) is None:
+                    return _rendered_json_response(
+                        {
+                            "message": "Session expired due to inactivity. Please log in again.",
+                            "code": "SESSION_IDLE_TIMEOUT",
+                        },
+                        status_code=401,
+                    )
+                cache.set(cache_key, "active", timeout=900)
 
         return self.get_response(request)
 

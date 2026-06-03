@@ -7,27 +7,23 @@ import { Input } from "@/components/ui/input";
 import { Checkbox } from "@/components/ui/Checkbox";
 import { AuthLayout } from "@/components/auth/AuthLayout";
 import { useAuth } from "@/lib/auth-context";
-import { usePasskey } from "@/hooks/use-passkey";
 import type { AuthTokens } from "@/lib/types";
 import { API_BASE } from "@/lib/api-base";
 import { validateDevicePolicy, cacheDevicePolicyCheck, getCachedDevicePolicy } from "@/lib/device-policy";
 import type { DevicePolicy } from "@/lib/device-policy";
 
-type Step = "credentials" | "passkey" | "password" | "mfa";
+type Step = "credentials" | "mfa";
 type MfaMode = "totp" | "backup";
 type MfaChannel = "email" | "authenticator";
 
 // UX-09: Context-aware save button labels per step
 const STEP_LABELS: Record<Step, string> = {
   credentials: "Sign in",
-  passkey: "Sign in",
-  password: "Sign in",
   mfa: "Verify code",
 };
 
 export default function LoginPage() {
   const { login } = useAuth();
-  const passkey = usePasskey();
   const [step, setStep] = useState<Step>("credentials");
   const [mfaMode, setMfaMode] = useState<MfaMode>("totp");
   const [email, setEmail] = useState("");
@@ -42,8 +38,6 @@ export default function LoginPage() {
   const [rememberMe, setRememberMe] = useState(false);
   const [timeRemaining, setTimeRemaining] = useState(30);
   const [devicePolicy, setDevicePolicy] = useState<DevicePolicy | null>(null);
-  const [userHasPasskey, setUserHasPasskey] = useState(false);
-  const [checkingPasskey, setCheckingPasskey] = useState(false);
   // UX-02: Resend code state
   const [resendCooldown, setResendCooldown] = useState(0);
   const [resendLoading, setResendLoading] = useState(false);
@@ -57,6 +51,7 @@ export default function LoginPage() {
       try {
         res = await fetch(`${API_BASE}/auth/login`, {
           method: "POST",
+          credentials: "include",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ email, password }),
         });
@@ -102,7 +97,12 @@ export default function LoginPage() {
       } else if (data.access_token) {
         login(data as AuthTokens, { rememberMe });
         const role = (data as AuthTokens).user_profile?.role;
-        window.location.href = role === "super_admin" ? "/superadmin" : "/dashboard";
+       const unfilledRoles = ['pharmacy_technician', 'radiology_technician', 'billing_staff', 'ward_clerk'];
+       if (unfilledRoles.includes(role || '')) {
+         window.location.href = '/coming-soon';
+       } else {
+         window.location.href = role === "super_admin" ? "/superadmin" : "/dashboard";
+       }
       }
     } catch {
       setError("Login failed");
@@ -150,31 +150,6 @@ export default function LoginPage() {
   }, []);
 
   useEffect(() => {
-    if (!email || !email.includes("@")) {
-      setUserHasPasskey(false);
-      return;
-    }
-    setCheckingPasskey(true);
-    const checkPasskey = async () => {
-      try {
-        const res = await fetch(`${API_BASE}/auth/passkey/check`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ email }),
-        });
-        const data = await res.json();
-        setUserHasPasskey(data.has_passkeys === true);
-      } catch {
-        setUserHasPasskey(false);
-      } finally {
-        setCheckingPasskey(false);
-      }
-    };
-    const timer = setTimeout(checkPasskey, 300);
-    return () => clearTimeout(timer);
-  }, [email]);
-
-  useEffect(() => {
     if (step !== "mfa" || mfaChannel !== "authenticator") return;
     const interval = setInterval(() => {
       setTimeRemaining((prev) => {
@@ -198,6 +173,7 @@ export default function LoginPage() {
     try {
       const res = await fetch(`${API_BASE}/auth/mfa-verify`, {
         method: "POST",
+        credentials: "include",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(body),
       });
@@ -212,9 +188,13 @@ export default function LoginPage() {
         throw new Error();
       }
       login(data as AuthTokens, { rememberMe });
-      document.cookie = "medsync_session=1; path=/; max-age=28800";
       const role = (data as AuthTokens).user_profile?.role;
-      window.location.href = role === "super_admin" ? "/superadmin" : "/dashboard";
+      const unfilledRoles = ['pharmacy_technician', 'radiology_technician', 'billing_staff', 'ward_clerk'];
+      if (unfilledRoles.includes(role || '')) {
+        window.location.href = '/coming-soon';
+      } else {
+        window.location.href = role === "super_admin" ? "/superadmin" : "/dashboard";
+      }
     } catch {
       //
     } finally {
@@ -244,24 +224,6 @@ export default function LoginPage() {
     }
   };
 
-  const handlePasskeyLogin = async () => {
-    if (!email) { setError("Please enter your email first"); return; }
-    setError("");
-    setLoading(true);
-    try {
-      const result = await passkey.authenticate(email);
-      login(result as AuthTokens, { rememberMe });
-      const role = (result as AuthTokens).role;
-      window.location.href = role === "super_admin" ? "/superadmin" : "/dashboard";
-    } catch (err: unknown) {
-      const message = err instanceof Error ? err.message : "Passkey authentication failed. Try password instead.";
-      setError(message);
-      setStep("password");
-    } finally {
-      setLoading(false);
-    }
-  };
-
   return (
     <AuthLayout title="MedSync" subtitle="One Record. Every Hospital.">
       {/* UX-28: Apply login-form-enter animation on step change */}
@@ -287,18 +249,6 @@ export default function LoginPage() {
             required
             autoFocus
           />
-
-          {passkey.isSupported && email && passkey.isPlatformAvailable && userHasPasskey && !checkingPasskey && (
-            <div className="border-t pt-4">
-              <p className="mb-3 text-xs text-[var(--gray-500)]">Sign in with your saved passkey</p>
-              <Button type="button" fullWidth variant="outline" onClick={handlePasskeyLogin} disabled={loading} data-testid="login-passkey">
-                {loading ? "Signing in…" : "👆 Sign in with passkey (fingerprint/face ID)"}
-              </Button>
-              <p className="mt-2 text-center text-xs text-[var(--gray-500)]">No code needed — just your fingerprint or face</p>
-              <hr className="my-4 border-[var(--gray-300)]" />
-              <p className="mb-3 text-xs text-[var(--gray-500)]">Or continue with password</p>
-            </div>
-          )}
 
           <Input
             label="Password"

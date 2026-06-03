@@ -10,6 +10,7 @@ from interop.models import GlobalPatient, Referral, Consent
 from api.utils import audit_log, get_request_hospital
 from api.serializers import ReferralSerializer
 from api.state_machines import validate_referral_transition, StateMachineError
+from api.decorators import requires_step_up
 
 logger = logging.getLogger(__name__)
 
@@ -20,6 +21,7 @@ def _interop_role_ok(user):
 
 @api_view(["POST"])
 @permission_classes([IsAuthenticated])
+@requires_step_up(action="cross_facility_referral")
 def referral_create(request):
     if not _interop_role_ok(request.user):
         return Response(
@@ -157,6 +159,7 @@ def referral_outgoing(request):
 
 @api_view(["PATCH"])
 @permission_classes([IsAuthenticated])
+@requires_step_up(action="cross_facility_referral")
 def referral_update(request, pk):
     if not _interop_role_ok(request.user):
         return Response(

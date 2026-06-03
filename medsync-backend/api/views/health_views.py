@@ -81,15 +81,13 @@ def build_health_payload(*, deep: bool = False) -> tuple[dict, bool]:
     try:
         from django.conf import settings
         model_paths = getattr(settings, "MODEL_PATHS", {}) or {}
-        present = 0
-        for k in ("risk_predictor", "triage_classifier", "diagnosis_classifier"):
-            p = model_paths.get(k)
-            if p:
-                import os
-                if os.path.exists(p):
-                    present += 1
-        if present == 0:
+        p = model_paths.get("risk_predictor")
+        if not p:
             ai_ok = False
+        else:
+            import os
+            if not os.path.exists(p):
+                ai_ok = False
     except Exception:
         ai_ok = False
     ai_obj = {"status": "ok" if ai_ok else "error", **ai_extra}

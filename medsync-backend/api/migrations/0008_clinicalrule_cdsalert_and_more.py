@@ -23,8 +23,8 @@ class Migration(migrations.Migration):
                 ('name', models.CharField(help_text='Human-readable rule name', max_length=200)),
                 ('rule_type', models.CharField(choices=[('drug_interaction', 'Drug-Drug Interaction'), ('drug_allergy', 'Drug-Allergy Contraindication'), ('renal_dosing', 'Renal Dose Adjustment'), ('duplicate_therapy', 'Duplicate Therapy')], max_length=50)),
                 ('severity', models.CharField(choices=[('critical', 'Critical'), ('warning', 'Warning'), ('info', 'Information')], max_length=20)),
-                ('condition_json', models.JSONField(default=api.models._default_dict, help_text='Rule condition parameters')),
-                ('action_json', models.JSONField(default=api.models._default_dict, help_text='Alert message and metadata')),
+                ('condition_json', models.JSONField(default=dict, help_text='Rule condition parameters')),
+                ('action_json', models.JSONField(default=dict, help_text='Alert message and metadata')),
                 ('active', models.BooleanField(default=True, help_text='Enable/disable this rule')),
                 ('description', models.TextField(blank=True, help_text='Detailed description of the rule')),
                 ('created_at', models.DateTimeField(auto_now_add=True)),
@@ -41,7 +41,7 @@ class Migration(migrations.Migration):
                 ('id', models.UUIDField(default=uuid.uuid4, editable=False, primary_key=True, serialize=False)),
                 ('severity', models.CharField(choices=[('critical', 'Critical'), ('warning', 'Warning'), ('info', 'Information')], max_length=20)),
                 ('message', models.TextField(help_text='Alert message to display to doctor')),
-                ('context_data', models.JSONField(default=api.models._default_dict, help_text='Additional context for the alert (drug names, values, etc.)')),
+                ('context_data', models.JSONField(default=dict, help_text='Additional context for the alert (drug names, values, etc.)')),
                 ('acknowledged', models.BooleanField(default=False, help_text='Has doctor acknowledged this alert?')),
                 ('acknowledged_at', models.DateTimeField(blank=True, null=True)),
                 ('acknowledgment_notes', models.TextField(blank=True, help_text="Doctor's notes on acknowledgment")),
@@ -81,3 +81,4 @@ class Migration(migrations.Migration):
             index=models.Index(fields=['rule', 'severity'], name='api_cdsaler_rule_id_0fd00e_idx'),
         ),
     ]
+

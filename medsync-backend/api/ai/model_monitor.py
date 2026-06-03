@@ -206,9 +206,6 @@ class ModelMonitor:
 
     MONITORED_MODELS = [
         'risk_predictor',
-        'triage_classifier',
-        'diagnosis_classifier',
-        'similarity_matcher',
     ]
 
     def __init__(self):

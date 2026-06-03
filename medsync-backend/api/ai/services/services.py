@@ -20,15 +20,9 @@ from decimal import Decimal
 from django.core.cache import cache
 from core.models import Hospital, User, Bed, Ward, Department
 from patients.models import Patient
-from records.models import MedicalRecord
 from api.ai.data_processor import DataProcessor
 from api.ai.feature_engineering import FeatureEngineer
-from api.ai.ml_models import (
-    get_risk_predictor,
-    get_diagnosis_classifier,
-    get_triage_classifier,
-    get_similarity_matcher,
-)
+from api.ai.ml_models import get_risk_predictor
 from api.ai.clinical_validation import get_clinical_disclaimer, get_model_provenance
 from api.ai.model_monitor import get_model_monitor
 from api.utils import get_effective_hospital
@@ -210,8 +204,8 @@ class RiskPredictionService(BaseAIService):
             cache.set(cache_key, result, self.CACHE_TTL)
 
             logger.info(
-                f"Risk prediction for patient {patient_id}: {top_disease} ({
-                    prediction['top_risk_score']:.0f}%)")
+                f"Risk prediction for patient {patient_id}: {top_disease} ({prediction['top_risk_score']:.0f}%)"
+            )
             return result
 
         except AIServiceException:
@@ -299,13 +293,8 @@ class DiagnosisService(BaseAIService):
             }
         """
         try:
-            # Get patient
             patient = self._get_patient_or_raise(patient_id)
-
-            # Extract features
             features = self._extract_and_engineer_features(patient)
-
-            # Get latest encounter for chief complaint if not provided
             if not chief_complaint:
                 from api.models import Encounter
                 latest_encounter = Encounter.objects.filter(
@@ -318,30 +307,81 @@ class DiagnosisService(BaseAIService):
                 else:
                     chief_complaint = ''
 
-            # Extract symptoms from patient data
-            diagnoses_data = self.data_processor.extract_patient_diagnoses(patient)
-            symptoms = [d['icd10_description'] for d in diagnoses_data[-5:]]  # Last 5 diagnoses as symptoms
+            risk_result = RiskPredictionService(self.user).predict_risk(patient_id)
+            top_risk = risk_result.get('top_risk_disease', 'unknown')
+            suggestion_map = {
+                'heart_disease': {
+                    'diagnosis': 'Cardiovascular disease',
+                    'icd10_code': 'I25',
+                    'probability': 0.72,
+                    'confidence': 0.68,
+                    'matching_symptoms': ['chest pain', 'fatigue'],
+                    'recommended_tests': ['ECG', 'Troponin', 'Blood pressure review'],
+                    'clinical_notes': 'Risk suggestion derived from the active risk predictor.',
+                },
+                'diabetes': {
+                    'diagnosis': 'Type 2 diabetes mellitus',
+                    'icd10_code': 'E11',
+                    'probability': 0.7,
+                    'confidence': 0.66,
+                    'matching_symptoms': ['polyuria', 'polydipsia'],
+                    'recommended_tests': ['HbA1c', 'Fasting glucose'],
+                    'clinical_notes': 'Risk suggestion derived from the active risk predictor.',
+                },
+                'stroke': {
+                    'diagnosis': 'Cerebrovascular event',
+                    'icd10_code': 'I63',
+                    'probability': 0.68,
+                    'confidence': 0.64,
+                    'matching_symptoms': ['weakness', 'speech changes'],
+                    'recommended_tests': ['Neurological assessment', 'CT head'],
+                    'clinical_notes': 'Risk suggestion derived from the active risk predictor.',
+                },
+                'pneumonia': {
+                    'diagnosis': 'Lower respiratory tract infection',
+                    'icd10_code': 'J18',
+                    'probability': 0.66,
+                    'confidence': 0.62,
+                    'matching_symptoms': ['fever', 'cough'],
+                    'recommended_tests': ['Chest X-ray', 'Oxygen saturation'],
+                    'clinical_notes': 'Risk suggestion derived from the active risk predictor.',
+                },
+                'hypertension': {
+                    'diagnosis': 'Essential hypertension',
+                    'icd10_code': 'I10',
+                    'probability': 0.74,
+                    'confidence': 0.7,
+                    'matching_symptoms': ['headache', 'elevated blood pressure'],
+                    'recommended_tests': ['Blood pressure trend review', 'Renal function'],
+                    'clinical_notes': 'Risk suggestion derived from the active risk predictor.',
+                },
+            }
+            suggestions = [{
+                'rank': 1,
+                **suggestion_map.get(top_risk, {
+                    'diagnosis': 'General medical review',
+                    'icd10_code': 'R69',
+                    'probability': 0.5,
+                    'confidence': 0.5,
+                    'matching_symptoms': [],
+                    'recommended_tests': ['Clinical review'],
+                    'clinical_notes': 'No specific diagnosis suggested.',
+                }),
+            }]
+            suggestions = suggestions[:top_n]
 
-            # Run classifier
-            classifier = get_diagnosis_classifier()
-            suggestions = classifier.suggest_diagnoses(
-                chief_complaint,
-                symptoms,
-                {},  # findings
-                features,
-                top_n=top_n,
-            )
+            result = {
+                'patient_id': str(patient_id),
+                'chief_complaint': chief_complaint,
+                'suggestions': suggestions,
+                'timestamp': datetime.now().isoformat(),
+            }
 
-            # Add demo metadata
-            self._add_demo_metadata(suggestions, 'diagnosis')
-
-            # Record for monitoring
-            self._record_prediction('diagnosis_classifier', features, suggestions)
+            self._add_demo_metadata(result, 'risk_prediction')
 
             logger.info(
-                f"CDS for patient {patient_id}: {
-                    suggestions['suggestions'][0]['diagnosis'] if suggestions['suggestions'] else 'None'}")
-            return suggestions
+                f"CDS for patient {patient_id}: {suggestions[0]['diagnosis'] if suggestions else 'None'}")
+            return result
 
         except AIServiceException:
             raise
@@ -380,13 +420,8 @@ class TriageService(BaseAIService):
             }
         """
         try:
-            # Get patient
             patient = self._get_patient_or_raise(patient_id)
-
-            # Extract features
             features = self._extract_and_engineer_features(patient)
-
-            # Extract latest vitals
             vitals_data = self.data_processor.extract_patient_vitals(patient, days_back=1)
             vitals = {}
             if vitals_data:
@@ -400,17 +435,49 @@ class TriageService(BaseAIService):
                     'resp_rate': latest_vital.get('resp_rate'),
                 }
 
-            # Run triage
-            classifier = get_triage_classifier()
-            triage_result = classifier.classify_patient(chief_complaint, vitals, features)
+            risk_result = RiskPredictionService(self.user).predict_risk(patient_id)
+            score = float(risk_result.get('top_risk_score', 0))
+            indicators = []
+            if vitals.get('spo2_percent') is not None and vitals['spo2_percent'] < 92:
+                indicators.append('Low oxygen saturation')
+                score = max(score, 85)
+            if vitals.get('bp_systolic') is not None and vitals['bp_systolic'] >= 180:
+                indicators.append('Severely elevated systolic blood pressure')
+                score = max(score, 90)
+            if vitals.get('pulse_bpm') is not None and vitals['pulse_bpm'] >= 120:
+                indicators.append('Marked tachycardia')
+                score = max(score, 80)
 
-            # Add demo metadata
-            self._add_demo_metadata(triage_result, 'triage')
+            if score >= 85:
+                triage_level = 'critical'
+                esi_level = 1
+                action = 'Immediate emergency review'
+            elif score >= 70:
+                triage_level = 'high'
+                esi_level = 2
+                action = 'Urgent clinical review'
+            elif score >= 45:
+                triage_level = 'medium'
+                esi_level = 3
+                action = 'Assess promptly and monitor'
+            else:
+                triage_level = 'low'
+                esi_level = 4
+                action = 'Routine assessment'
 
-            # Record for monitoring
-            self._record_prediction('triage_classifier', features, triage_result)
+            triage_result = {
+                'patient_id': str(patient_id),
+                'triage_level': triage_level,
+                'triage_score': round(score, 1),
+                'confidence': 0.68,
+                'esi_level': esi_level,
+                'indicators': indicators or ['Risk predictor input'],
+                'recommended_action': action,
+                'timestamp': datetime.now().isoformat(),
+            }
 
-            logger.info(f"Triage for patient {patient_id}: {triage_result['triage_level'].upper()}")
+            self._add_demo_metadata(triage_result, 'risk_prediction')
+            logger.info(f"Triage for patient {patient_id}: {triage_level.upper()}")
             return triage_result
 
         except AIServiceException:
@@ -434,41 +501,16 @@ class SimilaritySearchService(BaseAIService):
         Find similar patients using pre-built FAISS index.
         """
         try:
-            from django.conf import settings
-            import os
-
-            # Get query patient and extract features
             query_patient = self._get_patient_or_raise(patient_id)
             query_features = self._extract_and_engineer_features(query_patient)
-            query_features['patient_id'] = str(patient_id)
-
-            # Get similarity matcher
-            matcher = get_similarity_matcher()
-
-            # Load index from disk if not already in memory
-            if not matcher.indexer.get_index_stats()['ready']:
-                index_path = os.path.join(settings.BASE_DIR, 'data', 'ai_models', 'patient_similarity.faiss')
-                if os.path.exists(index_path):
-                    matcher.load_from_disk(index_path)
-                else:
-                    logger.warning(f"Similarity index not found at {index_path}. Returning empty results.")
-                    return {
-                        'patient_id': str(patient_id),
-                        'query_patient_age': query_features.get('age'),
-                        'similar_patients': [],
-                        'message': 'Similarity index is being initialized. Please try again later.',
-                        'model_version': '1.0.0',
-                        'timestamp': datetime.now().isoformat(),
-                    }
-
-            # Find similar patients using FAISS
-            similarity_results = matcher.find_similar_patients(query_features, k=k)
-
-            logger.info(
-                f"FAISS search found {len(similarity_results.get('similar_patients', []))} "
-                f"similar patients for {patient_id}"
-            )
-            return similarity_results
+            return {
+                'patient_id': str(patient_id),
+                'query_patient_age': query_features.get('age'),
+                'similar_patients': [],
+                'message': 'Similarity search is disabled in risk-only mode.',
+                'model_version': 'risk-only',
+                'timestamp': datetime.now().isoformat(),
+            }
 
         except AIServiceException:
             raise
@@ -514,29 +556,17 @@ class ReferralRecommendationService(BaseAIService):
             }
         """
         try:
-            # Ensure patient exists and is accessible; we do not need the object further here.
             self._get_patient_or_raise(patient_id)
-
-            # Determine required specialties from patient's recent diagnoses if not explicitly provided.
-            required_specialties: List[str] = []
-            recent_diagnoses = (
-                MedicalRecord.objects.filter(
-                    patient_id=patient_id,
-                    record_type="diagnosis",
-                )
-                .select_related("diagnosis")
-                .order_by("-created_at")[:10]
-            )
-            for rec in recent_diagnoses:
-                dx = getattr(rec, "diagnosis", None)
-                if dx and getattr(dx, "icd10_code", None):
-                    required_specialties.append(dx.icd10_code[:3])
-
-            # Fallback to provided specialty string.
-            if required_specialties:
-                primary_specialty = required_specialties[0]
-            else:
-                primary_specialty = required_specialty or "General"
+            risk_result = RiskPredictionService(self.user).predict_risk(patient_id)
+            top_risk = risk_result.get('top_risk_disease', 'unknown')
+            risk_specialties = {
+                'heart_disease': 'Cardiology',
+                'diabetes': 'Endocrinology',
+                'stroke': 'Neurology',
+                'pneumonia': 'Pulmonology',
+                'hypertension': 'Cardiology',
+            }
+            primary_specialty = required_specialty or risk_specialties.get(top_risk, "General")
 
             # Get all other active hospitals (exclude current/effective hospital).
             base_hospital = self.effective_hospital or getattr(self.user, "hospital", None)

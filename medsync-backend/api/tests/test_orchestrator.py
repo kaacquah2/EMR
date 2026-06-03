@@ -76,16 +76,11 @@ class TestAIOrchestrator:
         assert "analysis_timestamp" in result
         assert "agents_executed" in result
         assert "risk_analysis" in result
-        assert "triage_assessment" in result
-        assert "diagnosis_suggestions" in result
         assert "clinical_summary" in result
         assert "recommended_actions" in result
         assert "alerts" in result
         assert "confidence_score" in result
-        assert "data_agent" in result["agents_executed"]
-        assert "prediction_agent" in result["agents_executed"]
-        assert "triage_agent" in result["agents_executed"]
-        assert "diagnosis_agent" in result["agents_executed"]
+        assert "risk_agent" in result["agents_executed"]
         assert "summary_agent" in result["agents_executed"]
 
     def test_analyze_patient_with_similarity_and_referral(
@@ -101,5 +96,4 @@ class TestAIOrchestrator:
         )
         assert "similarity_agent" in result["agents_executed"] or "similar_patients" in result
         assert "referral_agent" in result["agents_executed"] or "referral_recommendations" in result
-
 

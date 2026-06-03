@@ -104,20 +104,14 @@ class TestAIRiskPrediction:
 
 @pytest.mark.django_db
 class TestAITriage:
-    def test_triage_returns_structure(self, api_client, nurse_user, patient):
+    def test_triage_route_is_unavailable(self, api_client, nurse_user, patient):
         api_client.force_authenticate(user=nurse_user)
         res = api_client.post(
             f"/api/v1/ai/triage/{patient.id}",
             {"chief_complaint": "headache"},
             format="json",
         )
-        assert res.status_code == 200
-        data = res.json()
-        if "data" in data:
-            data = data["data"]
-        assert data["triage_level"] in ("critical", "high", "medium", "low")
-        assert "esi_level" in data
-        assert "recommended_action" in data
+        assert res.status_code == 404
 
 
 @pytest.mark.django_db
@@ -139,5 +133,4 @@ class TestAIAnalysisHistory:
             "/api/v1/ai/analysis-history/00000000-0000-0000-0000-000000000000"
         )
         assert res.status_code == 404
-
 

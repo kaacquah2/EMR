@@ -50,6 +50,10 @@ class Hospital(models.Model):
         help_text="Super admin who initiated archival"
     )
     archive_reason = models.CharField(max_length=500, blank=True, help_text="Reason for archival")
+    
+    # PHASE 2: Device Trust & Adaptive MFA
+    # List of CIDR ranges (e.g., ["192.168.1.0/24", "10.0.0.0/8"]) for hospital's network
+    ip_subnets = models.JSONField(default=list, blank=True, help_text="List of CIDR ranges for hospital network (e.g., ['192.168.1.0/24'])")
 
     class Meta:
         indexes = [
@@ -344,37 +348,218 @@ class UserPushSubscription(models.Model):
         return f"Push subscription for {self.user.email}"
 
 
+class TrustedDevice(models.Model):
+    """
+    PHASE 2: Device Trust Model for adaptive MFA.
+    
+    Stores trusted devices for a user. A device is identified by its fingerprint:
+    SHA256(user-agent + screen_resolution + timezone).
+    
+    On first successful MFA (email OTP) from a new device, a TrustedDevice record is created.
+    On subsequent logins, if a matching device exists and is not expired, risk_tier=1 (no MFA).
+    Devices auto-refresh expiry on each successful login (30-day sliding window).
+    Users can revoke devices explicitly.
+    """
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='trusted_devices')
+    
+    # Device fingerprint: SHA256(user_agent + screen_resolution + timezone)
+    device_fingerprint = models.CharField(max_length=64, db_index=True, help_text="SHA256 fingerprint of device")
+    device_label = models.CharField(max_length=200, blank=True, help_text="Optional user-given device name (e.g., 'Main Office Desktop')")
+    
+    # Lifecycle
+    last_verified_at = models.DateTimeField(auto_now=True, help_text="Last successful auth from this device")
+    expires_at = models.DateTimeField(help_text="Device trust expires after 30 days of inactivity")
+    is_active = models.BooleanField(default=True, help_text="User can revoke devices")
+    
+    # Metadata
+    user_agent = models.TextField(blank=True, help_text="User-Agent header from device")
+    ip_address = models.GenericIPAddressField(null=True, blank=True, help_text="Last known IP from this device")
+    created_at = models.DateTimeField(auto_now_add=True)
+    
+    class Meta:
+        unique_together = ('user', 'device_fingerprint')
+        indexes = [
+            models.Index(fields=['user', 'is_active']),
+            models.Index(fields=['expires_at']),
+        ]
+    
+    def __str__(self):
+        label = f" ({self.device_label})" if self.device_label else ""
+        return f"Device for {self.user.email}{label}"
+    
+    def is_expired(self):
+        """Check if device trust has expired."""
+        from django.utils import timezone
+        return timezone.now() > self.expires_at
+    
+    def refresh_expiry(self, days=30):
+        """Refresh device expiry (called on each successful login from this device)."""
+        from django.utils import timezone
+        from datetime import timedelta
+        self.expires_at = timezone.now() + timedelta(days=days)
+        self.save(update_fields=['expires_at', 'last_verified_at'])
+
+
+class StepUpSession(models.Model):
+    """
+    PHASE 2: Step-Up MFA Session for high-risk actions.
+    
+    When a user requests step-up verification (e.g., before accessing cross-facility records),
+    a StepUpSession is created with:
+    - An email OTP sent to the user
+    - A session token valid for 5 minutes
+    
+    On OTP verification, a short-lived step_up_jwt is returned, scoped to an action type.
+    The decorator @requires_step_up(action="...") checks for this token in the request header.
+    """
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='step_up_sessions')
+    
+    # Session & OTP
+    session_token = models.CharField(max_length=128, unique=True, help_text="Token linking request to OTP verification")
+    otp_code = models.CharField(max_length=6, help_text="6-digit OTP sent to user email")
+    otp_hash = models.CharField(max_length=64, help_text="SHA256 hash of OTP (never store plaintext)")
+    
+    # Action & verification
+    action = models.CharField(
+        max_length=50,
+        help_text="Action type (e.g., 'cross_facility_access', 'break_glass', 'consent_grant')"
+    )
+    is_verified = models.BooleanField(default=False, help_text="True after OTP verification")
+    verified_at = models.DateTimeField(null=True, blank=True, help_text="When OTP was verified")
+    
+    # Lifecycle
+    expires_at = models.DateTimeField(help_text="Session expires after 5 minutes")
+    attempts = models.IntegerField(default=0, help_text="Failed OTP attempts (max 3)")
+    created_at = models.DateTimeField(auto_now_add=True)
+    
+    class Meta:
+        indexes = [
+            models.Index(fields=['user', 'action']),
+            models.Index(fields=['expires_at']),
+        ]
+    
+    def __str__(self):
+        status = "verified" if self.is_verified else "pending"
+        return f"StepUp {self.action} for {self.user.email} ({status})"
+    
+    def is_expired(self):
+        """Check if session has expired."""
+        from django.utils import timezone
+        return timezone.now() > self.expires_at
+    
+    def is_rate_limited(self):
+        """Check if OTP attempts exceeded (max 3 attempts)."""
+        return self.attempts >= 3
+
+
 class AuditLog(models.Model):
     ACTIONS = [
         ("VIEW", "View"),
         ("VIEW_PATIENT_RECORD", "View Patient Record"),
         ("VIEW_CROSS_FACILITY_RECORD", "View Cross-Facility Record"),
+        ("VIEW_AUDIT_LOG", "View Audit Log"),
+        ("VIEW_AS_HOSPITAL", "View As Hospital"),
+        ("VIEW_VITAL_TRENDS", "View Vital Trends"),
+        ("VIEW_WARD_VITALS_DASHBOARD", "View Ward Vitals Dashboard"),
+        ("SEARCH_PATIENT", "Search Patient"),
         ("CREATE", "Create"),
         ("UPDATE", "Update"),
+        ("DELETE", "Delete"),
         ("DEACTIVATE", "Deactivate"),
         ("EXPORT", "Export"),
+        ("EXPORT_DATA", "Export Data"),
         ("LOGIN", "Login"),
         ("LOGOUT", "Logout"),
         ("LOGIN_FAILED", "Login Failed"),
+        ("MFA_VERIFY", "MFA Verify"),
+        ("MFA_FAILED", "MFA Failed"),
+        ("MFA_ENABLED", "MFA Enabled"),
+        ("MFA_DISABLED", "MFA Disabled"),
+        ("PASSWORD_RESET_REQUEST", "Password Reset Requested"),
+        ("PASSWORD_RESET", "Password Reset Completed"),
+        ("PASSWORD_RESET_FAILED", "Password Reset Failed"),
+        ("FORCE_PASSWORD_RESET_INITIATED", "Force Password Reset Initiated"),
         ("ROLE_CHANGE", "Role Change"),
+        ("HOSPITAL_CHANGE", "Hospital Assignment Changed"),
         ("INVITE_SENT", "Invite Sent"),
         ("ACCOUNT_ACTIVATED", "Account Activated"),
+        ("ACCOUNT_LOCKED", "Account Locked"),
+        ("ACCOUNT_UNLOCKED", "Account Unlocked"),
         ("EMERGENCY_ACCESS", "Emergency Access"),
+        ("BREAK_GLASS_ACCESS", "Break Glass Access"),
+        ("BREAK_GLASS_ABUSE_DETECTED", "Break Glass Abuse Detected"),
+        ("BREAK_GLASS_EXPIRED_ACCESS", "Break Glass Expired Access"),
+        ("ANOMALY_DETECTED", "Anomaly Detected"),
         ("CROSS_FACILITY_ACCESS_REVOKED", "Cross-Facility Access Revoked"),
+        ("CROSS_FACILITY_ACCESS", "Cross-Facility Access"),
         ("BULK_IMPORT", "Bulk Import"),
-        ("VIEW_AS_HOSPITAL", "View As Hospital"),
+        ("CONSENT_REVOKED", "Consent Revoked"),
+        ("NO_SHOW_AUTO_MARKED", "No-show Auto Marked"),
+        ("NO_SHOW_OVERRIDE", "No-show Override"),
+        ("SEND_REMINDER", "Send Reminder"),
+        ("HANDOVER_SUBMITTED", "Handover Submitted"),
+        ("HANDOVER_ACKNOWLEDGED", "Handover Acknowledged"),
+        ("TRIAGE_ASSIGN", "Triage Assign"),
+        ("ED_ROOM_ASSIGN", "ED Room Assign"),
+        ("ESCALATE_ALERT", "Escalate Alert"),
+        ("ACKNOWLEDGE_CDS_ALERT", "Acknowledge CDS Alert"),
+        ("MEDICATION_ADMINISTERED", "Medication Administered"),
+        ("MEDICATION_HELD", "Medication Held"),
+        ("MEDICATION_DISPENSE", "Medication Dispense"),
+        ("DISPENSE_MEDICATION", "Dispense Medication"),
+        ("DISPENSE_PRESCRIPTION", "Dispense Prescription"),
+        ("ADD_DRUG_STOCK", "Add Drug Stock"),
+        ("ADJUST_STOCK", "Adjust Stock"),
+        ("NHIS_CLAIM_SUBMIT", "NHIS Claim Submit"),
+        ("INVOICE_CREATE", "Invoice Create"),
+        ("PAYMENT_RECORD", "Payment Record"),
+        ("REFERRAL_ACCEPTED", "Referral Accepted"),
+        ("REFERRAL_REJECTED", "Referral Rejected"),
+        ("REFERRAL_COMPLETED", "Referral Completed"),
         ("permission_denied", "Permission Denied"),
         ("PUSH_SUBSCRIBE", "Push Subscribe"),
         ("PUSH_RESUBSCRIBE", "Push Resubscribe"),
         ("PUSH_UNSUBSCRIBE", "Push Unsubscribe"),
+        ("ARCHIVE_HOSPITAL", "Archive Hospital"),
         ("PASSKEY_REGISTERED", "Passkey Registered"),
         ("PASSKEY_RENAMED", "Passkey Renamed"),
         ("PASSKEY_REMOVED", "Passkey Removed"),
         ("PASSKEY_AUTH_SUCCESS", "Passkey Authentication Success"),
         ("PASSKEY_RESET_BY_ADMIN", "Passkey Reset by Admin"),
+        ("USER_CREATED", "User Created"),
+        ("USER_DEACTIVATED", "User Deactivated"),
+        ("USER_REACTIVATED", "User Reactivated"),
+        ("HOSPITAL_CREATED", "Hospital Created"),
+        ("HOSPITAL_UPDATED", "Hospital Updated"),
+        ("RATE_LIMIT_HIT", "Rate Limit Exceeded"),
+        ("PERMISSION_DENIED", "Permission Denied"),
+        ("FAILED_OBJECT_ACCESS", "Object Access Denied"),
+        ("SUSPICIOUS_ACTIVITY", "Suspicious Activity Detected"),
+        ("ERROR", "Application Error"),
+        ("AI_ANALYSIS", "AI Analysis"),
+        ("AI_ANALYSIS_FAILED", "AI Analysis Failed"),
+        ("AI_ANALYSIS_START_ASYNC", "AI Analysis Start Async"),
+        ("AI_FEATURE_BLOCKED", "AI Feature Blocked"),
+        ("AI_SUGGESTION_IGNORED", "AI Suggestion Ignored"),
+        ("AI_RISK_PREDICTION", "AI Risk Prediction"),
+        ("AI_CDS", "AI CDS"),
+        ("AI_TRIAGE", "AI Triage"),
+        ("AI_SIMILARITY_SEARCH", "AI Similarity Search"),
+        ("AI_REFERRAL_RECOMMENDATION", "AI Referral Recommendation"),
+        ("AI_HISTORY_VIEW", "AI History View"),
+        ("AI_ANTIBIOTIC_GUIDANCE", "AI Antibiotic Guidance"),
+        ("AI_APPROVAL_GRANT", "AI Approval Grant"),
+        ("AI_APPROVAL_REVOKE", "AI Approval Revoke"),
+        ("AI_DEPLOYMENT_ENABLED", "AI Deployment Enabled"),
+        ("AI_DEPLOYMENT_DISABLED", "AI Deployment Disabled"),
+        ("AI_DRIFT_WARNING", "AI Drift Warning"),
+        ("AI_DRIFT_CRITICAL", "AI Drift Critical"),
+        ("DATA_RESIDENCY_DENIED", "Data Residency Access Denied"),
     ]
     user = models.ForeignKey(User, on_delete=models.CASCADE)
-    action = models.CharField(max_length=30, choices=ACTIONS)
+    action = models.CharField(max_length=50, choices=ACTIONS)
     resource_type = models.CharField(max_length=50, blank=True, null=True)
     resource_id = models.CharField(max_length=64, null=True, blank=True)
     hospital = models.ForeignKey(Hospital, null=True, blank=True, on_delete=models.SET_NULL)
@@ -384,6 +569,28 @@ class AuditLog(models.Model):
     chain_hash = models.CharField(max_length=64, editable=False, unique=True)
     signature = models.CharField(max_length=64, editable=False, default="")
     timestamp = models.DateTimeField(auto_now_add=True, db_index=True)
+    
+    # PHASE 2: Adaptive MFA context
+    # Risk tier (1=trusted, 2=MFA required, 3=step-up required) — for NIST AAL context
+    risk_tier = models.IntegerField(
+        choices=[(1, "AAL1: Trusted"), (2, "AAL2: MFA"), (3, "AAL3: Step-Up")],
+        null=True,
+        blank=True,
+        help_text="Authentication Assurance Level: 1=no MFA, 2=email OTP, 3=step-up required"
+    )
+    # MFA method used (none, email_otp, step_up, totp) — audit context for authentication events
+    mfa_method = models.CharField(
+        max_length=20,
+        choices=[
+            ("none", "None"),
+            ("email_otp", "Email OTP"),
+            ("step_up", "Step-Up MFA"),
+            ("totp", "TOTP Authenticator"),
+        ],
+        null=True,
+        blank=True,
+        help_text="Authentication factor method used for this action"
+    )
 
     def save(self, *args, **kwargs):
         if not self.pk:
@@ -402,13 +609,21 @@ class AuditLog(models.Model):
             from django.conf import settings
 
             key = getattr(settings, "AUDIT_LOG_SIGNING_KEY", None) or "dev-key-change-in-production"
-            self.signature = hmac.new(key.encode(), data.encode(), hashlib.sha256).hexdigest()
+            self.signature = hmac.new(
+                key.encode("utf-8"),
+                data.encode("utf-8"),
+                hashlib.sha256,
+            ).hexdigest()
         super().save(*args, **kwargs)
 
     @classmethod
-    def log_action(cls, user, action, resource_type=None, resource_id=None, hospital=None, request=None, extra_data=None):
+    def log_action(cls, user, action, resource_type=None, resource_id=None, hospital=None, request=None, extra_data=None, risk_tier=None, mfa_method=None):
         """
         Create a chained audit log entry with tamper-evident chain hashing.
+        
+        Args:
+            risk_tier (int): NIST AAL level (1=trusted, 2=MFA, 3=step-up)
+            mfa_method (str): Authentication method used (none, email_otp, step_up, totp)
         """
         from api.utils import sanitize_audit_resource_id, get_client_ip
         
@@ -430,6 +645,8 @@ class AuditLog(models.Model):
             ip_address=ip,
             user_agent=ua,
             extra_data=extra_data,
+            risk_tier=risk_tier,
+            mfa_method=mfa_method,
         )
 
     class Meta:
@@ -857,3 +1074,74 @@ class UserPasskey(models.Model):
     
     def __str__(self):
         return f"Passkey for {self.user.email} ({self.device_name or 'Unknown device'}) - {self.get_platform_display()}"
+
+
+class ClientCookie(models.Model):
+    """
+    PHASE 3: HttpOnly Cookie Session Tracking
+    
+    Server-side tracking of HTTP-only session cookies to enable:
+    - Immediate token revocation (cookies can be revoked without client knowledge)
+    - Encrypted JWT storage (JWTs stored server-side, not in cookie value)
+    - Device/IP context for security auditing
+    - Transparent session invalidation on logout
+    
+    The medsync_session cookie contains an opaque, random token. The actual JWT
+    is stored encrypted in this model. On each request, we decrypt the JWT and
+    validate it.
+    
+    Rationale: Replaces sessionStorage token storage (XSS-vulnerable) with
+    HttpOnly SameSite=Strict cookies + server-side JWT encryption.
+    
+    Fields:
+    - user: FK to User who owns this session
+    - cookie_token: SHA256 hash of the cookie value sent to browser
+    - access_token_jwt: Encrypted access JWT (15-minute TTL)
+    - refresh_token_jwt: Encrypted refresh JWT (7-day TTL)
+    - device_fingerprint: SHA256 of user-agent + screen resolution + timezone
+    - client_metadata: JSON dict with user-agent, IP address, device name
+    - created_at: When session was created (login time)
+    - expires_at: When access token expires (15 minutes from login/refresh)
+    - last_used_at: Last time this cookie was used (auto-updated)
+    - is_revoked: Soft-delete flag for immediate revocation (logout)
+    """
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='client_cookies')
+    
+    # Opaque cookie token (SHA256 hash; never contains JWT directly)
+    cookie_token = models.CharField(max_length=255, unique=True, db_index=True)
+    
+    # Encrypted JWTs stored server-side
+    access_token_jwt = models.TextField()  # Encrypted JSON-serialized access token
+    refresh_token_jwt = models.TextField()  # Encrypted JSON-serialized refresh token
+    
+    # Device tracking and context
+    device_fingerprint = models.CharField(max_length=256, null=True, blank=True)
+    client_metadata = models.JSONField(default=dict)  # { "user_agent": "...", "ip_addr": "...", "device_name": "..." }
+    
+    # Lifecycle
+    created_at = models.DateTimeField(auto_now_add=True)
+    expires_at = models.DateTimeField()  # When access token expires (15 min)
+    last_used_at = models.DateTimeField(auto_now=True)
+    is_revoked = models.BooleanField(default=False, db_index=True)  # Soft-delete on logout
+    
+    class Meta:
+       indexes = [
+           models.Index(fields=['user', 'is_revoked']),
+           models.Index(fields=['cookie_token', 'is_revoked']),
+           models.Index(fields=['expires_at']),  # For cleanup/expiry queries
+           models.Index(fields=['-created_at']),
+       ]
+       verbose_name = "Client Cookie Session"
+       verbose_name_plural = "Client Cookie Sessions"
+       ordering = ['-created_at']
+    
+    def __str__(self):
+       return f"Session for {self.user.email} (expires: {self.expires_at}, revoked: {self.is_revoked})"
+    
+    @property
+    def is_expired(self):
+       """Check if session has expired."""
+       from django.utils import timezone
+       return timezone.now() > self.expires_at
+

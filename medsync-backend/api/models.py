@@ -14,6 +14,7 @@ Models:
 
 import logging
 from uuid import uuid4
+from pathlib import Path
 
 from django.db import models
 from django.utils import timezone
@@ -23,6 +24,7 @@ from patients.models import Patient
 from records.models import Encounter, Prescription, Diagnosis
 
 logger = logging.getLogger(__name__)
+__path__ = [str(Path(__file__).resolve().with_name("models"))]
 
 
 def _default_list():
@@ -896,4 +898,3 @@ class ModelVersion(models.Model):
 
     def __str__(self):
         return f"{self.model_type} {self.version_tag} ({'PROD' if self.is_production else 'DRAFT'})"
-

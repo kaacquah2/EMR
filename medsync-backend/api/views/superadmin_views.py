@@ -14,6 +14,7 @@ from core.models import Hospital, User, AuditLog, Ward, Department, LabUnit, Sup
 from interop.models import BreakGlassLog, FacilityPatient, Consent, Referral
 from api.utils import audit_log
 from api.services.audit_service import compute_audit_chain_status
+from api.decorators import requires_step_up
 from api.circuit_breaker import get_all_circuit_statuses
 
 
@@ -224,6 +225,7 @@ def break_glass_list_global(request):
 
 @api_view(["POST"])
 @permission_classes([IsAuthenticated])
+@requires_step_up(action="superadmin_write")
 def break_glass_mark_reviewed(request, break_glass_id):
     if denied := _require_super_admin(request):
         return denied
@@ -241,6 +243,7 @@ def break_glass_mark_reviewed(request, break_glass_id):
 
 @api_view(["POST"])
 @permission_classes([IsAuthenticated])
+@requires_step_up(action="superadmin_write")
 def break_glass_flag_abuse(request, break_glass_id):
     if denied := _require_super_admin(request):
         return denied
@@ -280,6 +283,7 @@ def gmdc_unverified_doctors(request):
 
 @api_view(["POST"])
 @permission_classes([IsAuthenticated])
+@requires_step_up(action="superadmin_write")
 def onboard_hospital(request):
     """Create a new hospital. Super_admin only."""
     if denied := _require_super_admin(request):
@@ -316,6 +320,7 @@ def onboard_hospital(request):
 
 @api_view(["POST"])
 @permission_classes([IsAuthenticated])
+@requires_step_up(action="superadmin_write")
 def grant_hospital_access(request):
     """Grant a super admin explicit view-as access to a hospital."""
     if denied := _require_super_admin(request):
@@ -414,6 +419,7 @@ def hospital_onboarding_dashboard(request):
 @api_view(["POST"])
 @permission_classes([IsAuthenticated])
 @parser_classes([MultiPartParser, FormParser])
+@requires_step_up(action="superadmin_write")
 def bulk_import_staff(request, hospital_id):    # sourcery skip: low-code-quality
     """Bulk import staff from CSV. Super_admin only."""
     if denied := _require_super_admin(request):
@@ -628,6 +634,7 @@ def audit_chain_integrity_status(request):
 
 @api_view(["POST"])
 @permission_classes([IsAuthenticated])
+@requires_step_up(action="superadmin_write")
 def audit_chain_integrity_validate(request):
     if denied := _require_super_admin(request):
         return denied

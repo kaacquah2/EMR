@@ -14,7 +14,7 @@ class Migration(migrations.Migration):
         migrations.AlterField(
             model_name='diseaseriskprediction',
             name='recommendations',
-            field=models.JSONField(blank=True, default=api.models._default_list, help_text='Clinical recommendations for this disease'),
+            field=models.JSONField(blank=True, default=list, help_text='Clinical recommendations for this disease'),
         ),
         migrations.AddIndex(
             model_name='diseaseriskprediction',
@@ -25,3 +25,4 @@ class Migration(migrations.Migration):
             index=models.Index(fields=['risk_category'], name='disease_ris_risk_ca_959091_idx'),
         ),
     ]
+

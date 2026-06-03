@@ -14,6 +14,7 @@ from api.utils import (
     get_request_hospital,
     audit_log
 )
+from api.decorators import requires_step_up
 from api.vitals_utils import calculate_qsofa, calculate_news2
 from records.models import (
     MedicalRecord,
@@ -178,6 +179,7 @@ def create_diagnosis(request):
 
 @api_view(["POST"])
 @permission_classes([IsAuthenticated])
+@requires_step_up(action="prescription_modify")
 def create_prescription(request):
     if request.user.role != "doctor":
         return Response(
@@ -1121,6 +1123,7 @@ def amend_record(request, record_id):
 
 @api_view(["PATCH"])
 @permission_classes([IsAuthenticated])
+@requires_step_up(action="prescription_modify")
 def prescription_dispense(request, record_id):
     """Update prescription dispense status (pharmacy: prescribed -> dispensed | cancelled)."""
     if request.user.role != "nurse":
@@ -1166,6 +1169,7 @@ def prescription_dispense(request, record_id):
 
 @api_view(["POST"])
 @permission_classes([IsAuthenticated])
+@requires_step_up(action="prescription_modify")
 def prescription_dispense_by_nurse(request, record_id):
     """Spec endpoint for nurse dispense action with ward and hospital checks."""
     if request.user.role != "nurse":
@@ -1392,6 +1396,7 @@ def doctor_favorite_prescriptions(request):
 
 @api_view(["POST"])
 @permission_classes([IsAuthenticated])
+@requires_step_up(action="prescription_modify")
 def doctor_prescription_refill(request, record_id):
     """Refill a previous prescription (copy and create new record).
     

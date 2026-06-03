@@ -27,7 +27,7 @@ logger = logging.getLogger(__name__)
 
 class AIClinicalFeatureDisabled(Exception):
     """Raised when AI clinical features are disabled."""
-    pass
+    __slots__ = ()
 
 
 def is_ai_clinical_enabled(request: Request) -> bool:
