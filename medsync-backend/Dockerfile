@@ -51,5 +51,5 @@ EXPOSE 8000
 HEALTHCHECK --interval=30s --timeout=10s --start-period=30s --retries=3 \
   CMD curl -f http://localhost:8000/api/v1/health || exit 1
 
-# ASGI via Daphne (Channels/WebSockets). Override in compose for dev hot-reload.
-CMD ["daphne", "-b", "0.0.0.0", "-p", "8000", "medsync_backend.asgi:application"]
+# WSGI via gunicorn. Override in compose to suit environment.
+CMD ["gunicorn", "medsync_backend.wsgi", "--bind", "0.0.0.0:8000", "--workers", "4", "--timeout", "120"]
