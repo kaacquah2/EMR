@@ -33,16 +33,12 @@ import { usePollWhenVisible } from "@/hooks/use-poll-when-visible";
 import type { Patient, Consent } from "@/lib/types";
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
-import { useAsyncAIAnalysis } from "@/hooks/use-async-ai-analysis";
-import { AIAnalysisProgress } from "@/components/features/ai/ai-analysis-progress";
-import { AIDisclaimer } from "@/components/ui/AIDisclaimer";
 import { VitalsTrendChart } from "@/components/features/clinical/VitalsTrendChart";
 import { MarChart } from "@/components/features/nurse/MarChart";
-import { ReferralSuggestions } from "@/components/features/ai/ReferralSuggestions";
 
 const PATIENT_LABS_POLL_MS = 45_000;
 
-type Tab = "overview" | "encounters" | "diagnoses" | "prescriptions" | "labs" | "vitals" | "amendments" | "ai_history" | "ai_analysis" | "timeline" | "mar";
+type Tab = "overview" | "encounters" | "diagnoses" | "prescriptions" | "labs" | "vitals" | "amendments" | "timeline" | "mar";
 
 /** Roles that see only demographics + appointments (no clinical records). */
 const RESTRICTED_PATIENT_VIEW_ROLES: Role[] = [
@@ -165,8 +161,6 @@ export default function PatientPage() {
   const { list: consents, fetchList: fetchConsents, grant: grantConsent, revoke: revokeConsent } = useConsents();
   const { list: breakGlassList, fetchList: fetchBreakGlass } = useBreakGlassList();
   const { create: createReferral } = useReferrals();
-  const aiAnalysis = useAsyncAIAnalysis(id);
-
   const [tab, setTab] = useState<Tab>("overview");
   const [addOpen, setAddOpen] = useState(false);
   const [dischargeSummaryOpen, setDischargeSummaryOpen] = useState(false);
@@ -179,23 +173,11 @@ export default function PatientPage() {
   const [referralReason, setReferralReason] = useState("");
   const [consentSuccess, setConsentSuccess] = useState<string | null>(null);
   const [referralSuccess, setReferralSuccess] = useState(false);
-  const [aiReferralLoading, setAiReferralLoading] = useState(false);
-  const [aiRecommendations, setAiRecommendations] = useState<
-    {
-      hospital_name: string;
-      hospital_id: string;
-      specialty_match: number;
-      bed_availability: number;
-      distance_km?: number;
-      reason: string;
-    }[]
-  >([]);
   const [amendRecord, setAmendRecord] = useState<MedicalRecord | null>(null);
   const [exportPdfLoading, setExportPdfLoading] = useState(false);
   const [addRecordInitialType, setAddRecordInitialType] = useState<"vital_signs" | "nursing_note" | null>(null);
   const [consentToRevoke, setConsentToRevoke] = useState<Consent | null>(null);
   const [revokeConsentLoading, setRevokeConsentLoading] = useState(false);
-  const [aiHistory, setAiHistory] = useState<Array<{ timestamp?: string; analysis_type?: string; confidence_score?: number }>>([]);
   const [closeEncounterConfirmOpen, setCloseEncounterConfirmOpen] = useState(false);
   const [closeEncounterLoading, setCloseEncounterLoading] = useState(false);
 
@@ -250,51 +232,6 @@ export default function PatientPage() {
   useEffect(() => {
     if (id && !isRestrictedView) fetchEncounters();
   }, [id, fetchEncounters, isRestrictedView]);
-  useEffect(() => {
-    let cancelled = false;
-    (async () => {
-      try {
-        const res = await api.get<{ data?: Array<{ timestamp?: string; analysis_type?: string; confidence_score?: number }> }>(`/ai/analysis-history/${id}`);
-        if (!cancelled) setAiHistory(res.data || []);
-      } catch {
-        if (!cancelled) setAiHistory([]);
-      }
-    })();
-    return () => {
-      cancelled = true;
-    };
-  }, [api, id]);
-
-  useEffect(() => {
-    if (referralModalOpen && id) {
-      setAiReferralLoading(true);
-      api
-        .post<{
-          data: {
-            recommended_hospitals: {
-              hospital_name: string;
-              hospital_id: string;
-              specialty_match: number;
-              bed_availability: number;
-              distance_km?: number;
-              reason: string;
-            }[];
-          };
-        }>(`/ai/referral-recommendation/${id}`, {})
-        .then((res) => {
-          setAiRecommendations(res.data?.recommended_hospitals ?? []);
-        })
-        .catch(() => {
-          setAiRecommendations([]);
-        })
-        .finally(() => {
-          setAiReferralLoading(false);
-        });
-    } else {
-      setAiRecommendations([]);
-    }
-  }, [referralModalOpen, id, api]);
-
   const globalPatientId = patient?.global_patient_id ?? null;
 
   useEffect(() => {
@@ -342,8 +279,6 @@ export default function PatientPage() {
     { id: "vitals", label: "Vitals" },
     { id: "timeline", label: "Timeline" },
     { id: "amendments", label: "Amendments" },
-    { id: "ai_analysis", label: "AI Analysis" },
-    { id: "ai_history", label: "AI History" },
   ];
 
   if (user?.role === "nurse" || user?.role === "doctor") {
@@ -687,112 +622,6 @@ export default function PatientPage() {
             )}
           </div>
         )}
-        {tab === "ai_history" && (
-          <div className="space-y-4">
-            <AIDisclaimer />
-            {aiHistory.length ? (
-              aiHistory.map((h, idx) => (
-                <div key={`${h.timestamp || "t"}-${idx}`} className="rounded-lg border border-slate-200 dark:border-slate-800 bg-white p-4 text-sm">
-                  <p className="font-medium">{h.analysis_type || "Analysis"}</p>
-                  <p className="text-slate-500 dark:text-slate-500">
-                    {h.timestamp ? new Date(h.timestamp).toLocaleString() : "Unknown time"}
-                    {typeof h.confidence_score === "number" ? ` · Confidence ${Math.round(h.confidence_score * 100)}%` : ""}
-                  </p>
-                </div>
-              ))
-            ) : (
-              <p className="text-slate-500 dark:text-slate-500">No AI history.</p>
-            )}
-          </div>
-        )}
-        {tab === "ai_analysis" && (
-          <div className="space-y-4">
-            <AIDisclaimer />
-            <AIAnalysisProgress
-              jobId={aiAnalysis.jobId}
-              status={aiAnalysis.status}
-              progressPercent={aiAnalysis.progressPercent}
-              currentStep={aiAnalysis.currentStep}
-              analysis={aiAnalysis.analysis}
-              error={aiAnalysis.error}
-              onStart={async () => {
-                await aiAnalysis.startAnalysis();
-              }}
-              onCancel={aiAnalysis.cancelJob}
-              onRetry={async () => {
-                await aiAnalysis.startAnalysis();
-              }}
-              onClose={() => setTab("overview")}
-              onStartNew={() => {
-                aiAnalysis.cancelJob();
-                setTimeout(() => {
-                  aiAnalysis.startAnalysis();
-                }, 500);
-              }}
-            />
-          </div>
-        )}
-        {tab === "ai_history" && canInterop && globalPatientId && false && (
-          <div className="space-y-6">
-            <section>
-              <h3 className="text-sm font-semibold text-slate-900 dark:text-slate-100 mb-2">Active consents</h3>
-              {consents.filter((c) => c.is_active && (!c.expires_at || new Date(c.expires_at) > new Date())).length ? (
-                <ul className="space-y-2">
-                  {consents
-                    .filter((c) => c.is_active && (!c.expires_at || new Date(c.expires_at) > new Date()))
-                    .map((c) => (
-                      <li key={c.consent_id} className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-slate-200 dark:border-slate-800 bg-white p-3 text-sm">
-                        <span>
-                          {c.granted_to_facility_name} — {c.scope}
-                          {c.expires_at ? ` until ${c.expires_at.slice(0, 10)}` : " (no expiry)"}
-                        </span>
-                        <Button
-                          type="button"
-                          variant="secondary"
-                          size="sm"
-                          onClick={() => setConsentToRevoke(c)}
-                        >
-                          Revoke
-                        </Button>
-                      </li>
-                    ))}
-                </ul>
-              ) : (
-                <p className="text-slate-500 dark:text-slate-500">No active consents.</p>
-              )}
-            </section>
-            <section>
-              <h3 className="text-sm font-semibold text-slate-900 dark:text-slate-100 mb-2">Expired / revoked consents</h3>
-              {consents.filter((c) => !c.is_active || (c.expires_at && new Date(c.expires_at) <= new Date())).length ? (
-                <ul className="space-y-2">
-                  {consents
-                    .filter((c) => !c.is_active || (c.expires_at && new Date(c.expires_at) <= new Date()))
-                    .map((c) => (
-                      <li key={c.consent_id} className="rounded-lg border border-slate-100 dark:border-slate-900 bg-slate-50 dark:bg-slate-900 p-3 text-sm text-slate-500 dark:text-slate-500">
-                        {c.granted_to_facility_name} — {c.scope} — {c.is_active ? "expired" : "revoked"}
-                      </li>
-                    ))}
-                </ul>
-              ) : (
-                <p className="text-slate-500 dark:text-slate-500">None.</p>
-              )}
-            </section>
-            <section>
-              <h3 className="text-sm font-semibold text-slate-900 dark:text-slate-100 mb-2">Break-glass history</h3>
-              {breakGlassList.length ? (
-                <ul className="space-y-2">
-                  {breakGlassList.map((b) => (
-                    <li key={b.break_glass_id} className="rounded-lg border border-[#FEE2E2] bg-[#FEF2F2] p-3 text-sm">
-                      {b.created_at} — {b.reason}
-                    </li>
-                  ))}
-                </ul>
-              ) : (
-                <p className="text-slate-500 dark:text-slate-500">No break-glass access recorded.</p>
-              )}
-            </section>
-          </div>
-        )}
       </div>
 
       {/* Consent modal */}
@@ -941,19 +770,6 @@ export default function PatientPage() {
                   onChange={(e) => setReferralReason(e.target.value)}
                   placeholder="Reason for referral"
                 />
-
-                {aiRecommendations.length > 0 && (
-                  <div className="mt-4">
-                    <ReferralSuggestions
-                      recommendedHospitals={aiRecommendations}
-                      isLoading={aiReferralLoading}
-                      onSelect={(h) => {
-                        setReferralFacilityId(h.hospital_id);
-                        setReferralReason(h.reason);
-                      }}
-                    />
-                  </div>
-                )}
 
                 {referralSuccess && <p className="text-sm text-[#0B8A96]">Referral created.</p>}
                 <div className="mt-4 flex justify-end gap-2">

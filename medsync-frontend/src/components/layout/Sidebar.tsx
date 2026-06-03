@@ -139,8 +139,6 @@ function NavItem({ href, label, isActive, collapsed, badge, tag, onClick, icon: 
   return linkContent;
 }
 
-const AI_NEW_TAG_KEY = "medsync_ai_integration_new_seen";
-
 export function Sidebar() {
   const pathname = usePathname();
   const { user, logout, viewAsHospitalId } = useAuth();
@@ -149,14 +147,6 @@ export function Sidebar() {
   const [breakGlassUnreviewed, setBreakGlassUnreviewed] = useState<number | null>(null);
   const [haAlertCount, setHaAlertCount] = useState<number | null>(null);
   const [haRbacOverdue, setHaRbacOverdue] = useState<number | null>(null);
-  const [aiNewSeen, setAiNewSeen] = useState(() => {
-    if (typeof window === "undefined") return true;
-    try {
-      return localStorage.getItem(AI_NEW_TAG_KEY) === "1";
-    } catch {
-      return true;
-    }
-  });
 
   // Fetch nurse sidebar badges
   const nurseBadges = useNurseSidebarBadges(user?.role === "nurse");
@@ -247,12 +237,6 @@ export function Sidebar() {
         </span>
       );
 
-    const aiTag = aiNewSeen ? null : (
-      <span className="ml-auto rounded-full bg-[#0EAFBE] px-2 py-0.5 text-[10px] font-bold uppercase text-white">
-        New
-      </span>
-    );
-
     const system: NavRow[] = [
       { href: "/superadmin", label: "Dashboard" },
       { href: "/superadmin/network", label: "Network Intelligence" },
@@ -266,7 +250,6 @@ export function Sidebar() {
     const config: NavRow[] = [
       { href: "/superadmin/facilities", label: "Facilities" },
       { href: "/superadmin/system-health", label: "System health" },
-      { href: "/superadmin/ai-integration", label: "AI integration", tag: aiTag },
     ];
 
     const clinical: NavRow[] = !viewAsActive
@@ -279,7 +262,7 @@ export function Sidebar() {
         ];
 
     return { system, config, clinical };
-  }, [aiNewSeen, breakGlassUnreviewed, role, viewAsActive]);
+  }, [breakGlassUnreviewed, role, viewAsActive]);
 
   const brandHref = role === "super_admin" ? "/superadmin" : "/dashboard";
 
@@ -386,14 +369,6 @@ export function Sidebar() {
                     collapsed={collapsed}
                     tag={row.tag}
                     icon={getNavIcon(row.label)}
-                    onClick={row.href === "/superadmin/ai-integration" ? () => {
-                      try {
-                        localStorage.setItem(AI_NEW_TAG_KEY, "1");
-                        setAiNewSeen(true);
-                      } catch {
-                        //
-                      }
-                    } : undefined}
                   />
                 );
               })}

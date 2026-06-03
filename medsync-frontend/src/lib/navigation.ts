@@ -39,14 +39,12 @@ const COMMON_NAV = {
   superAdminFacilities: { href: "/superadmin/facilities", label: "Facilities" },
   superAdminBreakGlassReview: { href: "/superadmin/break-glass-review", label: "Break-glass review" },
   superAdminSystemHealth: { href: "/superadmin/system-health", label: "System health" },
-  superAdminAiIntegration: { href: "/superadmin/ai-integration", label: "AI integration" },
 };
 
 export const navByRole: Record<string, NavItem[]> = {
   doctor: [
     COMMON_NAV.dashboard,
     { href: "/worklist", label: "Worklist" },
-    { href: "/ai-insights", label: "AI Insights" },
     COMMON_NAV.emergencyQueue,
     COMMON_NAV.patientSearch,
     COMMON_NAV.appointments,
@@ -113,7 +111,6 @@ export const navByRole: Record<string, NavItem[]> = {
     COMMON_NAV.superAdminBreakGlassReview,
     COMMON_NAV.superAdminFacilities,
     COMMON_NAV.superAdminSystemHealth,
-    COMMON_NAV.superAdminAiIntegration,
   ],
 };
 
@@ -152,7 +149,6 @@ function pathSegmentIsUuid(segment: string): boolean {
 const DOCTOR_EXACT_ALLOWED = new Set([
   "/dashboard",
   "/worklist",
-  "/ai-insights",
   "/patients/search",
   "/appointments",
   "/alerts",
@@ -170,7 +166,6 @@ function isDoctorPathnameAccessible(path: string): boolean {
 
   // Doctors can open patient chart and clinical subflows, but not registration/admissions management routes.
   if (segments.length === 2) return true;
-  if (segments[2] === "ai-insights") return true;
   if (segments[2] === "admissions") return false;
   if (segments[2] === "encounter" || segments[2] === "encounters") return true;
   if (segments[2] === "records" || segments[2] === "vitals") return true;
@@ -246,7 +241,6 @@ export function isPathnameAccessible(role: string, pathname: string, options?: N
     if (segments[1] === "search" || segments[1] === "register")
       return nav.some((item) => item.href === `/patients/${segments[1]}`);
     if (pathSegmentIsUuid(segments[1])) {
-      if (segments[2] === "ai-insights") return role === "doctor";
       if (role === "receptionist") return false;
       return nav.some((item) => item.href === "/patients/search");
     }

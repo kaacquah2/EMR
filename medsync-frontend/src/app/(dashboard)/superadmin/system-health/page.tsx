@@ -28,14 +28,6 @@ const RUNBOOK_BLURBS: Record<string, string[]> = {
     "Verify DATABASE_URL connectivity (Neon/managed Postgres): check cloud console or run backend `/api/v1/health` and confirm database status is ok.",
     "Confirm migrations applied: `python manage.py migrate`.",
   ],
-  redis: [
-    "Confirm `REDIS_URL`, `CELERY_BROKER_URL`, `CELERY_RESULT_BACKEND` are set to full redis:// URIs (not host:port).",
-    "If Redis is down, background jobs/caching will degrade; API should still run. Re-check `/api/v1/health` after fixing env and restarting backend workers.",
-  ],
-  ai_inference: [
-    "If AI shows degraded/offline, verify any configured model/env settings and that the AI endpoints respond (see /superadmin/ai-integration).",
-    "AI failures should not block core API; treat as a separate incident and validate fallbacks.",
-  ],
   kms: [
     "Confirm encryption key is configured for the environment (never commit raw keys).",
   ],
