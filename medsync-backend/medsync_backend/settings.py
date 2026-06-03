@@ -20,13 +20,6 @@ _VERCEL = os.environ.get("VERCEL") == "1"
 # Default False so production is safe if env is unset. Set DEBUG=True for local dev only.
 DEBUG = config("DEBUG", default=False, cast=bool)
 ENV = config("ENV", default="development")
-LLM_MODE = config("LLM_MODE", default="mock")
-if _str_config("ENV").lower() == "production" and LLM_MODE == "mock":
-    from django.core.exceptions import ImproperlyConfigured
-    raise ImproperlyConfigured(
-        "LLM_MODE is 'mock' in production. Set LLM_MODE to a real provider "
-        "(e.g. LLM_MODE=bedrock) to prevent stub responses in clinical workflows."
-    )
 
 
 # SECRET_KEY: no insecure default when DEBUG=False. Accept SECRET_KEY or DJANGO_SECRET_KEY
@@ -395,9 +388,6 @@ REST_FRAMEWORK = {
     "DEFAULT_THROTTLE_RATES": {
         "anon": THROTTLE_ANON,
         "user": THROTTLE_USER,
-        "ai": "20/day",
-        "ai_endpoint": "20/hour",
-        "ai_hospital": "200/hour",
     },
     "DEFAULT_PAGINATION_CLASS": "rest_framework.pagination.CursorPagination",
     "PAGE_SIZE": 20,
@@ -409,7 +399,7 @@ SPECTACULAR_SETTINGS = {
     "DESCRIPTION": (
         "Multi-tenant Electronic Medical Records API. "
         "Supports JWT + TOTP MFA authentication, RBAC (10 roles), "
-        "FHIR R4 interoperability, and AI-assisted clinical decision support."
+        "and FHIR R4 interoperability for inter-hospital record access."
     ),
     "VERSION": "1.0.0",
     "SERVE_INCLUDE_SCHEMA": False,
@@ -500,49 +490,6 @@ WEBAUTHN_RP_NAME = "MedSync EMR"
 WEBAUTHN_ORIGIN = _WEBAUTHN_ORIGIN
 WEBAUTHN_ENABLED = config("WEBAUTHN_ENABLED", default=True, cast=bool)
 WEBAUTHN_CHALLENGE_TTL = 300  # 5 minutes
-
-# AI/ML model paths (MEDIUM-4: environment-aware model locations)
-# Default points at api/ai/models/*.joblib (written by api/ai/train_models.py).
-_ai_models_dir = Path(
-    _str_config("MEDSYNC_AI_MODELS_DIR", str(BASE_DIR / "api" / "ai" / "models"))
-).resolve()
-
-MODEL_PATHS = {
-    "risk_predictor": config(
-        "MODEL_PATH_RISK_PREDICTOR",
-        default=str(_ai_models_dir / "risk_predictor.joblib"),
-    ),
-}
-
-# AI/ML Clinical Features Deployment Gates
-# PRODUCTION SAFETY: All clinical AI features are DISABLED by default until explicitly validated and approved
-DISABLE_AI_CLINICAL_FEATURES = config("DISABLE_AI_CLINICAL_FEATURES", default=True, cast=bool)
-AI_CLINICAL_FEATURES_ENABLED = config("AI_CLINICAL_FEATURES_ENABLED", default=False, cast=bool)
-AI_CONFIDENCE_THRESHOLD_CLINICAL = config("AI_CONFIDENCE_THRESHOLD_CLINICAL", default=0.80, cast=float)
-AI_CONFIDENCE_THRESHOLD_DEV = config("AI_CONFIDENCE_THRESHOLD_DEV", default=0.75, cast=float)
-
-# Use clinical threshold in production, dev threshold otherwise
-AI_CONFIDENCE_THRESHOLD = AI_CONFIDENCE_THRESHOLD_DEV if DEBUG else AI_CONFIDENCE_THRESHOLD_CLINICAL
-
-# Model training and validation tracking
-# Phase 3 Complete: Using trained hybrid models (synthetic Ghana data + UCI readmission data)
-# Can be overridden per hospital via admin approval workflow in AIDeploymentLog
-AI_MODEL_VERSION = config("AI_MODEL_VERSION", default="1.0.0-hybrid")
-AI_MODELS_TRAINED_ON_REAL_DATA = config("AI_MODELS_TRAINED_ON_REAL_DATA", default=True, cast=bool)
-
-# Actual validation metrics from Phase 3 training run
-# Source: Hybrid dataset (7,000 samples: 3,000 synthetic Ghana + 4,000 UCI readmission data)
-# Training date: 2026-04-20
-AI_MODELS_VALIDATION_METRICS = {
-    'auc_roc': 0.5921,
-    'sensitivity': 0.9013,
-    'specificity': 0.2948,
-    'data_source': 'hybrid',
-    'training_date': '2026-04-20',
-    'samples': 7000,
-    'note': 'Development-grade models. Below clinical deployment thresholds (AUC≥0.80). '
-            'Hospital admin can override approval for research/demo purposes with audit trail.',
-}
 
 _cors_default = (
     "https://configure-cors-in-vercel.invalid"
