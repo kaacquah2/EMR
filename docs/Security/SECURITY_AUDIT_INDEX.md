@@ -28,7 +28,7 @@ Start with: **[RATE_LIMITING_FIXES_DETAILED.md](RATE_LIMITING_FIXES_DETAILED.md)
 - Unit and integration test code
 - Performance impact analysis
 
-Then read: **[SECURITY_FIX_RATE_LIMITING.md](SECURITY_FIX_RATE_LIMITING.md)**
+Then read: **[../Features/RATE_LIMITING_FIXES_DETAILED.md](../Features/RATE_LIMITING_FIXES_DETAILED.md)**
 - Implementation details of the two fixes
 - Before/after code comparison
 - Testing verification steps
@@ -48,8 +48,7 @@ Read ALL documents in order:
 1. SECURITY_AUDIT_SUMMARY.md - Overview
 2. SECURITY_AUDIT_PASSWORD_SYSTEM.md - Password systems
 3. SECURITY_AUDIT_ADDENDUM.md - MFA and cookies
-4. SECURITY_FIX_RATE_LIMITING.md - Recent fixes
-5. RATE_LIMITING_FIXES_DETAILED.md - Technical details
+4. ../Features/RATE_LIMITING_FIXES_DETAILED.md - Technical details
 
 ---
 
