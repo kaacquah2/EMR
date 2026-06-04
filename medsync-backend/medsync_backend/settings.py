@@ -609,6 +609,26 @@ if not AUDIT_LOG_SIGNING_KEY and not DEBUG:
     from django.core.exceptions import ImproperlyConfigured
     raise ImproperlyConfigured("AUDIT_LOG_SIGNING_KEY is required in production.")
 
+
+def _assert_no_placeholder_secrets() -> None:
+    """Catch CHANGE_ME placeholder values that slipped into production config."""
+    from django.core.exceptions import ImproperlyConfigured
+    for _name, _value in (
+        ("SECRET_KEY", SECRET_KEY),
+        ("FIELD_ENCRYPTION_KEY", FIELD_ENCRYPTION_KEY),
+        ("AUDIT_LOG_SIGNING_KEY", AUDIT_LOG_SIGNING_KEY),
+    ):
+        if _value and "CHANGE_ME" in str(_value).upper():
+            raise ImproperlyConfigured(
+                f"{_name} still contains a placeholder value. "
+                "Generate a real secret: "
+                "python -c \"import secrets; print(secrets.token_urlsafe(32))\""
+            )
+
+
+if not DEBUG:
+    _assert_no_placeholder_secrets()
+
 # Database backup monitoring (health check)
 BACKUP_ENABLED = config("BACKUP_ENABLED", default=False, cast=bool)
 BACKUP_MAX_AGE_HOURS = config("BACKUP_MAX_AGE_HOURS", default=26, cast=int)
@@ -679,7 +699,15 @@ if DEBUG:
     INTERNAL_IPS = ["127.0.0.1", "::1"]
 
 # Django admin URL path (non-guessable in production). No leading slash.
+# Set ADMIN_URL=ms-admin-<random>/ in production secrets — never use the default.
 ADMIN_URL = _str_config("ADMIN_URL", "admin/").strip("/") + "/"
+if not DEBUG and ADMIN_URL == "admin/":
+    from django.core.exceptions import ImproperlyConfigured
+    raise ImproperlyConfigured(
+        "Set ADMIN_URL to a non-guessable path in production "
+        "(e.g. ADMIN_URL=ms-admin-x7k2/). "
+        "The default 'admin/' URL must not be used in production."
+    )
 
 # ============================================================================
 # STRUCTURED LOGGING (JSON to stdout for log aggregation)
