@@ -2,6 +2,7 @@ import uuid
 from django.db import models
 from core.models import Hospital, User, Ward, Bed
 from django_cryptography.fields import encrypt
+from api.tenancy import TenantManager
 
 
 class Patient(models.Model):
@@ -38,6 +39,9 @@ class Patient(models.Model):
     blood_group = models.CharField(max_length=10, choices=BLOOD_GROUPS, default="unknown")
     registered_at = models.ForeignKey(Hospital, on_delete=models.PROTECT, related_name="+")
     created_by = models.ForeignKey(User, on_delete=models.PROTECT)
+
+    tenant_field = "registered_at"
+    tenant_objects = TenantManager()
     is_archived = models.BooleanField(default=False, db_index=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
