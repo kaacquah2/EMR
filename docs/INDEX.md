@@ -30,14 +30,12 @@ This documentation covers all aspects of the MedSync EMR system: architecture, d
 ## 🚀 Deployment & Operations
 
 ### Deployment Guides
-- **[DEPLOYMENT.md](DEPLOYMENT.md)** — ⭐ PRIMARY DEPLOYMENT GUIDE (Railway, Vercel, Neon setup)
-- **[DEPLOYMENT_RUNBOOK_UPDATE_APRIL2026.md](DEPLOYMENT_RUNBOOK_UPDATE_APRIL2026.md)** — Summary of latest deployment updates (WebAuthn, AI, Push, Celery)
-- **[CELERY_WORKER_DEPLOYMENT_DOCUMENTATION.md](CELERY_WORKER_DEPLOYMENT_DOCUMENTATION.md)** — Celery worker and beat scheduler setup (CRITICAL)
+- **[DEPLOY_RUNBOOK.md](DEPLOY_RUNBOOK.md)** — ⭐ QUICK DEPLOYMENT REFERENCE (Docker, Railway, Nginx, cron)
+- **[DEPLOYMENT.md](DEPLOYMENT.md)** — Full deployment guide (Railway, Vercel, Neon setup)
+- **[GO_NO_GO_CHECKLIST.md](GO_NO_GO_CHECKLIST.md)** — Production go/no-go checklist (complete Tier 1 before real PHI)
 
 ### Infrastructure & Configuration
-- **[NEON_REGION_SELECTION_FIX.md](NEON_REGION_SELECTION_FIX.md)** — Database region optimization (Africa/Cape Town for Ghana)
-- **[DAPHNE_FIX.md](DAPHNE_FIX.md)** — ASGI server configuration and fixes
-- **[REDIS.md](REDIS.md)** — Redis broker configuration
+- **[Deployment/NEON_REGION_SELECTION_FIX.md](Deployment/NEON_REGION_SELECTION_FIX.md)** — Database region (`aws-af-south-1` / Africa/Cape Town for Ghana)
 
 ### Operations Runbooks
 - **[ADMIN_RUNBOOK.md](ADMIN_RUNBOOK.md)** — Hospital admin operational tasks
@@ -112,28 +110,26 @@ This documentation covers all aspects of the MedSync EMR system: architecture, d
 ## 📚 How to Use This Documentation
 
 ### For New Developers
-1. Start with **[ARCHITECTURE.md](ARCHITECTURE.md)** — Understand the system design
-2. Read **[Multi_Tenancy_Architecture.md](Multi_Tenancy_Architecture.md)** — Understand hospital scoping
-3. Review **[DEPLOYMENT.md](DEPLOYMENT.md)** — Set up local development
-4. Check **[API_REFERENCE.md](API_REFERENCE.md)** — Understand available endpoints
+1. Start with **[ARCHITECTURE.md](ARCHITECTURE.md)** — Understand the system design (multi-tenancy section covers hospital scoping)
+2. Review **[DEPLOY_RUNBOOK.md](DEPLOY_RUNBOOK.md)** — Set up local development
+3. Check **[API_REFERENCE.md](API_REFERENCE.md)** — Understand available endpoints
 
 ### For DevOps/Infrastructure
-1. Start with **[DEPLOYMENT.md](DEPLOYMENT.md)** — Primary deployment guide
-2. Review **[CELERY_WORKER_DEPLOYMENT_DOCUMENTATION.md](CELERY_WORKER_DEPLOYMENT_DOCUMENTATION.md)** — Critical async infrastructure
-3. Check **[NEON_REGION_SELECTION_FIX.md](NEON_REGION_SELECTION_FIX.md)** — Database optimization
-4. Read **[Monitoring_And_Alerting.md](Monitoring_And_Alerting.md)** — Operational observability
+1. Start with **[DEPLOY_RUNBOOK.md](DEPLOY_RUNBOOK.md)** — Quick deployment reference
+2. Read **[DEPLOYMENT.md](DEPLOYMENT.md)** — Full deployment guide
+3. Check **[Deployment/NEON_REGION_SELECTION_FIX.md](Deployment/NEON_REGION_SELECTION_FIX.md)** — Database region optimization
+4. Work through **[GO_NO_GO_CHECKLIST.md](GO_NO_GO_CHECKLIST.md)** — Pre-live checklist
 
 ### For Security/Compliance
-1. Start with **[SECURITY_AUDIT_SUMMARY.md](SECURITY_AUDIT_SUMMARY.md)** — Overview of security findings
-2. Review **[JWT_ALGORITHM_SECURITY_FIX.md](JWT_ALGORITHM_SECURITY_FIX.md)** — Authentication security
-3. Check **[MFA_MANDATORY_REQUIREMENT_CORRECTION.md](MFA_MANDATORY_REQUIREMENT_CORRECTION.md)** — MFA requirements
+1. Start with **[Security/SECURITY_AUDIT_SUMMARY.md](Security/SECURITY_AUDIT_SUMMARY.md)** — Overview of security findings
+2. Review **[Security/JWT_ALGORITHM_SECURITY_FIX.md](Security/JWT_ALGORITHM_SECURITY_FIX.md)** — Authentication security
+3. Check **[Security/MFA_MANDATORY_REQUIREMENT_CORRECTION.md](Security/MFA_MANDATORY_REQUIREMENT_CORRECTION.md)** — MFA requirements
 4. Read **[BACKUP_STRATEGY.md](BACKUP_STRATEGY.md)** — Data protection
 
 ### For Clinical Leaders
 1. Start with **[ARCHITECTURE.md](ARCHITECTURE.md)** (Overview section) — Understand system capabilities
-2. Review **[ROLE_BASED_USERS_PERMISSIONS_BY_MODULE.md](ROLE_BASED_USERS_PERMISSIONS_BY_MODULE.md)** — Understand access control
-3. Read **[AI_ML_CLINICAL_DEPLOYMENT_ROADMAP.md](AI_ML_CLINICAL_DEPLOYMENT_ROADMAP.md)** — AI deployment plan
-4. Check **[Monitoring_And_Alerting.md](Monitoring_And_Alerting.md)** — System health and alerts
+2. Review **[Features/ROLE_BASED_USERS_PERMISSIONS_BY_MODULE.md](Features/ROLE_BASED_USERS_PERMISSIONS_BY_MODULE.md)** — Understand access control
+3. Read **[AI_ML/AI_ML_CLINICAL_DEPLOYMENT_ROADMAP.md](AI_ML/AI_ML_CLINICAL_DEPLOYMENT_ROADMAP.md)** — AI deployment plan (9+ months to clinical readiness)
 
 ### For AI/ML Engineers
 1. Start with **[AI_ML_STATUS_REPORT.md](AI_ML_STATUS_REPORT.md)** — Current AI status
@@ -166,32 +162,29 @@ This documentation covers all aspects of the MedSync EMR system: architecture, d
 - [JWT_ALGORITHM_SECURITY_FIX.md](JWT_ALGORITHM_SECURITY_FIX.md) — JWT security
 
 ### Multi-Hospital Setup
-- [Multi_Tenancy_Architecture.md](Multi_Tenancy_Architecture.md) — Hospital scoping
-- [Governance_Model.md](Governance_Model.md) — Admin responsibilities
-- [ROLE_BASED_USERS_PERMISSIONS_BY_MODULE.md](ROLE_BASED_USERS_PERMISSIONS_BY_MODULE.md) — Permissions by role
+- [ARCHITECTURE.md](ARCHITECTURE.md) — Multi-tenancy and hospital scoping (see "Multi-Tenancy Architecture" section)
+- [Features/ROLE_BASED_USERS_PERMISSIONS_BY_MODULE.md](Features/ROLE_BASED_USERS_PERMISSIONS_BY_MODULE.md) — Permissions by role
 
 ### Cross-Facility Access
-- [Access_Governance.md](Access_Governance.md) — Consent, referrals, break-glass
-- [ROLE_BASED_USERS_PERMISSIONS_BY_MODULE.md](ROLE_BASED_USERS_PERMISSIONS_BY_MODULE.md) — Cross-facility permissions
+- [ARCHITECTURE.md](ARCHITECTURE.md) — Consent, referrals, break-glass (see "Cross-Facility Access" section)
 
 ### Deployment
+- [DEPLOY_RUNBOOK.md](DEPLOY_RUNBOOK.md) — Quick deployment reference
 - [DEPLOYMENT.md](DEPLOYMENT.md) — Full deployment guide
-- [CELERY_WORKER_DEPLOYMENT_DOCUMENTATION.md](CELERY_WORKER_DEPLOYMENT_DOCUMENTATION.md) — Async infrastructure
-- [NEON_REGION_SELECTION_FIX.md](NEON_REGION_SELECTION_FIX.md) — Database setup
+- [Deployment/NEON_REGION_SELECTION_FIX.md](Deployment/NEON_REGION_SELECTION_FIX.md) — Database region setup
 
 ### AI/ML Features
-- [AI_ML_STATUS_REPORT.md](AI_ML_STATUS_REPORT.md) — Current status
-- [AI_ML_CLINICAL_DEPLOYMENT_ROADMAP.md](AI_ML_CLINICAL_DEPLOYMENT_ROADMAP.md) — Deployment plan
-- [AI_ML_PRODUCTION_READINESS_CORRECTION.md](AI_ML_PRODUCTION_READINESS_CORRECTION.md) — Ready for testing, not clinical
+- [AI_ML/AI_ML_STATUS_REPORT.md](AI_ML/AI_ML_STATUS_REPORT.md) — Current status
+- [AI_ML/AI_ML_CLINICAL_DEPLOYMENT_ROADMAP.md](AI_ML/AI_ML_CLINICAL_DEPLOYMENT_ROADMAP.md) — Deployment plan
+- [AI_ML/AI_ML_PRODUCTION_READINESS_CORRECTION.md](AI_ML/AI_ML_PRODUCTION_READINESS_CORRECTION.md) — Infrastructure ready; NOT clinical-ready
 
 ### Troubleshooting
 - [TROUBLESHOOTING.md](TROUBLESHOOTING.md) — Common issues
-- [DEPLOYMENT.md](DEPLOYMENT.md#troubleshooting-deployment-issues) — Deployment errors
 
-### Operations & Monitoring
+### Operations
 - [ADMIN_RUNBOOK.md](ADMIN_RUNBOOK.md) — Admin tasks
-- [Monitoring_And_Alerting.md](Monitoring_And_Alerting.md) — Health monitoring
 - [BACKUP_STRATEGY.md](BACKUP_STRATEGY.md) — Data protection
+- [GO_NO_GO_CHECKLIST.md](GO_NO_GO_CHECKLIST.md) — Production readiness (source of truth)
 
 ---
 
@@ -213,9 +206,9 @@ This documentation covers all aspects of the MedSync EMR system: architecture, d
 ## 🎯 Key Documentation Highlights
 
 ### ⚠️ Critical for Deployment Teams
-- **[DEPLOYMENT.md](DEPLOYMENT.md)** — Complete with Celery, AI, Push Notifications
-- **[CELERY_WORKER_DEPLOYMENT_DOCUMENTATION.md](CELERY_WORKER_DEPLOYMENT_DOCUMENTATION.md)** — Celery is NOT optional
-- **[NEON_REGION_SELECTION_FIX.md](NEON_REGION_SELECTION_FIX.md)** — Use Africa/Cape Town for Ghana
+- **[DEPLOY_RUNBOOK.md](DEPLOY_RUNBOOK.md)** — Quick reference; gunicorn WSGI, no Celery/Redis required
+- **[GO_NO_GO_CHECKLIST.md](GO_NO_GO_CHECKLIST.md)** — Complete Tier 1 before real patient data
+- **[Deployment/NEON_REGION_SELECTION_FIX.md](Deployment/NEON_REGION_SELECTION_FIX.md)** — Use `aws-af-south-1` (Africa/Cape Town) for Ghana
 
 ### ⚠️ Critical for Security
 - **[MFA_MANDATORY_REQUIREMENT_CORRECTION.md](MFA_MANDATORY_REQUIREMENT_CORRECTION.md)** — MFA is mandatory for all roles
@@ -235,18 +228,17 @@ docs/
 ├── INDEX.md (← YOU ARE HERE)
 ├── ARCHITECTURE.md
 ├── API_REFERENCE.md
+├── DEPLOY_RUNBOOK.md
 ├── DEPLOYMENT.md
+├── GO_NO_GO_CHECKLIST.md
 ├── TROUBLESHOOTING.md
 ├── ADMIN_RUNBOOK.md
 ├── BACKUP_STRATEGY.md
 ├── OPENAPI_SETUP.md
-├── REDIS.md
+├── SYSTEM_OVERVIEW_DIAGRAM.md
 │
 ├── Deployment/
-│   ├── DEPLOYMENT_RUNBOOK_UPDATE_APRIL2026.md
-│   ├── CELERY_WORKER_DEPLOYMENT_DOCUMENTATION.md
-│   ├── NEON_REGION_SELECTION_FIX.md
-│   └── DAPHNE_FIX.md
+│   └── NEON_REGION_SELECTION_FIX.md
 │
 ├── Security/
 │   ├── SECURITY_AUDIT_SUMMARY.md
@@ -254,8 +246,8 @@ docs/
 │   ├── SECURITY_AUDIT_PASSWORD_SYSTEM.md
 │   ├── SECURITY_AUDIT_ADDENDUM.md
 │   ├── JWT_ALGORITHM_SECURITY_FIX.md
-│   ├── JWT_ALGORITHM_SECURITY_AUDIT.md
-│   └── MFA_MANDATORY_REQUIREMENT_CORRECTION.md
+│   ├── MFA_MANDATORY_REQUIREMENT_CORRECTION.md
+│   └── DISSERTATION_LIMITATIONS.md
 │
 ├── AI_ML/
 │   ├── AI_ML_STATUS_REPORT.md
@@ -263,19 +255,13 @@ docs/
 │   ├── AI_ML_PRODUCTION_READINESS_CORRECTION.md
 │   └── AI_ML_CLINICAL_DEPLOYMENT_ROADMAP.md
 │
-├── Features/
-│   ├── ROLE_BASED_USERS_PERMISSIONS_BY_MODULE.md
-│   ├── ROLE_BASED_USERS_PERMISSIONS_UI.md
-│   ├── QUICK_REFERENCE_STATE_MACHINES.md
-│   ├── SAFETY_IMPLEMENTATION_REFERENCE.md
-│   ├── RATE_LIMITING_FIXES_DETAILED.md
-│   └── PERFORMANCE_FIXES.md
-│
-├── Architecture/
-│   └── CODEBASE_AUDIT_COMPREHENSIVE.md
-│
-└── Quality/
-    └── DOCUMENTATION_QUALITY_AUDIT_FINAL.md
+└── Features/
+    ├── ROLE_BASED_USERS_PERMISSIONS_BY_MODULE.md
+    ├── ROLE_BASED_USERS_PERMISSIONS_UI.md
+    ├── QUICK_REFERENCE_STATE_MACHINES.md
+    ├── SAFETY_IMPLEMENTATION_REFERENCE.md
+    ├── RATE_LIMITING_FIXES_DETAILED.md
+    └── PERFORMANCE_FIXES.md
 ```
 
 ---
@@ -291,6 +277,6 @@ docs/
 
 ---
 
-**Last Updated:** April 19, 2026  
+**Last Updated:** June 2026  
 **Maintained By:** Engineering Team  
 **Questions?** Check [TROUBLESHOOTING.md](TROUBLESHOOTING.md) or [ADMIN_RUNBOOK.md](ADMIN_RUNBOOK.md)

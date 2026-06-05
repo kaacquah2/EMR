@@ -156,8 +156,7 @@ jobs:
       DATABASE_URL: ${{ secrets.DATABASE_URL }}
       FIELD_ENCRYPTION_KEY: ${{ secrets.FIELD_ENCRYPTION_KEY }}
       AUDIT_LOG_SIGNING_KEY: ${{ secrets.AUDIT_LOG_SIGNING_KEY }}
-      REDIS_URL: ${{ secrets.REDIS_URL }}
-      LLM_MODE: "bedrock"
+      LLM_MODE: "mock"
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5

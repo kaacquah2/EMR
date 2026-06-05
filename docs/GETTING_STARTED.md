@@ -109,18 +109,13 @@ docs/
    - Read `docs/DEPLOYMENT.md` (primary reference)
    - Understand Railway setup for web service
 
-2. **Critical Services** (10 min)
-   - Read `docs/Deployment/CELERY_WORKER_DEPLOYMENT_DOCUMENTATION.md`
-   - ⚠️ Celery workers are MANDATORY (not optional)
-   - Set up two additional Railway services: worker and beat scheduler
-
-3. **Database Setup** (5 min)
+2. **Database Setup** (5 min)
    - Read `docs/Deployment/NEON_REGION_SELECTION_FIX.md`
-   - Use **Africa/Cape Town** region (aws-af-south-1) for Ghana deployment
+   - Use **Africa/Cape Town** region (`aws-af-south-1`) for Ghana deployment
 
-4. **Monitoring** (10 min)
-   - Read `docs/Monitoring_And_Alerting.md`
-   - Set up health check alerts
+3. **Pre-live checklist** (10 min)
+   - Work through `docs/GO_NO_GO_CHECKLIST.md` Tier 1 items
+   - Stack is gunicorn WSGI — no Celery or Redis workers required
 
 ---
 
@@ -159,10 +154,6 @@ docs/
 3. **User Management** (15 min)
    - Read `docs/ADMIN_RUNBOOK.md`
    - Learn how to add users, manage staff, view audit logs
-
-4. **Operations & Monitoring** (15 min)
-   - Read `docs/Monitoring_And_Alerting.md`
-   - Understand system health and alerts
 
 ---
 
@@ -254,7 +245,7 @@ npm run lint               # Check code style
 → Check `docs/TROUBLESHOOTING.md` → Your issue might be there
 
 ### "I need to deploy to production"
-→ Follow `docs/DEPLOYMENT.md` carefully (especially Celery setup)
+→ Follow `docs/DEPLOY_RUNBOOK.md` (quick) or `docs/DEPLOYMENT.md` (full guide)
 
 ### "I need to understand cross-hospital access"
 → Read `docs/Architecture/Access_Governance.md`
@@ -274,9 +265,9 @@ npm run lint               # Check code style
 
 ✅ **MFA is mandatory** — All clinical staff must use MFA (no exceptions in production)
 
-✅ **Celery is critical** — Deploy both worker and beat scheduler (not optional)
+✅ **Use Africa/Cape Town** — (`aws-af-south-1`) for database region when deploying to Ghana
 
-✅ **Use Africa/Cape Town** — For database region when deploying to Ghana
+✅ **Complete GO_NO_GO Tier 1** — Before processing any real patient data
 
 ✅ **Documentation is current** — Last updated April 2026, includes all Phase 2-8 features
 
@@ -310,7 +301,7 @@ npm run lint               # Check code style
 ### For Operations
 - `docs/DEPLOYMENT.md` — Production deployment
 - `docs/ADMIN_RUNBOOK.md` — Operational tasks
-- `docs/Monitoring_And_Alerting.md` — System health
+- `docs/ADMIN_RUNBOOK.md` — System health
 
 ### For Security
 - `docs/Security/` folder — All security-related docs

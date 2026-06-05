@@ -18,13 +18,13 @@ Get up to speed on the system in ~1.5 hours:
 ---
 
 ### 🔧 **DevOps / Infrastructure**
-Get deployment ready in ~45 minutes:
-1. Read [DEPLOYMENT.md](DEPLOYMENT.md) (20 min) — Primary guide
-2. Review [Deployment/CELERY_WORKER_DEPLOYMENT_DOCUMENTATION.md](Deployment/CELERY_WORKER_DEPLOYMENT_DOCUMENTATION.md) (10 min) — Critical async services
-3. Check [Deployment/NEON_REGION_SELECTION_FIX.md](Deployment/NEON_REGION_SELECTION_FIX.md) (5 min) — Database setup
-4. Review [Monitoring_And_Alerting.md](Monitoring_And_Alerting.md) (10 min) — Health checks
+Get deployment ready in ~30 minutes:
+1. Read [DEPLOY_RUNBOOK.md](DEPLOY_RUNBOOK.md) (10 min) — Quick deployment reference
+2. Read [DEPLOYMENT.md](DEPLOYMENT.md) (15 min) — Full deployment guide
+3. Check [Deployment/NEON_REGION_SELECTION_FIX.md](Deployment/NEON_REGION_SELECTION_FIX.md) (5 min) — Database region (af-south-1)
+4. Work through [GO_NO_GO_CHECKLIST.md](GO_NO_GO_CHECKLIST.md) — Pre-live blockers
 
-**Time:** 45 min | **Outcome:** Ready to deploy
+**Time:** 30 min | **Outcome:** Ready to deploy
 
 ---
 
@@ -40,13 +40,12 @@ Security audit checklist in ~30 minutes:
 ---
 
 ### 🏥 **Clinical Leaders / Administrators**
-Understand system capabilities in ~1 hour:
+Understand system capabilities in ~45 minutes:
 1. Read [ARCHITECTURE.md](ARCHITECTURE.md) — Overview (15 min)
 2. Review [Features/ROLE_BASED_USERS_PERMISSIONS_BY_MODULE.md](Features/ROLE_BASED_USERS_PERMISSIONS_BY_MODULE.md) — User access (15 min)
 3. Check [AI_ML/AI_ML_CLINICAL_DEPLOYMENT_ROADMAP.md](AI_ML/AI_ML_CLINICAL_DEPLOYMENT_ROADMAP.md) — AI timeline (15 min)
-4. Review [Monitoring_And_Alerting.md](Monitoring_And_Alerting.md) — Health monitoring (15 min)
 
-**Time:** 1 hour | **Outcome:** System understanding + user management knowledge
+**Time:** 45 min | **Outcome:** System understanding + user management knowledge
 
 ---
 
@@ -78,13 +77,13 @@ AI module status in ~30 minutes:
 
 ### 🔴 **DO NOT SKIP**
 - **MFA is MANDATORY** for all clinical staff — [Security/MFA_MANDATORY_REQUIREMENT_CORRECTION.md](Security/MFA_MANDATORY_REQUIREMENT_CORRECTION.md)
-- **Celery is CRITICAL** — Without it, notifications, AI jobs, and alerts silently fail — [Deployment/CELERY_WORKER_DEPLOYMENT_DOCUMENTATION.md](Deployment/CELERY_WORKER_DEPLOYMENT_DOCUMENTATION.md)
 - **AI models are in development** — Not ready for clinical use yet — [AI_ML/AI_ML_CLINICAL_DEPLOYMENT_ROADMAP.md](AI_ML/AI_ML_CLINICAL_DEPLOYMENT_ROADMAP.md)
+- **Complete Tier 1 before real PHI** — [GO_NO_GO_CHECKLIST.md](GO_NO_GO_CHECKLIST.md)
 
 ### 🟡 **Important Notes**
-- Database region: Use **Africa/Cape Town** for Ghana deployment — [Deployment/NEON_REGION_SELECTION_FIX.md](Deployment/NEON_REGION_SELECTION_FIX.md)
+- Database region: Use **Africa/Cape Town** (`aws-af-south-1`) for Ghana deployment — [Deployment/NEON_REGION_SELECTION_FIX.md](Deployment/NEON_REGION_SELECTION_FIX.md)
 - JWT algorithm: **HS256** (explicitly configured) — [Security/JWT_ALGORITHM_SECURITY_FIX.md](Security/JWT_ALGORITHM_SECURITY_FIX.md)
-- Documentation updated: April 2026 (includes all Phase 2-8 features)
+- Stack: gunicorn WSGI — no Celery or Redis workers required
 
 ---
 

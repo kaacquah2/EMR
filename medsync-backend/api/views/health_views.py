@@ -25,8 +25,8 @@ def build_health_payload(*, deep: bool = False) -> tuple[dict, bool]:
     """
     Build the same JSON body as GET /health. Returns (payload, db_ok).
 
-    deep=False (default for GET /api/v1/health): skips Redis ping and heavy audit-chain
-    validation so load balancers and uptime checks stay fast.
+    deep=False (default for GET /api/v1/health): skips heavy audit-chain validation
+    so load balancers and uptime checks stay fast.
 
     deep=True: full probes (used by superadmin dashboard bundle and explicit diagnostics).
     """
@@ -43,56 +43,6 @@ def build_health_payload(*, deep: bool = False) -> tuple[dict, bool]:
     except Exception:
         db_ok = False
     database_obj = _status_obj("database", db_ok, latency_ms=_ms(db_start))
-
-    # Redis/Celery check (best-effort; optional in fast path to avoid socket latency)
-    redis_ok = True
-    redis_latency = None
-    if deep:
-        try:
-            from django.conf import settings
-            # Prefer explicit REDIS_URL (Channels / cloud) over CELERY_BROKER_URL,
-            # which defaults to localhost in settings.
-            url = (getattr(settings, "REDIS_URL", "") or "").strip() or (
-                getattr(settings, "CELERY_BROKER_URL", "") or "").strip()
-            if not url:
-                redis_ok = False
-            else:
-                import redis  # type: ignore
-                r = redis.Redis.from_url(url, socket_connect_timeout=2.0, socket_timeout=3.0)
-                r_start = time.perf_counter()
-                r.ping()
-                redis_latency = _ms(r_start)
-        except Exception:
-            redis_ok = False
-    else:
-        try:
-            from django.conf import settings
-            url = (getattr(settings, "REDIS_URL", "") or "").strip() or (
-                getattr(settings, "CELERY_BROKER_URL", "") or "").strip()
-            if not url:
-                redis_ok = False
-        except Exception:
-            redis_ok = False
-    redis_obj = _status_obj("redis", redis_ok, latency_ms=redis_latency)
-
-    # AI inference status (best-effort; avoid model loads)
-    ai_ok = True
-    ai_extra = {"response_ms": None}
-    try:
-        from django.conf import settings
-        model_paths = getattr(settings, "MODEL_PATHS", {}) or {}
-        present = 0
-        for k in ("risk_predictor", "triage_classifier", "diagnosis_classifier"):
-            p = model_paths.get(k)
-            if p:
-                import os
-                if os.path.exists(p):
-                    present += 1
-        if present == 0:
-            ai_ok = False
-    except Exception:
-        ai_ok = False
-    ai_obj = {"status": "ok" if ai_ok else "error", **ai_extra}
 
     # KMS/encryption (placeholder; success if settings present)
     kms_ok = True
@@ -126,8 +76,6 @@ def build_health_payload(*, deep: bool = False) -> tuple[dict, bool]:
     services = {
         "api": api_obj,
         "database": database_obj,
-        "redis": redis_obj,
-        "ai_inference": ai_obj,
         "kms": kms_obj,
         "audit_chain": audit_obj,
         "backup": backup_obj,
@@ -159,7 +107,7 @@ def health(request):
     - database: ok | error
 
     Extended keys (best-effort):
-    - api, database, redis, ai_inference, kms, audit_chain, backup
+    - api, database, kms, audit_chain, backup
     """
     deep = request.GET.get("deep", "").lower() in ("1", "true", "yes")
     payload, db_ok = build_health_payload(deep=deep)

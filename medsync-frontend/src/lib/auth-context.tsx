@@ -20,12 +20,18 @@ interface AuthState {
 export interface LoginOptions {
   /** ⚠️  DEPRECATED: "Remember me" feature removed for security.
    *  Tokens are now stored in sessionStorage only (cleared on tab close).
-   *  For persistent sessions, use HttpOnly cookies via backend (not yet implemented).
+   *  For persistent sessions, use the HttpOnly cookie flow documented in
+   *  docs/Security/DISSERTATION_LIMITATIONS.md and the backend cookie endpoints.
    *  See SECURITY NOTE below. */
   rememberMe?: boolean; // Ignored - kept for backward compatibility
 }
 
 /** View-as hospital for super_admin only. Persisted in sessionStorage for the tab. */
+// TODO: MIGRATION PLAN — this client still keeps auth tokens in sessionStorage.
+// See docs/Security/DISSERTATION_LIMITATIONS.md for the XSS trade-off and the
+// HttpOnly, SameSite cookie target; backend cookie endpoints exist, but the
+// frontend still needs to switch over for a full production migration.
+
 const VIEW_AS_STORAGE_KEY = "medsync_view_as";
 
 interface AuthContextValue extends AuthState {
@@ -271,6 +277,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
               ? JSON.stringify({ refresh_token: refreshToken })
               : undefined,
           });
+          await fetch(`${API_BASE}/auth/logout-cookie`, {
+            method: "POST",
+            credentials: "include",
+            headers: {
+              "Content-Type": "application/json",
+              Authorization: `Bearer ${accessToken}`,
+            },
+          });
         } catch {
           /* ignore */
         }
@@ -319,10 +333,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     setState(next);
     if (typeof window !== "undefined") {
       saveStoredAuth(next, options?.rememberMe);
-      // HIGH-3 FIX: Add security flags to session cookie (SameSite=Strict; Secure)
-      // Note: HttpOnly cannot be set from JavaScript; must be configured on backend via Set-Cookie header
       const maxAge = 8 * 60 * 60; // 8 hours in seconds
-      document.cookie = `medsync_session=1; path=/; max-age=${maxAge}; SameSite=Strict; Secure`;
+      // medsync_session gates server-side layout access (dashboard/layout.tsx + middleware.ts)
+      document.cookie = `medsync_session=1; path=/; max-age=${maxAge}; SameSite=Strict`;
       if (tokens.user_profile?.role) {
         document.cookie = `medsync_role=${tokens.user_profile.role}; path=/; max-age=${maxAge}; SameSite=Strict; Secure`;
       }

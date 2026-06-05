@@ -1,6 +1,8 @@
 # MedSync EMR: Architecture Documentation
 
-**Status:** Production-Ready | **Version:** 1.0.0 | **Last Updated:** 2026-04-19
+**Status:** ~70% Production-Ready | **Version:** 1.0.0 | **Last Updated:** 2026-04-19
+
+> **Note:** The deployment section of this document (Heroku/Railway diagrams, Redis Cache, Celery Workers) reflects the April 2026 architecture. The current stack uses **gunicorn WSGI** with no Celery or Redis. See [`DEPLOY_RUNBOOK.md`](DEPLOY_RUNBOOK.md) for the current deployment reference.
 
 ## Table of Contents
 

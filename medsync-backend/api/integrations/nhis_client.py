@@ -23,7 +23,7 @@ API Base URL:
     NHIS_CIRCUIT_BREAKER_THRESHOLD — failures before circuit opens (default: 5)
 
 Integration notes:
-  - All calls are synchronous; for bulk processing wrap in a Celery task
+  - All calls are synchronous; for bulk processing wrap in a cron-driven management command
   - NHIS API returns GHS currency (Ghana Cedi) amounts
   - Diagnosis codes must be ICD-10-CM formatted (e.g. "A09", "I10")
   - Claim reference numbers are NHIA-generated and must be stored

@@ -16,22 +16,6 @@ describe("alerts resolve permissions", () => {
   });
 });
 
-describe("AI insights route access", () => {
-  const route = "/patients/123e4567-e89b-12d3-a456-426614174000/ai-insights";
-
-  it("allows doctor role", () => {
-    expect(isPathnameAccessible("doctor", route)).toBe(true);
-  });
-
-  it("blocks nurse role", () => {
-    expect(isPathnameAccessible("nurse", route)).toBe(false);
-  });
-
-  it("blocks receptionist role", () => {
-    expect(isPathnameAccessible("receptionist", route)).toBe(false);
-  });
-});
-
 describe("doctor route scope", () => {
   it("blocks doctor from patient registration route", () => {
     expect(isPathnameAccessible("doctor", "/patients/register")).toBe(false);

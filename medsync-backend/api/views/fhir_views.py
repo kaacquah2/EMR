@@ -1,14 +1,17 @@
 """
 FHIR R4 API for MedSync Interoperability
-- GET /fhir/Patient/<id> — Individual patient resource
-- GET /fhir/Patient/<id>/$everything — Full Bundle with all clinical data
-- GET /fhir/Encounter/<id> — Individual encounter
-- GET /fhir/Condition/<id> — Individual diagnosis/condition
-- GET /fhir/MedicationRequest/<id> — Individual prescription
-- GET /fhir/Observation/<id> — Individual vital/lab observation
-- GET /fhir/DiagnosticReport/<id> — Lab order with results
+- GET  /fhir/Patient/<id>                  — Individual patient resource
+- GET  /fhir/Patient/<id>/$everything      — Full Bundle with all clinical data
+- GET  /fhir/Encounter/<id>                — Individual encounter
+- GET  /fhir/Condition/<id>                — Individual diagnosis/condition
+- GET  /fhir/MedicationRequest/<id>        — Individual prescription
+- POST /fhir/MedicationRequest             — Create prescription from FHIR resource
+- GET  /fhir/Observation/<id>              — Individual vital/lab observation
+- POST /fhir/Observation                   — Create vital signs from FHIR resource
+- GET  /fhir/DiagnosticReport/<id>         — Lab order with results
 
 All endpoints enforce consent-based access for cross-facility reads.
+Write endpoints require doctor or hospital_admin role within the same facility.
 """
 
 import logging
@@ -19,9 +22,11 @@ from rest_framework.response import Response
 from django.utils import timezone
 from django.db.models import Q
 
+from django.db import transaction
 from core.models import AuditLog
 from patients.models import Patient, PatientAdmission
 from records.models import Encounter, Diagnosis, Prescription, Vital, LabOrder, LabResult
+from records.models.base import MedicalRecord
 from api.fhir.serializers import (
     FHIRPatientSerializer,
     FHIREncounterSerializer,
@@ -38,6 +43,7 @@ from api.utils import (
     get_effective_hospital,
 )
 from api.audit_logging import audit_log_extended
+from api.decorators import requires_step_up
 from interop.models import Consent, Referral
 
 logger = logging.getLogger(__name__)
@@ -196,6 +202,7 @@ def _build_everything_bundle(request, patient):
 
 @api_view(["GET"])
 @permission_classes([IsAuthenticated])
+@requires_step_up(action="export_fhir")
 def fhir_patient_read(request, pk):
     """GET /fhir/Patient/<id> - Individual patient resource."""
     if request.user.role not in _FHIR_ALLOWED_ROLES:
@@ -238,6 +245,7 @@ def fhir_patient_read(request, pk):
 
 @api_view(["GET"])
 @permission_classes([IsAuthenticated])
+@requires_step_up(action="export_fhir")
 def fhir_patient_everything(request, pk):
     """
     GET /fhir/Patient/<id>/$everything
@@ -284,6 +292,7 @@ def fhir_patient_everything(request, pk):
 
 @api_view(["GET"])
 @permission_classes([IsAuthenticated])
+@requires_step_up(action="export_fhir")
 def fhir_encounter_read(request, pk):
     """GET /fhir/Encounter/<id> - Individual encounter resource."""
     if request.user.role not in _FHIR_ALLOWED_ROLES:
@@ -322,6 +331,7 @@ def fhir_encounter_read(request, pk):
 
 @api_view(["GET"])
 @permission_classes([IsAuthenticated])
+@requires_step_up(action="export_fhir")
 def fhir_condition_read(request, pk):
     """GET /fhir/Condition/<id> - Individual condition/diagnosis resource."""
     if request.user.role not in _FHIR_ALLOWED_ROLES:
@@ -360,6 +370,7 @@ def fhir_condition_read(request, pk):
 
 @api_view(["GET"])
 @permission_classes([IsAuthenticated])
+@requires_step_up(action="export_fhir")
 def fhir_medication_request_read(request, pk):
     """GET /fhir/MedicationRequest/<id> - Individual medication request/prescription."""
     if request.user.role not in _FHIR_ALLOWED_ROLES:
@@ -398,6 +409,7 @@ def fhir_medication_request_read(request, pk):
 
 @api_view(["GET"])
 @permission_classes([IsAuthenticated])
+@requires_step_up(action="export_fhir")
 def fhir_observation_read(request, pk):
     """GET /fhir/Observation/<id> - Individual observation (vital or lab result)."""
     if request.user.role not in _FHIR_ALLOWED_ROLES:
@@ -454,6 +466,7 @@ def fhir_observation_read(request, pk):
 
 @api_view(["GET"])
 @permission_classes([IsAuthenticated])
+@requires_step_up(action="export_fhir")
 def fhir_diagnostic_report_read(request, pk):
     """GET /fhir/DiagnosticReport/<id> - Individual lab order/diagnostic report."""
     if request.user.role not in _FHIR_ALLOWED_ROLES:
@@ -884,6 +897,273 @@ def fhir_observation_list(request):
     return Response(bundle, status=status.HTTP_200_OK)
 
 
+_FHIR_WRITE_ROLES = ("doctor", "hospital_admin", "super_admin")
+
+
+@api_view(["POST"])
+@permission_classes([IsAuthenticated])
+def fhir_observation_create(request):
+    """
+    POST /fhir/Observation
+
+    Create a vital-signs Observation from an inbound FHIR R4 resource.
+    The subject reference must resolve to a patient in the caller's facility.
+    Accepted coding system: LOINC (http://loinc.org).
+
+    Supported components (all optional, at least one required):
+      8310-5  body temperature (°C)
+      8867-4  heart rate (bpm)
+      9279-1  respiratory rate (/min)
+      55284-4 blood pressure systolic (mmHg)  — use component
+      8480-6  blood pressure systolic  (mmHg)
+      8462-4  blood pressure diastolic (mmHg)
+      59408-9 O2 saturation (%)
+      29463-7 body weight (kg)
+      8302-2  body height (cm)
+    """
+    if request.user.role not in _FHIR_WRITE_ROLES:
+        return Response(
+            {"resourceType": "OperationOutcome", "issue": [{"severity": "error", "code": "forbidden"}]},
+            status=status.HTTP_403_FORBIDDEN,
+        )
+
+    data = request.data
+    if data.get("resourceType") != "Observation":
+        return Response(
+            {"resourceType": "OperationOutcome", "issue": [{"severity": "error", "code": "invalid",
+             "diagnostics": "resourceType must be 'Observation'"}]},
+            status=status.HTTP_400_BAD_REQUEST,
+        )
+
+    # Resolve patient from subject reference
+    subject_ref = (data.get("subject") or {}).get("reference", "")
+    patient_id = subject_ref.replace("Patient/", "").strip()
+    if not patient_id:
+        return Response(
+            {"resourceType": "OperationOutcome", "issue": [{"severity": "error", "code": "required",
+             "diagnostics": "subject.reference (Patient/<id>) is required"}]},
+            status=status.HTTP_400_BAD_REQUEST,
+        )
+
+    patient = get_patient_queryset(request.user, get_effective_hospital(request)).filter(id=patient_id).first()
+    if not patient:
+        return Response(
+            {"resourceType": "OperationOutcome", "issue": [{"severity": "error", "code": "not-found",
+             "diagnostics": f"Patient {patient_id} not found in your facility"}]},
+            status=status.HTTP_404_NOT_FOUND,
+        )
+
+    # Map LOINC codes → Vital fields
+    LOINC_MAP = {
+        "8310-5":  "temperature_c",
+        "8867-4":  "pulse_bpm",
+        "9279-1":  "resp_rate",
+        "8480-6":  "bp_systolic",
+        "55284-4": "bp_systolic",
+        "8462-4":  "bp_diastolic",
+        "59408-9": "spo2_percent",
+        "29463-7": "weight_kg",
+        "8302-2":  "height_cm",
+    }
+
+    vital_kwargs: dict = {}
+
+    def _extract_value(comp):
+        qty = comp.get("valueQuantity") or {}
+        try:
+            return float(qty.get("value", 0)) or None
+        except (TypeError, ValueError):
+            return None
+
+    def _extract_code(comp):
+        coding = (comp.get("code") or {}).get("coding") or []
+        for c in coding:
+            if c.get("system") == "http://loinc.org":
+                return c.get("code")
+        return None
+
+    # Top-level observation
+    top_code = _extract_code(data)
+    top_value = _extract_value(data)
+    if top_code and top_code in LOINC_MAP and top_value is not None:
+        vital_kwargs[LOINC_MAP[top_code]] = top_value
+
+    # Components (e.g. blood pressure panel)
+    for comp in data.get("component") or []:
+        code = _extract_code(comp)
+        val = _extract_value(comp)
+        if code and code in LOINC_MAP and val is not None:
+            vital_kwargs[LOINC_MAP[code]] = val
+
+    if not vital_kwargs:
+        return Response(
+            {"resourceType": "OperationOutcome", "issue": [{"severity": "error", "code": "required",
+             "diagnostics": "No recognised LOINC-coded vital values found in resource"}]},
+            status=status.HTTP_400_BAD_REQUEST,
+        )
+
+    hospital = get_effective_hospital(request) or request.user.hospital
+
+    try:
+        with transaction.atomic():
+            record = MedicalRecord.objects.create(
+                patient=patient,
+                hospital=hospital,
+                record_type="vital_signs",
+                created_by=request.user,
+            )
+            vital = Vital.objects.create(record=record, recorded_by=request.user, **vital_kwargs)
+    except Exception as exc:
+        logger.error("FHIR Observation create failed: %s", exc, exc_info=True)
+        return Response(
+            {"resourceType": "OperationOutcome", "issue": [{"severity": "error", "code": "exception",
+             "diagnostics": "Internal error creating Observation"}]},
+            status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+        )
+
+    audit_log_extended(
+        user=request.user,
+        action="CREATE",
+        resource_type="Observation",
+        resource_id=str(vital.id),
+        hospital=hospital,
+        request=request,
+        extra_data={"source": "FHIR_write", "patient_id": str(patient.id)},
+    )
+
+    resource = FHIRObservationSerializer.serialize_vital(vital)
+    return Response(resource, status=status.HTTP_201_CREATED)
+
+
+@api_view(["POST"])
+@permission_classes([IsAuthenticated])
+def fhir_medication_request_create(request):
+    """
+    POST /fhir/MedicationRequest
+
+    Create a prescription from an inbound FHIR R4 MedicationRequest resource.
+    The subject reference must resolve to a patient in the caller's facility.
+    Requires doctor or hospital_admin role.
+    """
+    if request.user.role not in _FHIR_WRITE_ROLES:
+        return Response(
+            {"resourceType": "OperationOutcome", "issue": [{"severity": "error", "code": "forbidden"}]},
+            status=status.HTTP_403_FORBIDDEN,
+        )
+
+    data = request.data
+    if data.get("resourceType") != "MedicationRequest":
+        return Response(
+            {"resourceType": "OperationOutcome", "issue": [{"severity": "error", "code": "invalid",
+             "diagnostics": "resourceType must be 'MedicationRequest'"}]},
+            status=status.HTTP_400_BAD_REQUEST,
+        )
+
+    # Resolve patient
+    subject_ref = (data.get("subject") or {}).get("reference", "")
+    patient_id = subject_ref.replace("Patient/", "").strip()
+    if not patient_id:
+        return Response(
+            {"resourceType": "OperationOutcome", "issue": [{"severity": "error", "code": "required",
+             "diagnostics": "subject.reference (Patient/<id>) is required"}]},
+            status=status.HTTP_400_BAD_REQUEST,
+        )
+
+    patient = get_patient_queryset(request.user, get_effective_hospital(request)).filter(id=patient_id).first()
+    if not patient:
+        return Response(
+            {"resourceType": "OperationOutcome", "issue": [{"severity": "error", "code": "not-found",
+             "diagnostics": f"Patient {patient_id} not found in your facility"}]},
+            status=status.HTTP_404_NOT_FOUND,
+        )
+
+    # Extract medication name
+    med_coding = ((data.get("medicationCodeableConcept") or {}).get("coding") or [{}])[0]
+    drug_name = (
+        med_coding.get("display")
+        or (data.get("medicationCodeableConcept") or {}).get("text")
+        or ""
+    ).strip()
+    if not drug_name:
+        return Response(
+            {"resourceType": "OperationOutcome", "issue": [{"severity": "error", "code": "required",
+             "diagnostics": "medicationCodeableConcept.coding[0].display or .text is required"}]},
+            status=status.HTTP_400_BAD_REQUEST,
+        )
+
+    # Extract dosage instructions
+    dosage_instructions = (data.get("dosageInstruction") or [{}])[0]
+    dose_qty = (dosage_instructions.get("doseAndRate") or [{}])[0].get("doseQuantity") or {}
+    dosage = (
+        f"{dose_qty.get('value', '')} {dose_qty.get('unit', '')}".strip()
+        or dosage_instructions.get("text")
+        or "as directed"
+    )
+    frequency = (
+        (dosage_instructions.get("timing") or {}).get("code", {}).get("text")
+        or dosage_instructions.get("text")
+        or "as directed"
+    )
+    route_text = (dosage_instructions.get("route") or {}).get("text", "oral").lower()
+    route_map = {"intravenous": "iv", "intramuscular": "im", "topical": "topical", "inhalation": "inhalation"}
+    route = route_map.get(route_text, "oral")
+
+    duration_days = None
+    bounds = (dosage_instructions.get("timing") or {}).get("repeat", {}).get("boundsDuration") or {}
+    if bounds.get("unit") == "d" and bounds.get("value"):
+        try:
+            duration_days = int(bounds["value"])
+        except (TypeError, ValueError):
+            pass
+
+    priority_raw = (data.get("priority") or "routine").lower()
+    priority = priority_raw if priority_raw in ("routine", "urgent", "stat") else "routine"
+
+    hospital = get_effective_hospital(request) or request.user.hospital
+
+    try:
+        with transaction.atomic():
+            record = MedicalRecord.objects.create(
+                patient=patient,
+                hospital=hospital,
+                record_type="prescription",
+                created_by=request.user,
+            )
+            rx = Prescription.objects.create(
+                record=record,
+                patient=patient,
+                hospital=hospital,
+                drug_name=drug_name,
+                dosage=dosage,
+                frequency=frequency,
+                route=route,
+                duration_days=duration_days,
+                priority=priority,
+                dispense_status="pending",
+                status="pending",
+            )
+    except Exception as exc:
+        logger.error("FHIR MedicationRequest create failed: %s", exc, exc_info=True)
+        return Response(
+            {"resourceType": "OperationOutcome", "issue": [{"severity": "error", "code": "exception",
+             "diagnostics": "Internal error creating MedicationRequest"}]},
+            status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+        )
+
+    audit_log_extended(
+        user=request.user,
+        action="CREATE",
+        resource_type="MedicationRequest",
+        resource_id=str(rx.id),
+        hospital=hospital,
+        request=request,
+        extra_data={"source": "FHIR_write", "patient_id": str(patient.id), "drug": drug_name},
+    )
+
+    resource = FHIRMedicationRequestSerializer.serialize(rx)
+    return Response(resource, status=status.HTTP_201_CREATED)
+
+
 @api_view(["GET"])
 @permission_classes([IsAuthenticated])
 def fhir_capability_statement(request):
@@ -907,8 +1187,8 @@ def fhir_capability_statement(request):
         ("Patient", ["read"], [{"name": "everything", "definition": f"{base}/Patient/{{id}}/$everything"}]),
         ("Encounter", ["read"], []),
         ("Condition", ["read"], []),
-        ("MedicationRequest", ["read"], []),
-        ("Observation", ["read"], []),
+        ("MedicationRequest", ["read", "create"], []),
+        ("Observation", ["read", "create"], []),
         ("DiagnosticReport", ["read"], []),
         ("Bundle", ["read"], []),
         ("CapabilityStatement", ["read"], []),

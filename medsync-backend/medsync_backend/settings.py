@@ -4,9 +4,6 @@ from typing import cast
 
 from decouple import config
 import dj_database_url
-import sentry_sdk  # type: ignore[import-untyped]
-from sentry_sdk.integrations.django import DjangoIntegration  # type: ignore[import-untyped]
-from celery.schedules import crontab
 
 
 def _str_config(key: str, default: str = "") -> str:
@@ -32,8 +29,8 @@ LLM_MODE = config("LLM_MODE", default="mock")
 def _resolve_secret_key():
     for env_name in ("SECRET_KEY", "DJANGO_SECRET_KEY"):
         raw = os.environ.get(env_name)
-        if raw is not None and str(raw).strip():
-            return str(raw).strip()
+        if raw is not None and raw.strip():
+            return raw.strip()
     cfg = config("SECRET_KEY", default=None)
     return (
         str(cfg).strip()
@@ -65,16 +62,6 @@ if _str_config("ENV").lower() == "production" and DEBUG:
     from django.core.exceptions import ImproperlyConfigured
     raise ImproperlyConfigured("Production must not run with DEBUG=True. Set DEBUG=False.")
 
-# Sentry Monitoring (Task 7)
-if _SENTRY_DSN := _str_config("SENTRY_DSN") or None:
-    sentry_sdk.init(
-        dsn=_SENTRY_DSN,
-        integrations=[DjangoIntegration()],
-        traces_sample_rate=0.1,
-        send_default_pii=False,  # PHI SAFETY: Never send PII to Sentry
-        environment=config("ENV", default="development"),
-    )
-
 ALLOWED_HOSTS = [
     h.strip()
     for h in _str_config("ALLOWED_HOSTS", "localhost,127.0.0.1,testserver").split(",")
@@ -96,9 +83,6 @@ def _has_pkg(name):
     except ImportError:
         return False
     return True
-_HAS_DAPHNE = _has_pkg("daphne")
-_HAS_CHANNELS = _has_pkg("channels")
-
 INSTALLED_APPS = [
     "django.contrib.admin",
     "django.contrib.auth",
@@ -112,20 +96,14 @@ INSTALLED_APPS = [
     "corsheaders",
     "django_otp",
     "django_otp.plugins.otp_totp",
-    "django_celery_beat",
-    "django_celery_results",
+    "drf_spectacular",
     "core",
     "patients",
     "records",
     "interop",
     "shared.apps.SharedConfig",
     "api",
-    "django_migration_linter",
 ]
-if _HAS_DAPHNE:
-    INSTALLED_APPS.insert(0, "daphne")
-if _HAS_CHANNELS:
-    INSTALLED_APPS.insert(INSTALLED_APPS.index("rest_framework"), "channels")
 if DEBUG and _has_pkg("debug_toolbar"):
     INSTALLED_APPS += ["debug_toolbar"]
 
@@ -138,10 +116,10 @@ MIDDLEWARE = [
     "django.middleware.csrf.CsrfViewMiddleware",
     "django.contrib.auth.middleware.AuthenticationMiddleware",
     "django_otp.middleware.OTPMiddleware",
+    "api.middleware.ForcedPasswordChangeMiddleware",
     "api.middleware.SessionIdleTimeoutMiddleware",
     "shared.permissions.PermissionEnforcementMiddleware",
 
-    "api.middleware.ForcedPasswordChangeMiddleware",
     "api.middleware.ViewAsHospitalMiddleware",
     "api.middleware.BreakGlassExpiryMiddleware",
     "api.middleware.anomaly_detection.AnomalyDetectionMiddleware",
@@ -158,27 +136,6 @@ if DEBUG and _has_pkg("debug_toolbar"):
 
 ROOT_URLCONF = "medsync_backend.urls"
 WSGI_APPLICATION = "medsync_backend.wsgi.application"
-if _HAS_CHANNELS:
-    ASGI_APPLICATION = "medsync_backend.asgi.application"
-# Production: set REDIS_URL so real-time alerts (WebSocket) are broadcast across ASGI workers.
-# InMemoryChannelLayer is single-process only; Redis is required for multi-worker deployments.
-_redis_url = _str_config("REDIS_URL")
-if _HAS_CHANNELS:
-    if _redis_url:
-        CHANNEL_LAYERS = {
-            "default": {
-                "BACKEND": "channels_redis.core.RedisChannelLayer",
-                "CONFIG": {"hosts": [_redis_url]},
-            }
-        }
-    elif DEBUG:
-        CHANNEL_LAYERS = {"default": {"BACKEND": "channels.layers.InMemoryChannelLayer"}}
-    else:
-        from django.core.exceptions import ImproperlyConfigured
-        raise ImproperlyConfigured(
-            "REDIS_URL is required for Channels in production. "
-            "InMemoryChannelLayer does not work across multiple workers."
-        )
 
 # Database: Postgres (Neon) required for production (pgcrypto, RLS, concurrent writes).
 # SQLite used only when DEBUG=True and DATABASE_URL is unset (local dev only).
@@ -218,20 +175,14 @@ else:
         "DATABASE_URL is required in production. SQLite does not support pgcrypto, RLS, "
         "or safe concurrent writes. Use Neon (PostgreSQL) and set DATABASE_URL."
     )
-# Database cache so MFA token survives runserver restarts (login -> mfa-verify). Run once: python manage.py createcachetable
-# Vercel: no stable DB + no migrate for cache table — use in-memory cache (MFA may not survive cold starts).
+# Database-backed cache for MFA tokens and rate limiting.
+# Run once: python manage.py createcachetable
+# Vercel: no stable DB for cache table — use in-memory (MFA may not survive cold starts).
 if _VERCEL:
     CACHES = {
         "default": {
             "BACKEND": "django.core.cache.backends.locmem.LocMemCache",
             "LOCATION": "vercel-locmem",
-        }
-    }
-elif _redis_url:
-    CACHES = {
-        "default": {
-            "BACKEND": "django.core.cache.backends.redis.RedisCache",
-            "LOCATION": _redis_url,
         }
     }
 else:
@@ -252,6 +203,25 @@ PASSWORD_HASHERS = [
     "django.contrib.auth.hashers.BCryptSHA256PasswordHasher",
 ]
 
+# Password validation — applied by Django admin + any code that calls validate_password().
+# The custom api/password_policy.py enforces strength in all auth flows; these validators
+# provide a second line of defence for Django's own set_password()/create_user() paths.
+AUTH_PASSWORD_VALIDATORS = [
+    {
+        "NAME": "django.contrib.auth.password_validation.UserAttributeSimilarityValidator",
+    },
+    {
+        "NAME": "django.contrib.auth.password_validation.MinimumLengthValidator",
+        "OPTIONS": {"min_length": 12},
+    },
+    {
+        "NAME": "django.contrib.auth.password_validation.CommonPasswordValidator",
+    },
+    {
+        "NAME": "django.contrib.auth.password_validation.NumericPasswordValidator",
+    },
+]
+
 
 # Roles that should only see basic demographics (PII masking) per MedSync Specs
 NON_CLINICAL_PII_MASK_ROLES = (
@@ -268,13 +238,11 @@ NON_CLINICAL_PII_MASK_ROLES = (
 THROTTLE_ANON = config("THROTTLE_ANON", default="60/hour")
 THROTTLE_USER = config("THROTTLE_USER", default="1000/hour")
 
-# RBAC Fail-Closed Mode: Security-first API endpoint protection
-# Default: False (fail-open) for safe development
-# Production: Set to True ONLY after RBAC coverage is verified 100%
-# See README.md section "RBAC Security: Fail-Closed Mode" for runbook
+# RBAC Fail-Closed Mode: deny requests to endpoints not in the permission matrix.
+# Override to False via env var only when actively debugging RBAC gaps.
 PERMISSION_FAIL_CLOSED_UNKNOWN_ENDPOINTS = config(
     "PERMISSION_FAIL_CLOSED_UNKNOWN_ENDPOINTS",
-    default=False,  # Changed from True to False for safety
+    default=True,  # Fail-closed: deny unknown endpoints. Set to False only when debugging RBAC gaps.
     cast=bool,
 )
 
@@ -358,10 +326,7 @@ NHIS_TIMEOUT_SECONDS = config("NHIS_TIMEOUT_SECONDS", default=10, cast=int)
 NHIS_MAX_RETRIES = config("NHIS_MAX_RETRIES", default=3, cast=int)
 NHIS_CIRCUIT_BREAKER_THRESHOLD = config("NHIS_CIRCUIT_BREAKER_THRESHOLD", default=5, cast=int)
 
-# ============================================================================
-# CDS RULES CACHE (Redis)
-# ============================================================================
-# TTL in seconds for the CDS rules cache (cds:active_rules:all key).
+# TTL in seconds for the in-memory CDS rules cache (cds:active_rules:all key).
 # On ClinicalRule save, the cache is immediately invalidated via signal.
 # Default: 3600 (1 hour) — increase in production if rules rarely change.
 CDS_RULES_CACHE_TTL = config("CDS_RULES_CACHE_TTL", default=3600, cast=int)
@@ -401,13 +366,27 @@ REST_FRAMEWORK = {
     "DEFAULT_THROTTLE_RATES": {
         "anon": THROTTLE_ANON,
         "user": THROTTLE_USER,
-        "ai": "20/day",
-        "ai_endpoint": "20/hour",
-        "ai_hospital": "200/hour",
     },
     "DEFAULT_PAGINATION_CLASS": "rest_framework.pagination.CursorPagination",
     "PAGE_SIZE": 20,
     "DEFAULT_VERSIONING_CLASS": "rest_framework.versioning.URLPathVersioning",
+}
+
+SPECTACULAR_SETTINGS = {
+    "TITLE": "MedSync EMR API",
+    "DESCRIPTION": (
+        "Multi-tenant Electronic Medical Records API. "
+        "Supports JWT + TOTP MFA authentication, RBAC (10 roles), "
+        "and FHIR R4 interoperability for inter-hospital record access."
+    ),
+    "VERSION": "1.0.0",
+    "SERVE_INCLUDE_SCHEMA": False,
+    "SECURITY": [{"bearerAuth": []}],
+    "COMPONENTS": {
+        "securitySchemes": {
+            "bearerAuth": {"type": "http", "scheme": "bearer", "bearerFormat": "JWT"}
+        }
+    },
 }
 
 from datetime import timedelta
@@ -490,57 +469,6 @@ WEBAUTHN_ORIGIN = _WEBAUTHN_ORIGIN
 WEBAUTHN_ENABLED = config("WEBAUTHN_ENABLED", default=True, cast=bool)
 WEBAUTHN_CHALLENGE_TTL = 300  # 5 minutes
 
-# AI/ML model paths (MEDIUM-4: environment-aware model locations)
-# Default points at api/ai/models/*.joblib (written by api/ai/train_models.py).
-_ai_models_dir = Path(
-    _str_config("MEDSYNC_AI_MODELS_DIR", str(BASE_DIR / "api" / "ai" / "models"))
-).resolve()
-
-MODEL_PATHS = {
-    "risk_predictor": config(
-        "MODEL_PATH_RISK_PREDICTOR",
-        default=str(_ai_models_dir / "risk_predictor.joblib"),
-    ),
-    "diagnosis_classifier": config(
-        "MODEL_PATH_DIAGNOSIS",
-        default=str(_ai_models_dir / "diagnosis_classifier.joblib"),
-    ),
-    "triage_classifier": config(
-        "MODEL_PATH_TRIAGE",
-        default=str(_ai_models_dir / "triage_classifier.joblib"),
-    ),
-}
-
-# AI/ML Clinical Features Deployment Gates
-# PRODUCTION SAFETY: All clinical AI features are DISABLED by default until explicitly validated and approved
-DISABLE_AI_CLINICAL_FEATURES = config("DISABLE_AI_CLINICAL_FEATURES", default=True, cast=bool)
-AI_CLINICAL_FEATURES_ENABLED = config("AI_CLINICAL_FEATURES_ENABLED", default=False, cast=bool)
-AI_CONFIDENCE_THRESHOLD_CLINICAL = config("AI_CONFIDENCE_THRESHOLD_CLINICAL", default=0.80, cast=float)
-AI_CONFIDENCE_THRESHOLD_DEV = config("AI_CONFIDENCE_THRESHOLD_DEV", default=0.75, cast=float)
-
-# Use clinical threshold in production, dev threshold otherwise
-AI_CONFIDENCE_THRESHOLD = AI_CONFIDENCE_THRESHOLD_DEV if DEBUG else AI_CONFIDENCE_THRESHOLD_CLINICAL
-
-# Model training and validation tracking
-# Phase 3 Complete: Using trained hybrid models (synthetic Ghana data + UCI readmission data)
-# Can be overridden per hospital via admin approval workflow in AIDeploymentLog
-AI_MODEL_VERSION = config("AI_MODEL_VERSION", default="1.0.0-hybrid")
-AI_MODELS_TRAINED_ON_REAL_DATA = config("AI_MODELS_TRAINED_ON_REAL_DATA", default=True, cast=bool)
-
-# Actual validation metrics from Phase 3 training run
-# Source: Hybrid dataset (7,000 samples: 3,000 synthetic Ghana + 4,000 UCI readmission data)
-# Training date: 2026-04-20
-AI_MODELS_VALIDATION_METRICS = {
-    'auc_roc': 0.5921,
-    'sensitivity': 0.9013,
-    'specificity': 0.2948,
-    'data_source': 'hybrid',
-    'training_date': '2026-04-20',
-    'samples': 7000,
-    'note': 'Development-grade models. Below clinical deployment thresholds (AUC≥0.80). '
-            'Hospital admin can override approval for research/demo purposes with audit trail.',
-}
-
 _cors_default = (
     "https://configure-cors-in-vercel.invalid"
     if _VERCEL
@@ -610,11 +538,6 @@ EMAIL_HOST_USER = config("EMAIL_HOST_USER", default="")
 EMAIL_HOST_PASSWORD = config("EMAIL_HOST_PASSWORD", default="")
 DEFAULT_FROM_EMAIL = config("DEFAULT_FROM_EMAIL", default="medsync@localhost")
 
-# Push Notifications (Web Push / VAPID)
-VAPID_PUBLIC_KEY = config('VAPID_PUBLIC_KEY', default='')
-VAPID_PRIVATE_KEY = config('VAPID_PRIVATE_KEY', default='')
-VAPID_CLAIM_EMAIL = config('VAPID_CLAIM_EMAIL', default='mailto:admin@medsync.gh')
-
 _local_mail_hosts = frozenset(("", "localhost", "127.0.0.1"))
 _smtp_configured = bool(
     EMAIL_HOST_USER
@@ -636,7 +559,7 @@ _email_deploy_context = bool(
     or os.environ.get("VERCEL") == "1"
     or _str_config("ENV").lower() == "production"
 )
-if _email_deploy_context and "console.EmailBackend" in cast(str, EMAIL_BACKEND):
+if _email_deploy_context and "console.EmailBackend" in EMAIL_BACKEND:
     import warnings
 
     warnings.warn(
@@ -687,7 +610,27 @@ if not AUDIT_LOG_SIGNING_KEY and not DEBUG:
     from django.core.exceptions import ImproperlyConfigured
     raise ImproperlyConfigured("AUDIT_LOG_SIGNING_KEY is required in production.")
 
-# Database backup monitoring (health check + future Celery pg_dump task)
+
+def _assert_no_placeholder_secrets() -> None:
+    """Catch CHANGE_ME placeholder values that slipped into production config."""
+    from django.core.exceptions import ImproperlyConfigured
+    for _name, _value in (
+        ("SECRET_KEY", SECRET_KEY),
+        ("FIELD_ENCRYPTION_KEY", FIELD_ENCRYPTION_KEY),
+        ("AUDIT_LOG_SIGNING_KEY", AUDIT_LOG_SIGNING_KEY),
+    ):
+        if _value and "CHANGE_ME" in str(_value).upper():
+            raise ImproperlyConfigured(
+                f"{_name} still contains a placeholder value. "
+                "Generate a real secret: "
+                "python -c \"import secrets; print(secrets.token_urlsafe(32))\""
+            )
+
+
+if not DEBUG:
+    _assert_no_placeholder_secrets()
+
+# Database backup monitoring (health check)
 BACKUP_ENABLED = config("BACKUP_ENABLED", default=False, cast=bool)
 BACKUP_MAX_AGE_HOURS = config("BACKUP_MAX_AGE_HOURS", default=26, cast=int)
 
@@ -756,101 +699,16 @@ CSRF_TRUSTED_ORIGINS = [
 if DEBUG:
     INTERNAL_IPS = ["127.0.0.1", "::1"]
 
-# ============================================================================
-# CELERY CONFIGURATION (Async Task Queue)
-# ============================================================================
-_celery_broker_url = config("CELERY_BROKER_URL", default="redis://127.0.0.1:6379/0")
-_celery_result_backend = config("CELERY_RESULT_BACKEND", default="redis://127.0.0.1:6379/0")
-
-CELERY_BROKER_URL = _celery_broker_url
-CELERY_RESULT_BACKEND = _celery_result_backend
-CELERY_ACCEPT_CONTENT = ["json"]
-CELERY_TASK_SERIALIZER = "json"
-CELERY_RESULT_SERIALIZER = "json"
-CELERY_TIMEZONE = "UTC"
-CELERY_TASK_TRACK_STARTED = True
-CELERY_TASK_TIME_LIMIT = 30 * 60  # 30 minutes hard limit
-CELERY_BROKER_CONNECTION_RETRY_ON_STARTUP = True
-
-# Task-specific timeouts
-CELERY_TASK_SOFT_TIME_LIMIT = 5 * 60  # 5 minutes soft limit (gives tasks time to cleanup)
-CELERY_TASK_ACKS_LATE = True  # Acknowledge after task completion (prevents task loss)
-CELERY_WORKER_PREFETCH_MULTIPLIER = 1  # Process one task at a time
-
-# TASK ROUTING & DEAD-LETTER QUEUE (DLQ)
-# Critical clinical tasks are routed to a dedicated queue.
-# Failed tasks are routed to the DLQ for manual inspection.
-from kombu import Queue, Exchange
-
-CELERY_TASK_DEFAULT_QUEUE = "default"
-CELERY_TASK_DEFAULT_EXCHANGE = "default"
-CELERY_TASK_DEFAULT_ROUTING_KEY = "default"
-
-CELERY_TASK_QUEUES = (
-    Queue("default", Exchange("default"), routing_key="default"),
-    Queue("clinical", Exchange("clinical"), routing_key="clinical"),
-    Queue("dlq", Exchange("dlq"), routing_key="dlq"),
-)
-
-CELERY_TASK_ROUTES = {
-    "api.tasks.appointment_tasks.*": {"queue": "clinical"},
-    "api.tasks.ai_tasks.*": {"queue": "clinical"},
-}
-
-# Retry policy for failed tasks
-CELERY_TASK_MAX_RETRIES = 3
-CELERY_TASK_DEFAULT_RETRY_DELAY = 5  # Start with 5 seconds
-
-# Celery Beat Schedule (Scheduled Tasks)
-# Tasks run at specified intervals (e.g., no-show auto-marking every 15 minutes)
-CELERY_BEAT_SCHEDULE = {
-    'mark-no-shows-every-15-minutes': {
-        'task': 'api.tasks.appointment_tasks.mark_no_shows_task',
-        'schedule': crontab(minute='*/15'),  # Every 15 minutes
-        'options': {'expires': 600}  # Expires in 10 minutes if not run
-    },
-    'rebuild-faiss-index-nightly': {
-        'task': 'ai.rebuild_faiss_index',
-        'schedule': crontab(hour=2, minute=0),  # Daily at 2 AM
-        'options': {'expires': 3600}  # Expires in 1 hour if not run
-    }
-}
-
-# Celery Result Backend Configuration (for tracking task status)
-CELERY_RESULT_EXPIRES = 3600  # Results expire after 1 hour
-
-# ============================================================================
-# DAPHNE ASGI SERVER CONFIGURATION (Development & Production)
-# ============================================================================
-# Daphne is the ASGI server for WebSocket support (Django Channels).
-# In development, Daphne uses Django's autoreloader for hot-reload.
-# This configuration ensures graceful shutdown during file reload.
-# 
-# Key settings:
-# - application_close_timeout: Time to wait for app instance to shut down gracefully (seconds).
-#   Default is 2; we increase to 5 to allow pending requests to complete before killing tasks.
-# - ping_interval: WebSocket ping interval (seconds). Higher values reduce load.
-# - ping_timeout: Time to wait for pong response before closing connection (seconds).
-# 
-# See: https://daphne.readthedocs.io/en/latest/
-# Development: longer timeout to allow requests to finish during reload
-# Production: shorter timeout (hard kill after 2 seconds if not graceful)
-DAPHNE_APPLICATION_CLOSE_TIMEOUT = 5 if DEBUG else 2
-
-# ============================================================================
-# RBAC-18: Fail-closed mode for unknown API endpoints
-# ============================================================================
-# When True: any /api/* path NOT listed in PERMISSION_MATRIX returns 403.
-# This prevents newly added endpoints from being publicly accessible before
-# they are registered in the permission matrix.
-#
-# Development (DEBUG=True): False → allows rapid iteration without blocking
-# Production (DEBUG=False): True → hard-fail for security
-# ============================================================================
-PERMISSION_FAIL_CLOSED_UNKNOWN_ENDPOINTS = not DEBUG
-
 # Django admin URL path (non-guessable in production). No leading slash.
+# Set ADMIN_URL=ms-admin-<random>/ in production secrets — never use the default.
 ADMIN_URL = _str_config("ADMIN_URL", "admin/").strip("/") + "/"
+if not DEBUG and ADMIN_URL == "admin/":
+    from django.core.exceptions import ImproperlyConfigured
+    raise ImproperlyConfigured(
+        "Set ADMIN_URL to a non-guessable path in production "
+        "(e.g. ADMIN_URL=ms-admin-x7k2/). "
+        "The default 'admin/' URL must not be used in production."
+    )
 
 # ============================================================================
 # STRUCTURED LOGGING (JSON to stdout for log aggregation)

@@ -11,8 +11,8 @@ RUN apt-get update && apt-get install -y \
     libpq-dev \
     && rm -rf /var/lib/apt/lists/*
 
-COPY requirements-local.txt .
-RUN pip wheel --no-cache-dir --no-deps --wheel-dir /app/wheels -r requirements-local.txt
+COPY requirements.txt .
+RUN pip wheel --no-cache-dir --no-deps --wheel-dir /app/wheels -r requirements.txt
 
 # Stage 2: Final image
 FROM python:3.12-slim
@@ -30,7 +30,7 @@ RUN apt-get update && apt-get install -y \
     && useradd --uid 1000 --gid medsync --create-home --shell /usr/sbin/nologin medsync
 
 COPY --from=builder /app/wheels /wheels
-COPY --from=builder /app/requirements-local.txt .
+COPY --from=builder /app/requirements.txt .
 RUN pip install --no-cache /wheels/*
 
 COPY . .
@@ -51,5 +51,5 @@ EXPOSE 8000
 HEALTHCHECK --interval=30s --timeout=10s --start-period=30s --retries=3 \
   CMD curl -f http://localhost:8000/api/v1/health || exit 1
 
-# ASGI via Daphne (Channels/WebSockets). Override in compose for dev hot-reload.
-CMD ["daphne", "-b", "0.0.0.0", "-p", "8000", "medsync_backend.asgi:application"]
+# WSGI via gunicorn. Override in compose to suit environment.
+CMD ["gunicorn", "medsync_backend.wsgi", "--bind", "0.0.0.0:8000", "--workers", "4", "--timeout", "120"]

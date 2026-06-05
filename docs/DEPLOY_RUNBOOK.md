@@ -1,24 +1,26 @@
 # MedSync — Deployment Runbook
 
-Quick reference for hospital IT and DevOps. Full operations: [OPERATIONS_RUNBOOK.md](../medsync-backend/docs/OPERATIONS_RUNBOOK.md) (backend).
+Quick reference for hospital IT and DevOps. Full operations detail: [`medsync-backend/docs/OPERATIONS_RUNBOOK.md`](../medsync-backend/docs/OPERATIONS_RUNBOOK.md).
 
 ## Prerequisites
 
-- PostgreSQL 16+ (Neon or self-hosted)
-- Redis 7+ with password/TLS in production
-- GitHub Secrets: `DJANGO_SECRET_KEY`, `FIELD_ENCRYPTION_KEY`, `AUDIT_LOG_SIGNING_KEY`, `DATABASE_URL`, `REDIS_URL`, `RAILWAY_TOKEN`, optional `VERCEL_TOKEN`
+- PostgreSQL 16+ (Neon or self-hosted; use region `aws-af-south-1` / Africa/Cape Town for Ghana)
+- GitHub Secrets: `DJANGO_SECRET_KEY`, `FIELD_ENCRYPTION_KEY`, `AUDIT_LOG_SIGNING_KEY`, `DATABASE_URL`
+- Optional: `RAILWAY_TOKEN`, `VERCEL_TOKEN`, `SENTRY_DSN`
 
 ## Docker (on-prem or VM)
 
 ```bash
-cp medsync-backend/.env.example medsync-backend/.env
-# Edit .env — never use example keys in production
+cp .env.docker .env.docker.local
+# Edit — fill in ALL CHANGE_ME values. Startup will fail if any placeholder remains.
+# Generate a secret:   python -c "import secrets; print(secrets.token_urlsafe(32))"
+# Generate ADMIN_URL:  python -c "import secrets; print('ms-admin-' + secrets.token_hex(4) + '/')"
 
 docker compose up -d --build
 docker compose exec backend python manage.py setup_production
 ```
 
-Backend image runs **Daphne** as user `medsync` (UID 1000). Static files are collected at image build time.
+Backend runs **gunicorn WSGI** (4 workers) as user `medsync` (UID 1000). Static files are collected at image build time. No Celery or Redis services are required.
 
 ## Railway
 
@@ -29,19 +31,23 @@ Backend image runs **Daphne** as user `medsync` (UID 1000). Static files are col
 
 ## Nginx + TLS
 
-Copy [`deploy/nginx/medsync.conf`](../deploy/nginx/medsync.conf) and [`deploy/nginx/proxy_params`](../deploy/nginx/proxy_params) to `/etc/nginx/`. Update `server_name` and certificate paths.
+Copy [`deploy/nginx/medsync.conf`](../deploy/nginx/medsync.conf) and [`deploy/nginx/proxy_params`](../deploy/nginx/proxy_params) to `/etc/nginx/`. Update `server_name` and certificate paths. TLS must terminate at Nginx — Django's `SECURE_SSL_REDIRECT` is enabled when `DEBUG=False`.
 
-## Celery supervision
+## No-show cron
 
-For VMs without Railway worker services, use [`deploy/celery/supervisord.conf`](../deploy/celery/supervisord.conf).
+The no-show auto-mark job runs as a plain management command scheduled via host cron or the `deploy/cron/` config:
+
+```
+*/15 * * * *  /app/.venv/bin/python /app/manage.py mark_no_shows
+```
 
 ## Pre-go-live
 
-Complete [GO_NO_GO_CHECKLIST.md](GO_NO_GO_CHECKLIST.md) Tier 1 (Blocking) before any real PHI.
+Complete [GO_NO_GO_CHECKLIST.md](GO_NO_GO_CHECKLIST.md) Tier 1 items before processing any real patient PHI. Key open items: key rotation, TLS at proxy, `ADMIN_URL` env var, DB backup automation.
 
 ## Health checks
 
-- Liveness: `GET /api/v1/health` (fast)
-- Deep: `GET /api/v1/health?deep=true` (Redis, audit chain, backup status)
+- Liveness: `GET /api/v1/health`
+- Deep: `GET /api/v1/health?deep=true` (audit chain integrity, backup status)
 
-Backup reports `not_configured` until `BACKUP_ENABLED=true` and a successful run is recorded via `api.services.backup_status.record_backup_success()`.
+Backup status reports `not_configured` until `BACKUP_ENABLED=true` and a successful run is recorded.

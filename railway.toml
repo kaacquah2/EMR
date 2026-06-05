@@ -7,7 +7,7 @@ dockerfilePath = "medsync-backend/Dockerfile"
 watchPatterns = ["medsync-backend/**"]
 
 [deploy]
-startCommand = "daphne -b 0.0.0.0 -p $PORT medsync_backend.asgi:application"
+startCommand = "gunicorn medsync_backend.wsgi --bind 0.0.0.0:$PORT --workers 4 --timeout 120"
 healthcheckPath = "/api/v1/health"
 healthcheckTimeout = 30
 restartPolicyType = "ON_FAILURE"

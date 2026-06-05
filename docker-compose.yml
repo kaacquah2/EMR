@@ -4,19 +4,11 @@ services:
     volumes:
       - postgres_data:/var/lib/postgresql/data
     environment:
-      - POSTGRES_DB=medsync
-      - POSTGRES_USER=postgres
-      - POSTGRES_PASSWORD=postgres
+      - POSTGRES_DB=${POSTGRES_DB:-medsync}
+      - POSTGRES_USER=${POSTGRES_USER:-postgres}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:?POSTGRES_PASSWORD must be set in .env.docker}
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U postgres"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
-
-  redis:
-    image: redis:7-alpine
-    healthcheck:
-      test: ["CMD", "redis-cli", "ping"]
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-postgres}"]
       interval: 10s
       timeout: 5s
       retries: 5
@@ -27,57 +19,18 @@ services:
     volumes:
       - ./medsync-backend:/app
     env_file:
-      - ./medsync-backend/.env
+      - .env.docker
     environment:
-      - DEBUG=True
-      - DATABASE_URL=postgresql://postgres:postgres@db:5432/medsync
-      - REDIS_URL=redis://redis:6379/0
-      - CELERY_BROKER_URL=redis://redis:6379/0
-      - CELERY_RESULT_BACKEND=redis://redis:6379/0
+      - DATABASE_URL=postgresql://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB:-medsync}
     depends_on:
       db:
-        condition: service_healthy
-      redis:
         condition: service_healthy
     ports:
       - "8000:8000"
-    command: daphne -b 0.0.0.0 -p 8000 medsync_backend.asgi:application
-
-  celery:
-    build:
-      context: ./medsync-backend
-    env_file:
-      - ./medsync-backend/.env
-    environment:
-      - DEBUG=True
-      - DATABASE_URL=postgresql://postgres:postgres@db:5432/medsync
-      - REDIS_URL=redis://redis:6379/0
-      - CELERY_BROKER_URL=redis://redis:6379/0
-      - CELERY_RESULT_BACKEND=redis://redis:6379/0
-    depends_on:
-      db:
-        condition: service_healthy
-      redis:
-        condition: service_healthy
-    command: celery -A medsync_backend worker --loglevel=info
-
-
-  flower:
-    build:
-      context: ./medsync-backend
-    env_file:
-      - ./medsync-backend/.env
-    environment:
-      - DEBUG=True
-      - CELERY_BROKER_URL=redis://redis:6379/0
-    ports:
-      - "5555:5555"
-    depends_on:
-      redis:
-        condition: service_healthy
-    command: >
-      celery -A medsync_backend flower --port=5555
-      --basic-auth=admin:${FLOWER_PASSWORD:-changeme}
+    # WSGI server — no Redis/Celery required.
+    # The no-show cron (*/15 * * * *  python manage.py mark_no_shows) should be
+    # configured on the host or in a lightweight cron container.
+    command: gunicorn medsync_backend.wsgi --bind 0.0.0.0:8000 --workers 4 --timeout 120
 
   frontend:
     build:
@@ -87,7 +40,7 @@ services:
       - /app/node_modules
       - /app/.next
     environment:
-      - NEXT_PUBLIC_API_URL=http://localhost:8000
+      - NEXT_PUBLIC_API_URL=${NEXT_PUBLIC_API_URL:-http://localhost:8000}
     depends_on:
       - backend
     ports:

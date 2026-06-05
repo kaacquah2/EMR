@@ -730,14 +730,7 @@ class Migration(migrations.Migration):
                 index=models.Index(fields=['hospital', '-encounter_date'], name='enc_hospital_created_idx'),
             )],
         ),
-        migrations.RunSQL(
-            sql='CREATE INDEX IF NOT EXISTS "enc_hospital_status_idx" ON "encounter" ("hospital_id", "status")',
-            reverse_sql='DROP INDEX IF EXISTS "enc_hospital_status_idx"',
-            state_operations=[migrations.AddIndex(
-                model_name='encounter',
-                index=models.Index(fields=['hospital', 'status'], name='enc_hospital_status_idx'),
-            )],
-        ),
+
         migrations.RunSQL(
             sql='CREATE INDEX IF NOT EXISTS "enc_patient_date_idx" ON "encounter" ("patient_id", "encounter_date" DESC)',
             reverse_sql='DROP INDEX IF EXISTS "enc_patient_date_idx"',

@@ -14,6 +14,7 @@ from api.utils import (
     get_request_hospital,
     audit_log
 )
+from api.decorators import requires_step_up
 from api.vitals_utils import calculate_qsofa, calculate_news2
 from records.models import (
     MedicalRecord,
@@ -178,6 +179,7 @@ def create_diagnosis(request):
 
 @api_view(["POST"])
 @permission_classes([IsAuthenticated])
+@requires_step_up(action="prescription_modify")
 def create_prescription(request):
     if request.user.role != "doctor":
         return Response(
@@ -644,8 +646,6 @@ def create_vitals_batch(request):
         )
 
     from api.utils import audit_log
-    from api.signals_alerts import broadcast_alert_created
-
     results = {"created": 0, "failed": 0, "items": []}
 
     for vital_data in vitals_list:
@@ -777,7 +777,6 @@ def create_vitals_batch(request):
                     resource_type="vitals",
                     resource_id=record.id,
                 )
-                broadcast_alert_created(alert)
             if spO2 and float(spO2) < 90:
                 alert = ClinicalAlert.objects.create(
                     patient=patient,
@@ -788,7 +787,6 @@ def create_vitals_batch(request):
                     resource_type="vitals",
                     resource_id=record.id,
                 )
-                broadcast_alert_created(alert)
             if pulse and (float(pulse) > 130 or float(pulse) < 50):
                 alert = ClinicalAlert.objects.create(
                     patient=patient,
@@ -799,7 +797,6 @@ def create_vitals_batch(request):
                     resource_type="vitals",
                     resource_id=record.id,
                 )
-                broadcast_alert_created(alert)
 
             results["created"] += 1
             results["items"].append({
@@ -1121,6 +1118,7 @@ def amend_record(request, record_id):
 
 @api_view(["PATCH"])
 @permission_classes([IsAuthenticated])
+@requires_step_up(action="prescription_modify")
 def prescription_dispense(request, record_id):
     """Update prescription dispense status (pharmacy: prescribed -> dispensed | cancelled)."""
     if request.user.role != "nurse":
@@ -1166,6 +1164,7 @@ def prescription_dispense(request, record_id):
 
 @api_view(["POST"])
 @permission_classes([IsAuthenticated])
+@requires_step_up(action="prescription_modify")
 def prescription_dispense_by_nurse(request, record_id):
     """Spec endpoint for nurse dispense action with ward and hospital checks."""
     if request.user.role != "nurse":
@@ -1392,6 +1391,7 @@ def doctor_favorite_prescriptions(request):
 
 @api_view(["POST"])
 @permission_classes([IsAuthenticated])
+@requires_step_up(action="prescription_modify")
 def doctor_prescription_refill(request, record_id):
     """Refill a previous prescription (copy and create new record).
     
@@ -2295,14 +2295,11 @@ def compile_and_submit_dhims2(request):
     if not month:
         return Response({"message": "month is required (format YYYY-MM)"}, status=status.HTTP_400_BAD_REQUEST)
         
-    from api.tasks.dhims2_tasks import compile_and_submit_dhims2_report
-    from api.tasks.fallback import can_use_celery
-    if can_use_celery():
-        task = compile_and_submit_dhims2_report.delay(str(hospital.id), month)
-        return Response({"message": "DHIMS-2 compilation and submission task queued", "task_id": task.id}, status=status.HTTP_202_ACCEPTED)
-    else:
-        res = compile_and_submit_dhims2_report(str(hospital.id), month)
-        return Response(res, status=status.HTTP_200_OK)
+    # DHIMS-2 submission not implemented in this version
+    return Response(
+        {"message": "DHIMS-2 automated submission is not available in this release."},
+        status=status.HTTP_501_NOT_IMPLEMENTED,
+    )
 
 
 @api_view(['GET'])

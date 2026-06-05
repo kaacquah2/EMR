@@ -86,21 +86,19 @@ docs/
 ├── QUICK_START.md .............. Role-based quick start
 ├── GETTING_STARTED.md ......... Comprehensive setup guide
 │
-├── Core Docs (8 files)
+├── Core Docs
 │   ├── ARCHITECTURE.md
 │   ├── DEPLOYMENT.md
+│   ├── DEPLOY_RUNBOOK.md
+│   ├── GO_NO_GO_CHECKLIST.md
 │   ├── API_REFERENCE.md
 │   ├── TROUBLESHOOTING.md
 │   ├── ADMIN_RUNBOOK.md
 │   ├── BACKUP_STRATEGY.md
-│   ├── OPENAPI_SETUP.md
-│   └── REDIS.md
+│   └── OPENAPI_SETUP.md
 │
-├── Deployment/ (4 files)
-│   ├── DEPLOYMENT_RUNBOOK_UPDATE_APRIL2026.md
-│   ├── CELERY_WORKER_DEPLOYMENT_DOCUMENTATION.md
-│   ├── NEON_REGION_SELECTION_FIX.md
-│   └── DAPHNE_FIX.md
+├── Deployment/ (1 file)
+│   └── NEON_REGION_SELECTION_FIX.md
 │
 ├── Security/ (8 files)
 │   ├── SECURITY_AUDIT_SUMMARY.md
@@ -118,12 +116,7 @@ docs/
 │   ├── QUICK_REFERENCE_STATE_MACHINES.md
 │   └── ... (4 more)
 │
-├── Architecture/ (1 file)
-│   └── CODEBASE_AUDIT_COMPREHENSIVE.md
-│
-└── Quality/ (2 files)
-    ├── DOCUMENTATION_QUALITY_AUDIT_FINAL.md
-    └── DOCUMENTATION_ACCURACY_CORRECTIONS_COMPLETE.md
+└── Architecture/ (empty — see ARCHITECTURE.md in root)
 ```
 
 **Total:** 35 documentation files organized into 6 categories
@@ -134,8 +127,8 @@ docs/
 
 ### 🔴 Critical
 - **MFA is MANDATORY** for all clinical staff — [Security/MFA_MANDATORY_REQUIREMENT_CORRECTION.md](Security/MFA_MANDATORY_REQUIREMENT_CORRECTION.md)
-- **Celery is CRITICAL** — Not optional; needed for notifications, AI, and alerts — [Deployment/CELERY_WORKER_DEPLOYMENT_DOCUMENTATION.md](Deployment/CELERY_WORKER_DEPLOYMENT_DOCUMENTATION.md)
 - **AI models in development** — Not ready for clinical use yet — [AI_ML/AI_ML_CLINICAL_DEPLOYMENT_ROADMAP.md](AI_ML/AI_ML_CLINICAL_DEPLOYMENT_ROADMAP.md)
+- **Complete Tier 1 checklist** before any real patient data — [GO_NO_GO_CHECKLIST.md](GO_NO_GO_CHECKLIST.md)
 
 ### 🟡 Important
 - **Database region:** Use Africa/Cape Town for Ghana deployment — [Deployment/NEON_REGION_SELECTION_FIX.md](Deployment/NEON_REGION_SELECTION_FIX.md)

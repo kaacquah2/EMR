@@ -5,7 +5,6 @@ import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
 import { useApi } from "@/hooks/use-api";
 import { usePatient } from "@/hooks/use-patients";
-import { useAIAnalysis } from "@/hooks/use-ai-analysis";
 import { usePatientRecords } from "@/hooks/use-patient-records";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -54,7 +53,6 @@ export default function EncounterDetailPage() {
   const params = useParams();
   const router = useRouter();
   const api = useApi();
-  const { analyzePatient, loading: aiLoading } = useAIAnalysis();
   const patientId = params.id as string;
   const encounterId = params.encounterId as string;
   const { patient } = usePatient(patientId);
@@ -64,12 +62,6 @@ export default function EncounterDetailPage() {
   const [saving, setSaving] = useState(false);
   const [savedAt, setSavedAt] = useState<string>("");
   const [dirty, setDirty] = useState(false);
-  const [aiOpen, setAiOpen] = useState(false);
-  const [aiResult, setAiResult] = useState<{
-    risk_scores?: Record<string, { risk_score?: number }>;
-    diagnosis_suggestions?: { suggestions?: Array<{ diagnosis: string; icd10_code?: string; probability?: number }> };
-    triage_assessment?: { triage_level?: string };
-  } | null>(null);
 
   const [icdQuery, setIcdQuery] = useState("");
   const [icdSuggestions, setIcdSuggestions] = useState<Array<{ code: string; description: string }>>([]);
@@ -173,16 +165,6 @@ export default function EncounterDetailPage() {
     setDirty(true);
   };
 
-  const runAI = async () => {
-    const res = await analyzePatient(patientId, { include_similarity: true, include_referral: true });
-    setAiResult({
-      risk_scores: res.risk_analysis?.predictions,
-      diagnosis_suggestions: res.diagnosis_suggestions,
-      triage_assessment: res.triage_assessment,
-    });
-    setAiOpen(true);
-  };
-
   const addDiagnosis = async () => {
     await api.post("/records/diagnosis", {
       patient_id: patientId,
@@ -239,9 +221,6 @@ export default function EncounterDetailPage() {
             </p>
           </div>
           <div className="flex gap-2">
-            <Button variant="secondary" onClick={runAI} disabled={aiLoading}>
-              {aiLoading ? "Running AI..." : "Run AI Analysis"}
-            </Button>
             <Button onClick={() => setCloseOpen(true)} disabled={encounter.status === "completed"}>
               Mark as Complete
             </Button>
@@ -359,34 +338,6 @@ export default function EncounterDetailPage() {
         }}
       />
 
-      {aiOpen && (
-        <div className="fixed inset-y-0 right-0 z-50 w-full max-w-md overflow-y-auto border-l border-slate-200 dark:border-slate-800 bg-white p-4 shadow-xl">
-          <div className="mb-3 flex items-center justify-between">
-            <h3 className="font-semibold">AI Analysis</h3>
-            <Button variant="secondary" size="sm" onClick={() => setAiOpen(false)}>Close</Button>
-          </div>
-          <p className="mb-2 text-sm">Triage: <strong>{aiResult?.triage_assessment?.triage_level || "N/A"}</strong></p>
-          <div className="space-y-2">
-            {(aiResult?.diagnosis_suggestions?.suggestions || []).slice(0, 10).map((s, idx) => (
-              <div key={`${s.icd10_code || s.diagnosis}-${idx}`} className="rounded border border-slate-200 dark:border-slate-800 p-2 text-sm">
-                <p className="font-medium">{idx + 1}. {s.diagnosis}</p>
-                <p className="text-xs text-slate-500 dark:text-slate-500">{s.icd10_code || "No code"} · {Math.round((s.probability || 0) * 100)}%</p>
-                <Button
-                  size="sm"
-                  variant="secondary"
-                  className="mt-2"
-                  onClick={() => {
-                    setDiagnosisCode(s.icd10_code || "");
-                    setDiagnosisDesc(s.diagnosis || "");
-                  }}
-                >
-                  Apply to form
-                </Button>
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
     </div>
   );
 }

@@ -267,7 +267,10 @@ def get_lab_result_queryset(user, effective_hospital=None):
 # ---- Interop: global patient and cross-facility access ----
 
 # Break-glass access is considered valid for this many minutes after logging.
-BREAK_GLASS_VALID_MINUTES = 15
+from django.conf import settings
+
+# Single source of truth: read the configured window from settings.BREAK_GLASS_WINDOW_MINUTES
+BREAK_GLASS_VALID_MINUTES = getattr(settings, "BREAK_GLASS_WINDOW_MINUTES", 15)
 
 
 def get_global_patient_queryset(user, effective_hospital=None):
@@ -308,6 +311,18 @@ def can_access_cross_facility(
 
     if not facility:
         return False, None
+
+    # DATA RESIDENCY ENFORCEMENT: Check if patient is locked to a specific country
+    if gp.data_residency_locked:
+        requesting_country = getattr(facility, 'country', None)
+        if requesting_country != gp.data_residency_country:
+            AuditLog.log_action(
+                user=user,
+                action='DATA_RESIDENCY_DENIED',
+                resource_type='GlobalPatient',
+                resource_id=str(gp.id),
+            )
+            return False, None
 
     now = timezone.now()
 
@@ -393,7 +408,17 @@ def get_hospital_for_super_admin_override(request, data):
     return hospital
 
 
-def audit_log(user, action, resource_type=None, resource_id=None, hospital=None, request=None, extra_data=None):
+def audit_log(
+    user,
+    action,
+    resource_type=None,
+    resource_id=None,
+    hospital=None,
+    request=None,
+    extra_data=None,
+    risk_tier=None,
+    mfa_method=None,
+):
     """
     Create a chained audit log entry with tamper-evident chain hashing.
 
@@ -408,6 +433,8 @@ def audit_log(user, action, resource_type=None, resource_id=None, hospital=None,
         hospital: Hospital context (optional)
         request: HttpRequest for IP and user agent (optional)
         extra_data: Additional JSON-serializable data to log (optional)
+        risk_tier: Authentication assurance level if known
+        mfa_method: MFA or step-up method if known
 
     Returns:
         None (creates AuditLog object as side effect)
@@ -417,6 +444,20 @@ def audit_log(user, action, resource_type=None, resource_id=None, hospital=None,
     resource_id = sanitize_audit_resource_id(resource_id)
     ip = request.META.get("REMOTE_ADDR", "127.0.0.1") if request else "127.0.0.1"
     ua = (request.META.get("HTTP_USER_AGENT") or "") if request else ""
+
+    if request and risk_tier is None:
+        auth_payload = getattr(request, "auth", None)
+        if isinstance(auth_payload, dict):
+            risk_tier = auth_payload.get("risk_tier", risk_tier)
+            mfa_method = auth_payload.get("mfa_method", mfa_method)
+
+    step_up_payload = getattr(request, "step_up_jwt_payload", None) if request else None
+    if isinstance(step_up_payload, dict):
+        risk_tier = 3
+        mfa_method = "step_up"
+        extra_data = dict(extra_data or {})
+        extra_data.setdefault("step_up_action", step_up_payload.get("step_up_action"))
+
     AuditLog.objects.create(
         user=user,
         action=action,
@@ -426,6 +467,8 @@ def audit_log(user, action, resource_type=None, resource_id=None, hospital=None,
         ip_address=ip,
         user_agent=ua,
         extra_data=extra_data,
+        risk_tier=risk_tier,
+        mfa_method=mfa_method,
     )
 
 

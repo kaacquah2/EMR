@@ -20,7 +20,6 @@ import {
 } from "@/components/ui/dialog";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { useDepartments, useLabUnits } from "@/hooks/use-admin";
-import { AdminPasskeyManagement } from "@/components/features/admin/AdminPasskeyManagement";
 type StaffRole = "doctor" | "nurse" | "receptionist" | "lab_technician";
 const ROLE_LABEL: Record<StaffRole, string> = {
   doctor: "Doctor",
@@ -448,14 +447,6 @@ export default function AdminUsersPage() {
                             >
                               {actionLoading === u.user_id ? "..." : "Reset MFA"}
                             </Button>
-                            <AdminPasskeyManagement
-                              userId={u.user_id}
-                              userName={u.full_name}
-                              userEmail={u.email}
-                              onResetComplete={() => {
-                                // Optional: show success message or refresh
-                              }}
-                            />
                           </>
                         )}
                       </div>

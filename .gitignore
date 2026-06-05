@@ -4,15 +4,13 @@
 .env
 .env.*
 !.env.example
+!.env.docker
 *.sqlite3
 .venv/
 venv/
 media/
-# ML Models & Data
+# ML model artefacts (AI module has been removed)
 *.joblib
-medsync-backend/api/ai/models/*
-!medsync-backend/api/ai/models/.gitkeep
-medsync-backend/data/datasets/
 __pycache__/
 *.pyc
 node_modules/
@@ -28,6 +26,12 @@ playwright-report/
 blob-report/
 playwright/.cache/
 
-# Local debug artifacts (do not commit)
+# Local debug / scratch artifacts (do not commit)
 medsync-frontend/ts_errors*.txt
 medsync-backend/test_run_output.txt
+medsync-backend/*_results.txt
+medsync-backend/test_*.txt
+medsync-backend/SETUP_COMPLETE.txt
+medsync-backend/db.sqlite3
+MedSync_EMR_Master_Prompt.md
+spec_extracted.txt

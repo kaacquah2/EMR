@@ -24,7 +24,7 @@ export default async function DashboardLayout({
   // Note: We can't easily check the full pathname here because it's a layout,
   // but we can ensure the role is valid for the dashboard generally.
   // The proxy and client-side check handle the specific path access.
-  if (!["doctor", "nurse", "lab_tech", "receptionist", "hospital_admin", "super_admin", "pharmacy"].includes(userRole)) {
+  if (!["doctor", "nurse", "lab_technician", "receptionist", "hospital_admin", "super_admin", "pharmacy_technician", "radiology_technician", "billing_staff", "ward_clerk"].includes(userRole)) {
     redirect("/unauthorized");
   }
 

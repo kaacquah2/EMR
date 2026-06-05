@@ -29,6 +29,11 @@ Django REST API for MedSync EMR (Ghana Inter-Hospital Electronic Medical Records
 - ❌ HIPAA compliance audit not completed
 - ❌ Penetration testing not completed
 
+**Phase 3 Security Features (this release):**
+- HttpOnly cookie-based sessions with server-side encrypted JWT storage (ClientCookie model) to eliminate sessionStorage XSS risk. See COOKIE_MIGRATION.md for frontend steps.
+- Step-up verification for high-risk actions (exports, prescription changes, break-glass). Enforcement is feature-flagged via `ENABLE_STEP_UP_PROTECTION` (default: False). Toggle TRUE in staging/production when rollout and user flows are validated.
+- ENCRYPTION_KEY must be set in environment for production; rotate regularly and document rotation steps.
+
 **Estimated effort to production:** 6-8 weeks (100+ hours). See [Audit & Critical Fixes](#audit--critical-fixes) and `CRITICAL_FIXES_GUIDE.md`.
 
 ---
@@ -529,6 +534,37 @@ All of the above are enforced in `api.utils.can_access_cross_facility()` and in 
 | Break-glass                | `BreakGlassLog` (per global patient, facility, user, reason, timestamp) and `AuditLog`: action `EMERGENCY_ACCESS`, resource_type `global_patient` | `GET /break-glass/list?global_patient_id=...` and audit logs |
 
 Audit log entries are chained (hash of previous + current) to support integrity checks. Use hospital-level audit for normal review; use superadmin audit and break-glass list for cross-facility and emergency-access review.
+
+## How the system works
+
+The core viva flow is:
+
+1. **Register the patient locally** at Hospital A with `POST /patients` → `patient_views.patient_create`.
+   - Touches `Patient` and optional `Allergy` rows.
+   - Writes `AuditLog` action `CREATE_PATIENT`.
+2. **Link the local record to the global registry** with `POST /facility-patients/link/` or the `manage.py backfill_global_patients` process.
+   - Touches `GlobalPatient` and `FacilityPatient`.
+   - This is the GPID step.
+3. **Create the referral** with `POST /referrals` → `referral_views.referral_create`.
+   - Touches `Referral`.
+   - If an active `Consent` is supplied, the referral stores it.
+   - Writes `AuditLog` action `CREATE` with `resource_type="referral"`.
+4. **Grant consent** with `POST /consents` → `consent_views.consent_grant`.
+   - Touches `Consent`.
+   - Writes `AuditLog` action `CREATE` with `resource_type="consent"`.
+5. **Read the shared record** at Hospital B with `GET /cross-facility-records/<global_patient_id>/`.
+   - `global_patient_views.cross_facility_records` calls `can_access_cross_facility()`.
+   - It checks active consent, accepted referral, or recent break-glass.
+   - It writes `SharedRecordAccess` and `AuditLog` action `VIEW_CROSS_FACILITY_RECORD`.
+   - Response includes `demographics`, `scope`, `facilities`, `records`, `read_only`, and `expires_at`.
+6. **Revoke consent** with `PATCH /consents/<uuid>`.
+   - Touches `Consent.withdrawn_at`, `Consent.withdrawn_by`, and `Consent.withdrawal_reason`.
+   - Writes `AuditLog` action `CONSENT_WITHDRAWN`.
+7. **Review the tamper-evident chain** with `GET /superadmin/audit-chain-integrity`.
+   - `compute_audit_chain_status()` walks `AuditLog.chain_hash` and signature values entry by entry.
+   - Response is `{"data": {"status", "last_checked_at", "message"}}`.
+
+If you can walk through those seven steps, you can explain the full inter-hospital referral story from API call to database row.
 
 ---
 

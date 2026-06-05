@@ -27,37 +27,7 @@ from records.models import (
     Equipment,
     FamilyLink,
 )
-from api.models import DrugStock, Dispensation, StockMovement, StockAlert, ModelVersion
-
-
-class ModelVersionSerializer(serializers.ModelSerializer):
-    trained_by_name = serializers.CharField(source="trained_by.full_name", read_only=True)
-    approved_by_name = serializers.CharField(source="approved_by.full_name", read_only=True)
-
-    class Meta:
-        model = ModelVersion
-        fields = [
-            "id",
-            "model_type",
-            "version_tag",
-            "trained_at",
-            "trained_by",
-            "trained_by_name",
-            "training_data_source",
-            "training_sample_count",
-            "evaluation_metrics",
-            "comparison_vs_previous",
-            "is_production",
-            "clinical_use_approved",
-            "approved_by",
-            "approved_by_name",
-            "approved_at",
-            "approval_notes",
-            "joblib_path",
-            "created_at",
-            "updated_at",
-        ]
-        read_only_fields = ["id", "trained_at", "created_at", "updated_at"]
+from api.models import DrugStock, Dispensation, StockMovement, StockAlert
 
 
 class EncounterSerializer(serializers.ModelSerializer):
@@ -915,7 +885,7 @@ class EncounterDraftCreateUpdateSerializer(serializers.ModelSerializer):
 
 
 class TaskStatusSerializer(serializers.Serializer):
-    """Serializer for Celery task status response."""
+    """Serializer for async task status response."""
     task_id = serializers.CharField()
     status = serializers.CharField()  # PENDING, STARTED, SUCCESS, FAILURE, RETRY
     result = serializers.JSONField(required=False, allow_null=True)
@@ -1012,43 +982,6 @@ class LabResultSerializerRestricted(serializers.ModelSerializer):
 
     def get_lab_order_id(self, obj):
         return str(obj.lab_order_id)
-
-
-class AIAnalysisJobSerializer(serializers.Serializer):
-    """
-    Serializer for AIAnalysisJob status and results.
-    Used by GET /ai/async-analysis/:job_id to return job status.
-    """
-    job_id = serializers.SerializerMethodField()
-    patient_id = serializers.SerializerMethodField()
-    status = serializers.CharField()
-    progress_percent = serializers.IntegerField()
-    current_step = serializers.CharField()
-    analysis_type = serializers.CharField()
-    created_at = serializers.DateTimeField()
-    started_at = serializers.DateTimeField(allow_null=True)
-    completed_at = serializers.DateTimeField(allow_null=True)
-    # Results only populated when status == 'completed'
-    analysis = serializers.SerializerMethodField()
-    error_message = serializers.CharField(allow_blank=True, allow_null=True)
-
-    def get_job_id(self, obj):
-        return str(obj.id)
-
-    def get_patient_id(self, obj):
-        return str(obj.patient_id)
-
-    def get_analysis(self, obj):
-        """Return analysis data if job is completed; otherwise None."""
-        if obj.status == 'completed' and obj.analysis_result:
-            # Return the analysis ID and key fields
-            return {
-                'analysis_id': str(obj.analysis_result.id),
-                'analysis_type': obj.analysis_result.analysis_type,
-                'overall_confidence': obj.analysis_result.overall_confidence,
-                'clinical_summary': obj.analysis_result.clinical_summary,
-            }
-        return None
 
 
 class ShiftHandoverSerializer(serializers.ModelSerializer):

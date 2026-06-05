@@ -441,18 +441,13 @@ def check_expiry_manual_trigger(request):
         return Response({'error': 'Insufficient permissions'}, status=status.HTTP_403_FORBIDDEN)
     
     try:
-        # Queue the task
-        task = check_expiring_stock_task.delay()
-        
-        return Response({
-            'message': 'Expiry check queued',
-            'task_id': task.id,
-        })
+        result = check_expiring_stock_task()
+        return Response({'message': 'Expiry check complete', 'result': result})
     except Exception as e:
-        logger.error(f"Error queuing expiry check: {e}")
+        logger.error("Error running expiry check: %s", e)
         return Response(
-            {'error': 'Failed to queue task'},
-            status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            {'error': 'Failed to run expiry check'},
+            status=status.HTTP_500_INTERNAL_SERVER_ERROR,
         )
 
 

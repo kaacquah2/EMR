@@ -7,7 +7,6 @@ from rest_framework.response import Response
 from patients.models import ClinicalAlert
 from api.utils import get_effective_hospital, audit_log
 from api.pagination import paginate_queryset
-from api.signals_alerts import broadcast_alert_resolved
 from shared.permissions import ALERT_RESOLVE_ROLES
 
 
@@ -86,7 +85,6 @@ def alert_resolve(request, pk):
     alert.resolved_at = timezone.now()
     alert.resolved_by = request.user
     alert.save(update_fields=["status", "resolved_at", "resolved_by"])
-    broadcast_alert_resolved(alert)
     return Response({
         "id": str(alert.id),
         "status": alert.status,

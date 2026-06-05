@@ -5,10 +5,12 @@ from rest_framework.response import Response
 
 from api.serializers import ConsentSerializer
 from api.services import consent_service
+from api.decorators import requires_step_up
 
 
 @api_view(["POST"])
 @permission_classes([IsAuthenticated])
+@requires_step_up(action="consent")
 def consent_grant(request):
     consent, err = consent_service.grant_consent(request, request.data)
     if err:
@@ -37,6 +39,7 @@ def consent_list(request):
 
 @api_view(["PATCH"])
 @permission_classes([IsAuthenticated])
+@requires_step_up(action="consent")
 def consent_revoke(request, pk):
     """Revoke consent (set is_active=False). Only grantor facility or super_admin."""
     consent, err = consent_service.revoke_consent(request, str(pk))

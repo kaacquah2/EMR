@@ -10,8 +10,6 @@ const externalBase =
 export type HealthServiceKey =
   | "api"
   | "database"
-  | "redis"
-  | "ai_inference"
   | "kms"
   | "audit_chain"
   | "backup";
@@ -26,8 +24,6 @@ export function runbookHref(serviceKey: HealthServiceKey): string {
 export const DASHBOARD_HEALTH_ROWS: ReadonlyArray<{ label: string; key: HealthServiceKey }> = [
   { label: "Django API", key: "api" },
   { label: "PostgreSQL", key: "database" },
-  { label: "Redis / Celery", key: "redis" },
-  { label: "AI inference", key: "ai_inference" },
   { label: "KMS / Encryption", key: "kms" },
   { label: "Audit chain", key: "audit_chain" },
   { label: "Backup", key: "backup" },

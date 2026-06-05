@@ -14,6 +14,7 @@ from core.models import Hospital, User, AuditLog, Ward, Department, LabUnit, Sup
 from interop.models import BreakGlassLog, FacilityPatient, Consent, Referral
 from api.utils import audit_log
 from api.services.audit_service import compute_audit_chain_status
+from api.decorators import requires_step_up
 from api.circuit_breaker import get_all_circuit_statuses
 
 
@@ -63,8 +64,8 @@ def _hospitals_list_data():
             h.doctor_count > 0,  # pyright: ignore[reportAttributeAccessIssue]
             h.id in hospital_ids_with_patients,
         ]
-        onboarding_pct = int(round((sum(bool(ok)
-                                    for ok in checks) / len(checks)) * 100))
+        onboarding_pct = round((sum(bool(ok)
+                                    for ok in checks) / len(checks)) * 100)
 
         data.append(
             {
@@ -111,7 +112,7 @@ def _hospital_onboarding_list_data():
             checks.append(("First patient registered", False))
 
         missing = [name for (name, ok) in checks if not ok]
-        completion = int(round(((len(checks) - len(missing)) / len(checks)) * 100))
+        completion = round(((len(checks) - len(missing)) / len(checks)) * 100)
         out.append(
             {
                 "hospital_id": str(h.id),
@@ -224,6 +225,7 @@ def break_glass_list_global(request):
 
 @api_view(["POST"])
 @permission_classes([IsAuthenticated])
+@requires_step_up(action="superadmin_write")
 def break_glass_mark_reviewed(request, break_glass_id):
     if denied := _require_super_admin(request):
         return denied
@@ -241,6 +243,7 @@ def break_glass_mark_reviewed(request, break_glass_id):
 
 @api_view(["POST"])
 @permission_classes([IsAuthenticated])
+@requires_step_up(action="superadmin_write")
 def break_glass_flag_abuse(request, break_glass_id):
     if denied := _require_super_admin(request):
         return denied
@@ -280,6 +283,7 @@ def gmdc_unverified_doctors(request):
 
 @api_view(["POST"])
 @permission_classes([IsAuthenticated])
+@requires_step_up(action="superadmin_write")
 def onboard_hospital(request):
     """Create a new hospital. Super_admin only."""
     if denied := _require_super_admin(request):
@@ -316,6 +320,7 @@ def onboard_hospital(request):
 
 @api_view(["POST"])
 @permission_classes([IsAuthenticated])
+@requires_step_up(action="superadmin_write")
 def grant_hospital_access(request):
     """Grant a super admin explicit view-as access to a hospital."""
     if denied := _require_super_admin(request):
@@ -414,6 +419,7 @@ def hospital_onboarding_dashboard(request):
 @api_view(["POST"])
 @permission_classes([IsAuthenticated])
 @parser_classes([MultiPartParser, FormParser])
+@requires_step_up(action="superadmin_write")
 def bulk_import_staff(request, hospital_id):    # sourcery skip: low-code-quality
     """Bulk import staff from CSV. Super_admin only."""
     if denied := _require_super_admin(request):
@@ -628,6 +634,7 @@ def audit_chain_integrity_status(request):
 
 @api_view(["POST"])
 @permission_classes([IsAuthenticated])
+@requires_step_up(action="superadmin_write")
 def audit_chain_integrity_validate(request):
     if denied := _require_super_admin(request):
         return denied
@@ -663,7 +670,7 @@ def hospital_onboarding_status(request):
     ]
     done = [name for (name, ok) in checks if ok]
     missing = [name for (name, ok) in checks if not ok]
-    completion = int(round((len(done) / len(checks)) * 100))
+    completion = round((len(done) / len(checks)) * 100)
     return Response({"data": {
         "hospital_id": str(hospital.id),
         "completion_pct": completion,
@@ -925,7 +932,6 @@ def superadmin_dashboard_bundle(request):
     if denied := _require_super_admin(request):
         return denied
     from api.views.health_views import build_health_payload
-    from api.views.ai_views import build_ai_status_payload
 
     health_payload, _db_ok = build_health_payload(deep=True)
     hospitals_data = _hospitals_list_data()
@@ -939,7 +945,7 @@ def superadmin_dashboard_bundle(request):
         {
             "generated_at": timezone.now().isoformat(),
             "health": health_payload,
-            "ai_status": build_ai_status_payload(),
+            "ai_status": {"enabled": False},
             "hospitals": {"data": hospitals_data, "count": len(hospitals_data)},
             "onboarding": {"data": onboarding_data, "count": len(onboarding_data)},
             "compliance_alerts": {"data": compliance},

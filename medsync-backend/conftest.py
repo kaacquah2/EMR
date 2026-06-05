@@ -39,18 +39,15 @@ if "FIELD_ENCRYPTION_KEY" not in os.environ:
 
 django.setup()
 
-from medsync_backend.celery import app
-app.conf.task_always_eager = True
-app.conf.task_eager_propagates = True
-app.conf.task_store_eager_result = True
-
-# Bypass AI circuit breakers for all unit/integration tests
-import api.ai.governance
-api.ai.governance.check_ai_clinical_features_enabled = lambda hospital: None
-api.ai.governance.check_ai_rate_limit = lambda user: None
-
-import api.ai.safety_gates
-api.ai.safety_gates.is_ai_clinical_enabled = lambda request: True
+# Override CACHES settings to use LocMemCache for testing to avoid DatabaseCache errors
+from django.conf import settings
+settings.CACHES = {
+    "default": {
+        "BACKEND": "django.core.cache.backends.locmem.LocMemCache",
+        "LOCATION": "test-cache",
+    }
+}
+settings.TESTING = True
 
 pytest_plugins = ["pytest_django"]
 

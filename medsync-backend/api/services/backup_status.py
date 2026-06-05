@@ -11,7 +11,7 @@ BACKUP_META_CACHE_KEY = "backup:last_meta"
 
 
 def record_backup_success(*, destination: str = "", size_bytes: int | None = None) -> None:
-    """Call from the Celery/pg_dump backup task when a run completes successfully."""
+    """Call from the backup task (cron/pg_dump) when a run completes successfully."""
     meta = {
         "recorded_at": timezone.now().isoformat(),
         "destination": destination,

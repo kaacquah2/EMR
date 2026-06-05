@@ -15,21 +15,10 @@ type HealthResponse = {
   services?: {
     api?: ServiceStatus;
     database?: ServiceStatus;
-    redis?: ServiceStatus;
-    ai_inference?: ServiceStatus;
     kms?: ServiceStatus;
     audit_chain?: ServiceStatus;
     backup?: ServiceStatus;
   };
-};
-
-type AiStatusResponse = {
-  status: "online" | "degraded" | "offline";
-  analyses_24h: number;
-  avg_response_ms: number | null;
-  target_response_ms: number;
-  uptime_7d_pct: number | null;
-  modules: Record<string, string>;
 };
 
 type HospitalRow = {
@@ -64,7 +53,6 @@ type PendingAdminGrants = {
 type DashboardBundle = {
   generated_at: string;
   health: HealthResponse;
-  ai_status: AiStatusResponse;
   hospitals: { data: HospitalRow[] };
   onboarding: { data: OnboardingRow[] };
   compliance_alerts: { data: ComplianceAlert[] };
@@ -139,7 +127,6 @@ export default function SuperAdminPage() {
   const api = useApi();
   const [health, setHealth] = useState<HealthResponse | null>(null);
   const [healthRefreshedAt, setHealthRefreshedAt] = useState<string | null>(null);
-  const [aiStatus, setAiStatus] = useState<AiStatusResponse | null>(null);
   const [hospitals, setHospitals] = useState<HospitalRow[]>([]);
   const [onboarding, setOnboarding] = useState<OnboardingRow[]>([]);
   const [complianceAlerts, setComplianceAlerts] = useState<ComplianceAlert[]>([]);
@@ -153,7 +140,6 @@ export default function SuperAdminPage() {
       const b = await api.get<DashboardBundle>("/superadmin/dashboard-bundle");
       setHealth(b.health ?? null);
       setHealthRefreshedAt(new Date().toISOString());
-      setAiStatus(b.ai_status ?? null);
       setHospitals(Array.isArray(b.hospitals?.data) ? b.hospitals.data : []);
       setOnboarding(Array.isArray(b.onboarding?.data) ? b.onboarding.data : []);
       setComplianceAlerts((Array.isArray(b.compliance_alerts?.data) ? b.compliance_alerts.data : []).slice(0, 5));
@@ -168,7 +154,6 @@ export default function SuperAdminPage() {
     } catch {
       setHealth(null);
       setHealthRefreshedAt(new Date().toISOString());
-      setAiStatus(null);
       setHospitals([]);
       setOnboarding([]);
       setComplianceAlerts([]);
@@ -242,11 +227,6 @@ export default function SuperAdminPage() {
           <div>
             <span className="font-semibold">Critical: {downServiceLabels.length} service(s) down</span>
             <span className="mt-1 block text-red-800/90">{downServiceLabels.join(" · ")}</span>
-            {downServiceLabels.some((l) => l.includes("Redis")) ? (
-              <span className="mt-1 block text-xs text-red-800/80">
-                Background jobs and caching may be affected until Redis/Celery is healthy.
-              </span>
-            ) : null}
           </div>
           <Link className="shrink-0 font-medium text-red-800 underline underline-offset-2" href="/superadmin/system-health">
             Troubleshoot →
@@ -290,22 +270,6 @@ export default function SuperAdminPage() {
           </div>
           <div className="mt-1 text-sm text-slate-500 dark:text-slate-500">
             {apiLatencyPretty ? `${apiLatencyPretty} avg` : "Latency not sampled"}
-          </div>
-        </Card>
-        <Card
-          className={`border-t-4 p-5 ${statAccent(
-            aiStatus?.status === "offline" ? "red" : aiStatus?.status === "degraded" ? "amber" : "green"
-          )}`}
-        >
-          <div className="text-sm text-slate-500 dark:text-slate-500">AI service</div>
-          <div className="mt-2 flex items-center gap-2 text-lg font-semibold text-slate-900 dark:text-slate-100">
-            <span className={`h-2.5 w-2.5 rounded-full ${dot(aiStatus?.status === "offline" ? "down" : aiStatus?.status === "degraded" ? "warn" : "ok")}`} />
-            {aiStatus?.status ? (aiStatus.status === "offline" ? "Offline" : aiStatus.status === "degraded" ? "Degraded" : "Online") : "—"}
-          </div>
-          <div className="mt-1 text-sm text-slate-500 dark:text-slate-500">
-            {typeof aiStatus?.uptime_7d_pct === "number" && Number.isFinite(aiStatus.uptime_7d_pct)
-              ? `${fmtInt(aiStatus.uptime_7d_pct)}% uptime (7d)`
-              : "Uptime not measured (7d)"}
           </div>
         </Card>
       </div>
@@ -366,50 +330,6 @@ export default function SuperAdminPage() {
         </Card>
 
         <div className="space-y-4">
-          <Card className="p-6">
-            <div className="flex items-center justify-between gap-3">
-              <h2 className="font-sora text-lg font-semibold text-slate-900 dark:text-slate-100">AI integration</h2>
-              <Link className="text-sm font-medium text-[#2563EB]" href="/superadmin/ai-integration">Config →</Link>
-            </div>
-            <div className="mt-4 grid grid-cols-3 gap-3 text-sm">
-              <div>
-                <div className="text-slate-500 dark:text-slate-500">Status</div>
-                <div className="mt-1 font-semibold text-slate-900 dark:text-slate-100">{aiStatus?.status ?? "—"}</div>
-              </div>
-              <div>
-                <div className="text-slate-500 dark:text-slate-500">Analyses</div>
-                <div className="mt-1 font-semibold text-slate-900 dark:text-slate-100">{fmtInt(aiStatus?.analyses_24h ?? 0)}</div>
-                <div className="text-xs text-slate-500 dark:text-slate-500">(24h)</div>
-              </div>
-              <div>
-                <div className="text-slate-500 dark:text-slate-500">Avg response</div>
-                <div className="mt-1 font-semibold text-slate-900 dark:text-slate-100">
-                  {typeof aiStatus?.avg_response_ms === "number" && Number.isFinite(aiStatus.avg_response_ms)
-                    ? `${fmtInt(aiStatus.avg_response_ms)}ms`
-                    : "—"}
-                </div>
-                <div className="text-xs text-slate-500 dark:text-slate-500">
-                  Target {fmtInt(aiStatus?.target_response_ms ?? 0)}ms ·{" "}
-                  {typeof aiStatus?.avg_response_ms !== "number" || !Number.isFinite(aiStatus.avg_response_ms)
-                    ? "Not measured"
-                    : aiStatus.avg_response_ms > aiStatus.target_response_ms
-                      ? "↑ Above target"
-                      : "Within target"}
-                </div>
-              </div>
-            </div>
-            <div className="mt-4 text-sm text-slate-500 dark:text-slate-500">
-              {aiStatus?.modules
-                ? Object.entries(aiStatus.modules).map(([k, v]) => (
-                    <div key={k} className="flex items-center justify-between">
-                      <span className="capitalize">{k.replaceAll("_", " ")}</span>
-                      <span>{v}</span>
-                    </div>
-                  ))
-                : "—"}
-            </div>
-          </Card>
-
           <Card className="p-6">
             <div className="flex flex-wrap items-center justify-between gap-3">
               <h2 className="font-sora text-lg font-semibold text-slate-900 dark:text-slate-100">Compliance alerts</h2>

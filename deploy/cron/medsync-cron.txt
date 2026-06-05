@@ -1,0 +1,6 @@
+# MedSync scheduled tasks — install with:  crontab deploy/cron/medsync-cron.txt
+# For Railway: configure the cron trigger in the Railway dashboard (see README).
+# For systemd: use deploy/cron/mark-no-shows.service + .timer (template below).
+
+# Mark missed appointments as no-show every 15 minutes (respects 15-min grace period)
+*/15 * * * * cd /app && python manage.py mark_no_shows >> /var/log/medsync/no_shows.log 2>&1

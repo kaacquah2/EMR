@@ -272,54 +272,6 @@ class CrossFacilityAccessThrottle(SafeUserRateThrottle):
         return f"throttle_cross_facility_{request.user.id}"
 
 
-class AIEndpointThrottle(SafeUserRateThrottle):
-    """
-    Rate limit AI endpoints: 20 requests per hour per user.
-    PHASE 2 (HIGH-PRIORITY): Prevents abuse of computationally expensive AI operations.
-    AI endpoints perform inference which consumes significant CPU/memory resources.
-    """
-    scope = 'ai_endpoint'
-    rate = '20/hour'
-
-    def get_cache_key(self, request, view):
-        if not request.user or not request.user.is_authenticated:
-            return None
-        return f"throttle_ai_{request.user.id}"
-
-
-class AIThrottle(SafeUserRateThrottle):
-    """
-    Daily rate limit for AI operations to save credits.
-    Controlled by 'ai' rate in settings.
-    """
-    scope = "ai"
-
-    def get_cache_key(self, request, view):
-        if not request.user or not request.user.is_authenticated:
-            return None
-        return f"throttle_ai_daily_{request.user.id}"
-
-
-class AIHospitalThrottle(SafeUserRateThrottle):
-    """
-    Rate limit AI endpoints: 200 requests per hour per hospital.
-    PHASE 2 (HIGH-PRIORITY): Additional hospital-level rate limiting to prevent
-    facility-wide AI abuse (e.g., automated bulk analysis scripts).
-    200/hour allows ~50 clinicians × 4 req/hour average.
-    """
-    scope = 'ai_hospital'
-    rate = '200/hour'
-
-    def get_cache_key(self, request, view):
-        if not request.user or not request.user.is_authenticated:
-            return None
-        hospital_id = getattr(request.user, 'hospital_id', None)
-        if not hospital_id:
-            # Super admin without hospital assignment: no hospital throttle
-            return None
-        return f"throttle_ai_hospital_{hospital_id}"
-
-
 # ============================================================================
 # THROTTLE CONFIGURATION REFERENCE
 # ============================================================================
@@ -348,14 +300,6 @@ THROTTLE_CONFIG = {
     'cross-facility': 'CrossFacilityAccessThrottle',  # 10/hour
     'break-glass': 'CrossFacilityAccessThrottle',
 
-    # AI endpoints (computationally expensive)
-    'ai/analyze-patient': 'AIEndpointThrottle',  # 20/hour
-    'ai/risk-prediction': 'AIEndpointThrottle',
-    'ai/clinical-decision-support': 'AIEndpointThrottle',
-    'ai/triage': 'AIEndpointThrottle',
-    'ai/find-similar-patients': 'AIEndpointThrottle',
-    'ai/referral-recommendation': 'AIEndpointThrottle',
-    'ai/async-analysis': 'AIEndpointThrottle',
 }
 
 
