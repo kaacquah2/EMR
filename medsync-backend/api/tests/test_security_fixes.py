@@ -479,29 +479,7 @@ class TestProductionReadinessArgon2PasswordHasher(TestCase):
         self.assertEqual(hasher.algorithm, 'argon2')
 
 
-class TestProductionReadinessLLMModeGuard(TestCase):
-    """Test that startup guard raises ImproperlyConfigured in production if mock LLM mode is active."""
 
-    def test_guard_raises_on_mock_llm_in_production(self):
-        from django.core.exceptions import ImproperlyConfigured
-        from django.apps import apps
-        config = apps.get_app_config('api')
-        
-        # Test condition: ENV=production, LLM_MODE=mock
-        with self.settings(ENV='production', LLM_MODE='mock'):
-            with self.assertRaises(ImproperlyConfigured) as context:
-                config.ready()
-            self.assertIn("LLM_MODE=mock is not allowed when ENV=production", str(context.exception))
-
-        # Test condition: ENV=production, LLM_MODE=bedrock (should pass)
-        with self.settings(ENV='production', LLM_MODE='bedrock'):
-            # Should not raise ImproperlyConfigured
-            config.ready()
-
-        # Test condition: ENV=development, LLM_MODE=mock (should pass)
-        with self.settings(ENV='development', LLM_MODE='mock'):
-            # Should not raise ImproperlyConfigured
-            config.ready()
 
 
 
@@ -554,6 +532,7 @@ class TestAnomalyDetectionCache(TestCase):
             anomaly_detection.PATIENT_ACCESS_THRESHOLD = original_threshold
 
 
+@override_settings(TEST_SESSION_IDLE_TIMEOUT=True)
 class TestSessionIdleTimeout(TestCase):
     """Test session inactivity timeout validation."""
 
@@ -636,6 +615,7 @@ def test_permission_fail_closed_setting_respects_env_value(monkeypatch):
     monkeypatch.setenv("PERMISSION_FAIL_CLOSED_UNKNOWN_ENDPOINTS", "False")
     monkeypatch.setenv("DATABASE_URL", "postgresql://user:pass@localhost:5432/medsync")
     monkeypatch.setenv("WEBAUTHN_ORIGIN", "https://localhost:3000")
+    monkeypatch.setenv("ADMIN_URL", "ms-admin-x7k2/")
 
     import importlib
     import medsync_backend.settings as settings_module

@@ -19,6 +19,7 @@ _VERCEL = os.environ.get("VERCEL") == "1"
 # Default False so production is safe if env is unset. Set DEBUG=True for local dev only.
 DEBUG = config("DEBUG", default=False, cast=bool)
 ENV = config("ENV", default="development")
+LLM_MODE = config("LLM_MODE", default="mock")
 
 
 # SECRET_KEY: no insecure default when DEBUG=False. Accept SECRET_KEY or DJANGO_SECRET_KEY
@@ -28,8 +29,8 @@ ENV = config("ENV", default="development")
 def _resolve_secret_key():
     for env_name in ("SECRET_KEY", "DJANGO_SECRET_KEY"):
         raw = os.environ.get(env_name)
-        if raw is not None and str(raw).strip():
-            return str(raw).strip()
+        if raw is not None and raw.strip():
+            return raw.strip()
     cfg = config("SECRET_KEY", default=None)
     return (
         str(cfg).strip()
@@ -558,7 +559,7 @@ _email_deploy_context = bool(
     or os.environ.get("VERCEL") == "1"
     or _str_config("ENV").lower() == "production"
 )
-if _email_deploy_context and "console.EmailBackend" in cast(str, EMAIL_BACKEND):
+if _email_deploy_context and "console.EmailBackend" in EMAIL_BACKEND:
     import warnings
 
     warnings.warn(

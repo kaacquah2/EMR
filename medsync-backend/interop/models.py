@@ -165,6 +165,8 @@ class Consent(models.Model):
     )
     withdrawal_reason = models.TextField(blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
+    consented_record_ids = models.JSONField(default=list, blank=True, help_text="Scope this consent to only these record IDs.")
+    consented_encounter_ids = models.JSONField(default=list, blank=True, help_text="Scope this consent to only these encounter IDs.")
 
     class Meta:
         indexes = [
@@ -210,6 +212,7 @@ class Referral(models.Model):
     STATUS_COMPLETED = "COMPLETED"
     STATUS_CANCELLED = "CANCELLED"
     STATUS_EXPIRED = "EXPIRED"
+    STATUS_INFO_REQUESTED = "INFO_REQUESTED"
     STATUS_CHOICES = [
         (STATUS_PENDING, "Pending"),
         (STATUS_ACCEPTED, "Accepted"),
@@ -217,6 +220,7 @@ class Referral(models.Model):
         (STATUS_COMPLETED, "Completed"),
         (STATUS_CANCELLED, "Cancelled"),
         (STATUS_EXPIRED, "Expired"),
+        (STATUS_INFO_REQUESTED, "Info Requested"),
     ]
 
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
@@ -241,6 +245,14 @@ class Referral(models.Model):
         blank=True,
         help_text="Optional list of record UUIDs to share with receiving facility.",
     )
+    encounter_ids_to_share = models.JSONField(
+        default=list,
+        blank=True,
+        help_text="Optional list of encounter UUIDs to share with receiving facility.",
+    )
+    receiving_department = models.CharField(max_length=100, blank=True)
+    is_reverse_referral = models.BooleanField(default=False)
+    admin_approved = models.BooleanField(default=False)
     reason = models.TextField()
     status = models.CharField(
         max_length=20, choices=STATUS_CHOICES, default=STATUS_PENDING

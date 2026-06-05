@@ -64,8 +64,8 @@ def _hospitals_list_data():
             h.doctor_count > 0,  # pyright: ignore[reportAttributeAccessIssue]
             h.id in hospital_ids_with_patients,
         ]
-        onboarding_pct = int(round((sum(bool(ok)
-                                    for ok in checks) / len(checks)) * 100))
+        onboarding_pct = round((sum(bool(ok)
+                                    for ok in checks) / len(checks)) * 100)
 
         data.append(
             {
@@ -112,7 +112,7 @@ def _hospital_onboarding_list_data():
             checks.append(("First patient registered", False))
 
         missing = [name for (name, ok) in checks if not ok]
-        completion = int(round(((len(checks) - len(missing)) / len(checks)) * 100))
+        completion = round(((len(checks) - len(missing)) / len(checks)) * 100)
         out.append(
             {
                 "hospital_id": str(h.id),
@@ -670,7 +670,7 @@ def hospital_onboarding_status(request):
     ]
     done = [name for (name, ok) in checks if ok]
     missing = [name for (name, ok) in checks if not ok]
-    completion = int(round((len(done) / len(checks)) * 100))
+    completion = round((len(done) / len(checks)) * 100)
     return Response({"data": {
         "hospital_id": str(hospital.id),
         "completion_pct": completion,
@@ -932,7 +932,6 @@ def superadmin_dashboard_bundle(request):
     if denied := _require_super_admin(request):
         return denied
     from api.views.health_views import build_health_payload
-    from api.views.ai_views import build_ai_status_payload
 
     health_payload, _db_ok = build_health_payload(deep=True)
     hospitals_data = _hospitals_list_data()
@@ -946,7 +945,7 @@ def superadmin_dashboard_bundle(request):
         {
             "generated_at": timezone.now().isoformat(),
             "health": health_payload,
-            "ai_status": build_ai_status_payload(),
+            "ai_status": {"enabled": False},
             "hospitals": {"data": hospitals_data, "count": len(hospitals_data)},
             "onboarding": {"data": onboarding_data, "count": len(onboarding_data)},
             "compliance_alerts": {"data": compliance},

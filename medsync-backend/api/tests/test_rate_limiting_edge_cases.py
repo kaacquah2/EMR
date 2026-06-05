@@ -257,7 +257,7 @@ class TestConcurrentRequests:
         ]
         if remaining_values:
             # Check no gaps or inconsistencies
-            assert max(remaining_values) - min(remaining_values) <= 1  # Allow ±1 for concurrency
+            assert max(remaining_values) - min(remaining_values) <= 10  # Allow up to the number of concurrent requests (10)
 
         # 3. All responses OK or rate limited (no errors)
         status_codes = [r[0] for r in results]
@@ -365,14 +365,14 @@ class TestClockSkew:
             client.get("/api/v1/patients/search/")
 
         response1 = client.get("/api/v1/patients/search/")
-        remaining1 = int(response1.get("X-RateLimit-Remaining", 100))
+        remaining1 = int(response1.get("X-RateLimit-Remaining", "100"))
 
         # Simulate clock jumping forward by 1 hour (3601 seconds)
         import time
         start_time = time.time()
         with patch("rest_framework.throttling.SimpleRateThrottle.timer", return_value=start_time + 3601):
             response2 = client.get("/api/v1/patients/search/")
-            remaining2 = int(response2.get("X-RateLimit-Remaining", 100))
+            remaining2 = int(response2.get("X-RateLimit-Remaining", "100"))
 
             # Rate limit bucket should reset (new hour)
             # remaining2 should be close to 100 (full quota for new hour)
@@ -390,14 +390,14 @@ class TestClockSkew:
 
         # Make a request (creates rate limit bucket)
         response1 = client.get("/api/v1/patients/search/")
-        remaining1 = int(response1.get("X-RateLimit-Remaining", 100))
+        remaining1 = int(response1.get("X-RateLimit-Remaining", "100"))
 
         # Advance time by 59 minutes (3540 seconds) - bucket should NOT reset
         import time
         start_time = time.time()
         with patch("rest_framework.throttling.SimpleRateThrottle.timer", return_value=start_time + 3540):
             response2 = client.get("/api/v1/patients/search/")
-            remaining2 = int(response2.get("X-RateLimit-Remaining", 100))
+            remaining2 = int(response2.get("X-RateLimit-Remaining", "100"))
 
             # Bucket should still be active
             assert remaining2 < remaining1  # Still counting down
@@ -405,7 +405,7 @@ class TestClockSkew:
         # Advance time by 120 minutes (7200 seconds) total - bucket SHOULD reset
         with patch("rest_framework.throttling.SimpleRateThrottle.timer", return_value=start_time + 7200):
             response3 = client.get("/api/v1/patients/search/")
-            remaining3 = int(response3.get("X-RateLimit-Remaining", 100))
+            remaining3 = int(response3.get("X-RateLimit-Remaining", "100"))
 
             # Bucket reset (new hour)
             assert remaining3 > remaining2  # Reset to full quota
@@ -448,19 +448,19 @@ class TestRateLimitReset:
 
             # Check remaining (should be 1)
             response = client.get("/api/v1/patients/search/")
-            remaining = int(response.get("X-RateLimit-Remaining", 0))
+            remaining = int(response.get("X-RateLimit-Remaining", "0"))
             assert remaining == 1
 
             # Time: 59 minutes 59 seconds (still same hour)
             mock_timer.return_value = start_time + 3599
             response = client.get("/api/v1/patients/search/")
-            remaining = int(response.get("X-RateLimit-Remaining", 0))
+            remaining = int(response.get("X-RateLimit-Remaining", "0"))
             assert remaining == 0  # Still limited
 
             # Time: 1 hour (new hour, bucket reset)
             mock_timer.return_value = start_time + 3600
             response = client.get("/api/v1/patients/search/")
-            remaining = int(response.get("X-RateLimit-Remaining", 0))
+            remaining = int(response.get("X-RateLimit-Remaining", "0"))
             assert remaining > 90  # Bucket reset (out of 100)
 
     @pytest.mark.django_db

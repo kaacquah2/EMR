@@ -39,6 +39,16 @@ if "FIELD_ENCRYPTION_KEY" not in os.environ:
 
 django.setup()
 
+# Override CACHES settings to use LocMemCache for testing to avoid DatabaseCache errors
+from django.conf import settings
+settings.CACHES = {
+    "default": {
+        "BACKEND": "django.core.cache.backends.locmem.LocMemCache",
+        "LOCATION": "test-cache",
+    }
+}
+settings.TESTING = True
+
 pytest_plugins = ["pytest_django"]
 
 

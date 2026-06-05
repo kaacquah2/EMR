@@ -15,7 +15,7 @@ from django.core.cache import cache
 
 logger = logging.getLogger(__name__)
 
-PATIENT_ACCESS_THRESHOLD = 200
+PATIENT_ACCESS_THRESHOLD: int = 200
 WINDOW_SECONDS = 3600
 
 

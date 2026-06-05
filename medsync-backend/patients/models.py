@@ -41,6 +41,7 @@ class Patient(models.Model):
     created_by = models.ForeignKey(User, on_delete=models.PROTECT)
 
     tenant_field = "registered_at"
+    objects = models.Manager()
     tenant_objects = TenantManager()
     is_archived = models.BooleanField(default=False, db_index=True)
     created_at = models.DateTimeField(auto_now_add=True)

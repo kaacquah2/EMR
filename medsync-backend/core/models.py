@@ -37,6 +37,18 @@ class Hospital(models.Model):
     email = models.EmailField(blank=True)
     head_of_facility = models.CharField(max_length=200, blank=True)
     is_active = models.BooleanField(default=True)
+    facility_type = models.CharField(
+        max_length=50,
+        choices=[
+            ("CHPS", "CHPS"),
+            ("HEALTH_CENTRE", "Health Centre"),
+            ("DISTRICT_HOSPITAL", "District Hospital"),
+            ("REGIONAL_HOSPITAL", "Regional Hospital"),
+            ("TEACHING_HOSPITAL", "Teaching Hospital"),
+        ],
+        default="HEALTH_CENTRE",
+        help_text="Ghana referral hierarchy level"
+    )
     ai_enabled = models.BooleanField(default=True, help_text="Enable/disable AI features for this hospital")
     onboarded_at = models.DateTimeField(auto_now_add=True)
     onboarded_by = models.ForeignKey(

@@ -30,6 +30,8 @@ from api.views import (
     vitals_monitoring_views,
     cds_views,
     step_up_views,
+    pharmacy_views,
+    pharmacy_stock_views,
 )
 
 urlpatterns = [
@@ -48,6 +50,17 @@ urlpatterns = [
     path("auth/me", auth_views.me),
     path("auth/step-up/request", step_up_views.step_up_request),
     path("auth/step-up/verify", step_up_views.step_up_verify),
+    # WebAuthn/Passkey authentication endpoints
+    path("auth/passkey/register/begin", auth_views.passkey_register_begin),
+    path("auth/passkey/register/complete", auth_views.passkey_register_complete),
+    path("auth/passkey/check", auth_views.passkey_check),
+    path("auth/passkey/auth/begin", auth_views.passkey_auth_begin),
+    path("auth/passkey/auth/complete", auth_views.passkey_auth_complete),
+    path("auth/passkeys", auth_views.list_passkeys),
+    path("auth/passkeys/<uuid:pk>", auth_views.delete_passkey),
+    path("auth/passkeys/<uuid:pk>/rename", auth_views.rename_passkey),
+    path("admin/users/<uuid:user_id>/passkeys", auth_views.admin_list_user_passkeys),
+    path("admin/users/<uuid:user_id>/passkeys/reset", auth_views.admin_reset_user_passkeys),
     # PHASE 3: HttpOnly Cookie-Based Authentication
     path("auth/refresh-cookie", auth_views.refresh_with_cookie),
     path("auth/logout-cookie", auth_views.logout_with_cookie),
@@ -322,8 +335,19 @@ urlpatterns = [
     path("encounters/<uuid:encounter_id>/cds-alerts", cds_views.encounter_cds_alerts),
     path("cds-alerts/<uuid:alert_id>", cds_views.cds_alert_detail),
     path("cds-alerts/<uuid:alert_id>/acknowledge", cds_views.acknowledge_cds_alert),
-    
-    # Pharmacy module: Phase 2.
+    # Pharmacy dispensing and worklist endpoints
+    path("pharmacy/worklist", pharmacy_views.pharmacy_worklist),
+    path("pharmacy/dispense/<uuid:prescription_id>", pharmacy_views.dispense_medication),
+    path("pharmacy/statistics", pharmacy_views.pharmacy_statistics),
+    # Pharmacy stock management and reporting
+    path("pharmacy/stock", pharmacy_stock_views.stock_list_create),
+    path("pharmacy/stock/<uuid:stock_id>", pharmacy_stock_views.stock_detail),
+    path("pharmacy/stock/<uuid:stock_id>/adjust", pharmacy_stock_views.adjust_stock),
+    path("pharmacy/dispensations", pharmacy_stock_views.dispensation_list),
+    path("pharmacy/reports/low-stock", pharmacy_stock_views.low_stock_report),
+    path("pharmacy/reports/expiring", pharmacy_stock_views.expiring_stock_report),
+    path("pharmacy/tasks/check-expiry", pharmacy_stock_views.check_expiry_manual_trigger),
+    path("pharmacy/prescriptions/<uuid:prescription_id>/dispense-confirm", pharmacy_stock_views.dispense_confirm),
     
     # MAR: Medication Administration Record
     path("mar/ward/<uuid:ward_id>/due", mar_views.ward_medications_due),

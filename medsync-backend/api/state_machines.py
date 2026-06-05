@@ -15,7 +15,8 @@ class StateMachineError(Exception):
 # Referral status transitions
 # Maps current status -> list of allowed next statuses
 REFERRAL_TRANSITIONS = {
-    'PENDING': ['ACCEPTED', 'REJECTED'],
+    'PENDING': ['ACCEPTED', 'REJECTED', 'INFO_REQUESTED'],
+    'INFO_REQUESTED': ['PENDING', 'ACCEPTED', 'REJECTED'],
     'ACCEPTED': ['COMPLETED', 'CANCELLED'],
     'REJECTED': [],   # Terminal state
     'COMPLETED': [],  # Terminal state
