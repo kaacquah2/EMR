@@ -11,10 +11,12 @@ import type { AuthTokens } from "@/lib/types";
 import { API_BASE } from "@/lib/api-base";
 import { validateDevicePolicy, cacheDevicePolicyCheck, getCachedDevicePolicy } from "@/lib/device-policy";
 import type { DevicePolicy } from "@/lib/device-policy";
+import { isPasskeySupported, authenticateWithPasskey, optionsToWebAuthn, credentialToJSON } from "@/lib/passkey";
+import { Fingerprint } from "lucide-react";
 
 type Step = "credentials" | "mfa";
 type MfaMode = "totp" | "backup";
-type MfaChannel = "email" | "authenticator";
+type MfaChannel = "email" | "authenticator" | "passkey";
 
 // UX-09: Context-aware save button labels per step
 const STEP_LABELS: Record<Step, string> = {
@@ -41,6 +43,7 @@ export default function LoginPage() {
   // UX-02: Resend code state
   const [resendCooldown, setResendCooldown] = useState(0);
   const [resendLoading, setResendLoading] = useState(false);
+  const [passkeySupported, setPasskeySupported] = useState(false);
 
   const handleCredentials = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -52,8 +55,17 @@ export default function LoginPage() {
         res = await fetch(`${API_BASE}/auth/login`, {
           method: "POST",
           credentials: "include",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ email, password }),
+          headers: { 
+            "Content-Type": "application/json",
+            "X-Screen-Resolution": typeof window !== "undefined" ? `${window.screen.width}x${window.screen.height}` : "",
+            "X-Timezone": typeof window !== "undefined" ? Intl.DateTimeFormat().resolvedOptions().timeZone : "",
+          },
+          body: JSON.stringify({ 
+            email, 
+            password,
+            screen_resolution: typeof window !== "undefined" ? `${window.screen.width}x${window.screen.height}` : "",
+            timezone: typeof window !== "undefined" ? Intl.DateTimeFormat().resolvedOptions().timeZone : "",
+          }),
         });
       } catch {
         setError("Sign-in is temporarily unavailable. Check your connection and try again.");
@@ -71,7 +83,7 @@ export default function LoginPage() {
       } catch {
         setError(
           `The server did not return JSON (HTTP ${res.status}). ` +
-            `Confirm NEXT_PUBLIC_API_URL in your deploy points to the Django API base ending in /api/v1, then redeploy the frontend.`,
+             `Confirm NEXT_PUBLIC_API_URL in your deploy points to the Django API base ending in /api/v1, then redeploy the frontend.`,
         );
         return;
       }
@@ -82,30 +94,107 @@ export default function LoginPage() {
       if (!res.ok) {
         setError(
           data.message ||
-            (res.status === 401 ? "Invalid credentials" : `Sign-in failed (HTTP ${res.status})`),
+             (res.status === 401 ? "Invalid credentials" : `Sign-in failed (HTTP ${res.status})`),
         );
         return;
       }
       if (data.mfa_required) {
         setMfaToken(data.mfa_token ?? null);
         const ch = data.mfa_channel;
-        setMfaChannel(ch === "email" || ch === "authenticator" ? ch : "authenticator");
+        setMfaChannel(ch === "email" || ch === "authenticator" || ch === "passkey" ? ch : "authenticator");
         setStep("mfa");
         setTimeRemaining(30);
         // UX-02: start resend cooldown for email OTP
         if (ch === "email") setResendCooldown(60);
+        if (ch === "passkey" && (data as any).passkey_options) {
+          handleAutoPasskeyMfa((data as any).passkey_options);
+        }
       } else if (data.access_token) {
         login(data as AuthTokens, { rememberMe });
         const role = (data as AuthTokens).user_profile?.role;
-       const unfilledRoles = ['pharmacy_technician', 'radiology_technician', 'billing_staff', 'ward_clerk'];
-       if (unfilledRoles.includes(role || '')) {
-         window.location.href = '/coming-soon';
-       } else {
-         window.location.href = role === "super_admin" ? "/superadmin" : "/dashboard";
-       }
+        const unfilledRoles: string[] = [];
+        if (unfilledRoles.includes(role || '')) {
+          window.location.href = '/coming-soon';
+        } else {
+          window.location.href = role === "super_admin" ? "/superadmin" : "/dashboard";
+        }
       }
     } catch {
       setError("Login failed");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleAutoPasskeyMfa = async (passkeyOptions: any) => {
+    setError("");
+    setLoading(true);
+    try {
+      const options = optionsToWebAuthn(passkeyOptions);
+      const assertion = await navigator.credentials.get({
+        publicKey: options as unknown as PublicKeyCredentialRequestOptions,
+      });
+
+      if (!assertion) {
+        throw new Error("Passkey authentication cancelled by user");
+      }
+
+      const assertionData = credentialToJSON(assertion as unknown as PublicKeyCredential);
+      const res = await fetch(`${API_BASE}/auth/passkey/auth/complete`, {
+        method: "POST",
+        credentials: "include",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(assertionData),
+      });
+
+      const data = await res.json();
+      if (!res.ok) {
+        throw new Error(data.message || "Passkey verification failed");
+      }
+
+      login(data as AuthTokens, { rememberMe });
+      const role = (data as AuthTokens).user_profile?.role;
+      window.location.href = role === "super_admin" ? "/superadmin" : "/dashboard";
+    } catch (err: any) {
+      setError(err.message || "Passkey authentication failed.");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handlePasskeySignIn = async () => {
+    setError("");
+    if (!email) {
+      setError("Please enter your email to sign in with passkey.");
+      return;
+    }
+    setLoading(true);
+    try {
+      const result = await authenticateWithPasskey({
+        post: async <T extends unknown>(path: string, body: Record<string, unknown>): Promise<T> => {
+          const res = await fetch(`${API_BASE}${path}`, {
+            method: "POST",
+            credentials: "include",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(body),
+          });
+          const data = await res.json();
+          if (!res.ok) throw new Error(data.message || "Request failed");
+          return data as T;
+        },
+        get: async <T extends unknown>(path: string): Promise<T> => {
+          return {} as T;
+        },
+        delete: async (path: string): Promise<void> => {},
+      }, email);
+
+      login(result as unknown as AuthTokens, { rememberMe });
+      const role = (result as unknown as AuthTokens).user_profile?.role;
+      window.location.href = role === "super_admin" ? "/superadmin" : "/dashboard";
+    } catch (err: any) {
+      setError(err.message || "Passkey authentication failed.");
     } finally {
       setLoading(false);
     }
@@ -139,6 +228,7 @@ export default function LoginPage() {
   }, [resendCooldown]);
 
   useEffect(() => {
+    setPasskeySupported(isPasskeySupported());
     const cached = getCachedDevicePolicy();
     if (cached) {
       setDevicePolicy(cached);
@@ -164,7 +254,11 @@ export default function LoginPage() {
     e.preventDefault();
     setError("");
     setLoading(true);
-    const body: Record<string, string> = { mfa_token: mfaToken || "" };
+    const body: Record<string, string> = { 
+      mfa_token: mfaToken || "",
+      screen_resolution: typeof window !== "undefined" ? `${window.screen.width}x${window.screen.height}` : "",
+      timezone: typeof window !== "undefined" ? Intl.DateTimeFormat().resolvedOptions().timeZone : "",
+    };
     if (mfaMode === "backup") {
       body.backup_code = backupCode;
     } else {
@@ -174,7 +268,11 @@ export default function LoginPage() {
       const res = await fetch(`${API_BASE}/auth/mfa-verify`, {
         method: "POST",
         credentials: "include",
-        headers: { "Content-Type": "application/json" },
+        headers: { 
+          "Content-Type": "application/json",
+          "X-Screen-Resolution": typeof window !== "undefined" ? `${window.screen.width}x${window.screen.height}` : "",
+          "X-Timezone": typeof window !== "undefined" ? Intl.DateTimeFormat().resolvedOptions().timeZone : "",
+        },
         body: JSON.stringify(body),
       });
       const data = await res.json();
@@ -189,7 +287,7 @@ export default function LoginPage() {
       }
       login(data as AuthTokens, { rememberMe });
       const role = (data as AuthTokens).user_profile?.role;
-      const unfilledRoles = ['pharmacy_technician', 'radiology_technician', 'billing_staff', 'ward_clerk'];
+      const unfilledRoles: string[] = [];
       if (unfilledRoles.includes(role || '')) {
         window.location.href = '/coming-soon';
       } else {
@@ -235,6 +333,27 @@ export default function LoginPage() {
             <div className="rounded-lg border border-[#FCD34D] bg-[#FEF3C7] p-3 text-sm text-[#92400E]" role="alert">
               <p className="font-medium">{devicePolicy.warning}</p>
               <p className="mt-1 text-xs">Supported: Windows (Hello) · macOS (Touch ID/Face ID)</p>
+            </div>
+          )}
+
+          {passkeySupported && (
+            <div className="space-y-3">
+              <Button
+                type="button"
+                variant="outline"
+                fullWidth
+                onClick={handlePasskeySignIn}
+                disabled={loading}
+                className="flex items-center justify-center gap-2 border-[var(--teal-500)] text-[var(--teal-500)] hover:bg-[rgba(11,138,150,0.05)] cursor-pointer py-3 h-auto"
+              >
+                <Fingerprint className="h-5 w-5 text-[var(--teal-500)]" />
+                <span className="font-semibold">Sign in with Passkey / biometric</span>
+              </Button>
+              <div className="relative flex items-center py-2">
+                <div className="flex-grow border-t border-[var(--gray-300)]"></div>
+                <span className="flex-shrink mx-4 text-xs text-[var(--gray-400)] uppercase font-semibold">or use email & password</span>
+                <div className="flex-grow border-t border-[var(--gray-300)]"></div>
+              </div>
             </div>
           )}
 

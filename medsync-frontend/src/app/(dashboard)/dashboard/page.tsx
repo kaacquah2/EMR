@@ -44,6 +44,34 @@ const DoctorDashboard = dynamic(
     })),
   { loading: () => roleDashboardLoading },
 );
+const BillingDashboard = dynamic(
+  () =>
+    import("@/components/features/BillingDashboard").then((m) => ({
+      default: m.BillingDashboard,
+    })),
+  { loading: () => roleDashboardLoading },
+);
+const WardClerkDashboard = dynamic(
+  () =>
+    import("@/components/features/WardClerkDashboard").then((m) => ({
+      default: m.WardClerkDashboard,
+    })),
+  { loading: () => roleDashboardLoading },
+);
+const PharmacyDashboard = dynamic(
+  () =>
+    import("@/components/features/pharmacy/PharmacyDashboard").then((m) => ({
+      default: m.PharmacyDashboard,
+    })),
+  { loading: () => roleDashboardLoading },
+);
+const RadiologyDashboard = dynamic(
+  () =>
+    import("@/components/features/RadiologyDashboard").then((m) => ({
+      default: m.RadiologyDashboard,
+    })),
+  { loading: () => roleDashboardLoading },
+);
 
 const ANALYTICS_ROLES = ["super_admin", "hospital_admin", "doctor"];
 
@@ -290,6 +318,22 @@ export default function DashboardPage() {
 
     if (role === "doctor") {
       return <DoctorDashboard />;
+    }
+
+    if (role === "billing_staff") {
+      return <BillingDashboard />;
+    }
+
+    if (role === "ward_clerk") {
+      return <WardClerkDashboard />;
+    }
+
+    if (role === "pharmacy_technician") {
+      return <PharmacyDashboard />;
+    }
+
+    if (role === "radiology_technician") {
+      return <RadiologyDashboard />;
     }
 
     // Admin dashboard (super_admin and hospital_admin roles)
