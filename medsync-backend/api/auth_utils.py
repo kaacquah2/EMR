@@ -180,29 +180,41 @@ def compute_login_risk_tier(user, request) -> dict:
         if known_ip:
             matched_factors.append('ip')
     
-    # Check 3: Business hours
+    # Check 3: Business hours — OR on an active shift (covers night duty staff)
     in_hours = is_within_business_hours(timezone_str)
-    if in_hours:
-        matched_factors.append('hours')
-    
-    # Check 4: Role-based enforcement
-    is_admin = user.role in ('super_admin', 'hospital_admin')
-    
+    on_active_shift = False
+    try:
+        from records.models import NurseShift
+        on_active_shift = NurseShift.objects.filter(
+            nurse=user,
+            status__in=('active', 'on_break'),
+        ).exists()
+    except Exception as e:
+        logger.debug("Shift lookup failed during risk tier computation: %s", e)
+    effective_in_hours = in_hours or on_active_shift
+    if effective_in_hours:
+        matched_factors.append('hours' if in_hours else 'active_shift')
+
+    # Check 4: Role-based enforcement - Only Tier 1 roles are allowed AAL1 (MFA bypass)
+    is_tier1 = user.role in ('nurse', 'lab_technician', 'pharmacy_technician', 'radiology_technician', 'ward_clerk')
+
     # Compute risk tier
-    if known_device and known_ip and in_hours and not is_admin:
+    if is_tier1 and known_device and known_ip and effective_in_hours:
         risk_tier = 1
-        reason = "Trusted device, known IP, business hours → no MFA"
+        shift_note = " (active shift)" if on_active_shift and not in_hours else ""
+        reason = f"Tier 1 role on trusted device, known IP, business hours{shift_note} → no MFA"
     else:
         risk_tier = 2
         reason_parts = []
-        if not known_device:
-            reason_parts.append("new device")
-        if not known_ip and user.hospital:
-            reason_parts.append("unknown IP")
-        if not in_hours and timezone_str:
-            reason_parts.append("after-hours")
-        if is_admin:
-            reason_parts.append("admin role")
+        if not is_tier1:
+            reason_parts.append(f"role '{user.role}' requires MFA")
+        else:
+            if not known_device:
+                reason_parts.append("new device")
+            if not known_ip and user.hospital:
+                reason_parts.append("unknown IP")
+            if not effective_in_hours:
+                reason_parts.append("after-hours (no active shift)")
         reason = f"MFA required: {', '.join(reason_parts)}"
     
     return {

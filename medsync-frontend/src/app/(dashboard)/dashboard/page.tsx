@@ -300,8 +300,6 @@ export default function DashboardPage() {
 
   if (!user) return null;
 
-  if (!user) return null;
-
   const renderDashboardContent = () => {
     // Route to role-specific optimized dashboards (Phase 3 UI components)
     if (role === "nurse") {

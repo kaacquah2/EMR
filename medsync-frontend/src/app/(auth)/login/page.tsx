@@ -44,6 +44,7 @@ export default function LoginPage() {
   const [resendCooldown, setResendCooldown] = useState(0);
   const [resendLoading, setResendLoading] = useState(false);
   const [passkeySupported, setPasskeySupported] = useState(false);
+  const [passkeyLoading, setPasskeyLoading] = useState(false);
 
   const handleCredentials = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -77,6 +78,7 @@ export default function LoginPage() {
         mfa_token?: string;
         mfa_channel?: MfaChannel;
         access_token?: string;
+        passkey_options?: Record<string, unknown>;
       };
       try {
         data = await res.json();
@@ -106,18 +108,13 @@ export default function LoginPage() {
         setTimeRemaining(30);
         // UX-02: start resend cooldown for email OTP
         if (ch === "email") setResendCooldown(60);
-        if (ch === "passkey" && (data as any).passkey_options) {
-          handleAutoPasskeyMfa((data as any).passkey_options);
+        if (ch === "passkey" && data.passkey_options) {
+          handleAutoPasskeyMfa(data.passkey_options, data.mfa_token ?? null);
         }
       } else if (data.access_token) {
         login(data as AuthTokens, { rememberMe });
         const role = (data as AuthTokens).user_profile?.role;
-        const unfilledRoles: string[] = [];
-        if (unfilledRoles.includes(role || '')) {
-          window.location.href = '/coming-soon';
-        } else {
-          window.location.href = role === "super_admin" ? "/superadmin" : "/dashboard";
-        }
+        window.location.href = role === "super_admin" ? "/superadmin" : "/dashboard";
       }
     } catch {
       setError("Login failed");
@@ -126,7 +123,7 @@ export default function LoginPage() {
     }
   };
 
-  const handleAutoPasskeyMfa = async (passkeyOptions: any) => {
+  const handleAutoPasskeyMfa = async (passkeyOptions: Record<string, unknown>, mfaTokenValue: string | null) => {
     setError("");
     setLoading(true);
     try {
@@ -146,7 +143,7 @@ export default function LoginPage() {
         headers: {
           "Content-Type": "application/json",
         },
-        body: JSON.stringify(assertionData),
+        body: JSON.stringify({ ...assertionData, mfa_token: mfaTokenValue }),
       });
 
       const data = await res.json();
@@ -157,8 +154,9 @@ export default function LoginPage() {
       login(data as AuthTokens, { rememberMe });
       const role = (data as AuthTokens).user_profile?.role;
       window.location.href = role === "super_admin" ? "/superadmin" : "/dashboard";
-    } catch (err: any) {
-      setError(err.message || "Passkey authentication failed.");
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : "Passkey authentication failed.";
+      setError(msg);
     } finally {
       setLoading(false);
     }
@@ -167,13 +165,13 @@ export default function LoginPage() {
   const handlePasskeySignIn = async () => {
     setError("");
     if (!email) {
-      setError("Please enter your email to sign in with passkey.");
+      setError("Please enter your email address above first.");
       return;
     }
-    setLoading(true);
+    setPasskeyLoading(true);
     try {
       const result = await authenticateWithPasskey({
-        post: async <T extends unknown>(path: string, body: Record<string, unknown>): Promise<T> => {
+        post: async <T,>(path: string, body: Record<string, unknown>): Promise<T> => {
           const res = await fetch(`${API_BASE}${path}`, {
             method: "POST",
             credentials: "include",
@@ -184,19 +182,22 @@ export default function LoginPage() {
           if (!res.ok) throw new Error(data.message || "Request failed");
           return data as T;
         },
-        get: async <T extends unknown>(path: string): Promise<T> => {
-          return {} as T;
+        // eslint-disable-next-line @typescript-eslint/no-unused-vars
+        get: async <T,>(_: string): Promise<T> => {
+          throw new Error("GET not supported in passkey sign-in flow");
         },
-        delete: async (path: string): Promise<void> => {},
+        // eslint-disable-next-line @typescript-eslint/no-unused-vars
+        delete: async (_: string): Promise<void> => {},
       }, email);
 
       login(result as unknown as AuthTokens, { rememberMe });
       const role = (result as unknown as AuthTokens).user_profile?.role;
       window.location.href = role === "super_admin" ? "/superadmin" : "/dashboard";
-    } catch (err: any) {
-      setError(err.message || "Passkey authentication failed.");
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : "Passkey authentication failed.";
+      setError(msg);
     } finally {
-      setLoading(false);
+      setPasskeyLoading(false);
     }
   };
 
@@ -287,12 +288,7 @@ export default function LoginPage() {
       }
       login(data as AuthTokens, { rememberMe });
       const role = (data as AuthTokens).user_profile?.role;
-      const unfilledRoles: string[] = [];
-      if (unfilledRoles.includes(role || '')) {
-        window.location.href = '/coming-soon';
-      } else {
-        window.location.href = role === "super_admin" ? "/superadmin" : "/dashboard";
-      }
+      window.location.href = role === "super_admin" ? "/superadmin" : "/dashboard";
     } catch {
       //
     } finally {
@@ -327,33 +323,12 @@ export default function LoginPage() {
       {/* UX-28: Apply login-form-enter animation on step change */}
       {step === "credentials" ? (
         <form key="credentials" onSubmit={handleCredentials} className="login-form-enter space-y-4">
-          <h2 className="font-sora text-lg font-semibold text-[var(--gray-900)]">Sign in to MedSync</h2>
+          <h2 className="font-sora text-lg font-semibold text-[#0C1F3D]">Sign in to MedSync</h2>
 
           {devicePolicy && !devicePolicy.isSupported && devicePolicy.warning && (
             <div className="rounded-lg border border-[#FCD34D] bg-[#FEF3C7] p-3 text-sm text-[#92400E]" role="alert">
               <p className="font-medium">{devicePolicy.warning}</p>
               <p className="mt-1 text-xs">Supported: Windows (Hello) · macOS (Touch ID/Face ID)</p>
-            </div>
-          )}
-
-          {passkeySupported && (
-            <div className="space-y-3">
-              <Button
-                type="button"
-                variant="outline"
-                fullWidth
-                onClick={handlePasskeySignIn}
-                disabled={loading}
-                className="flex items-center justify-center gap-2 border-[var(--teal-500)] text-[var(--teal-500)] hover:bg-[rgba(11,138,150,0.05)] cursor-pointer py-3 h-auto"
-              >
-                <Fingerprint className="h-5 w-5 text-[var(--teal-500)]" />
-                <span className="font-semibold">Sign in with Passkey / biometric</span>
-              </Button>
-              <div className="relative flex items-center py-2">
-                <div className="flex-grow border-t border-[var(--gray-300)]"></div>
-                <span className="flex-shrink mx-4 text-xs text-[var(--gray-400)] uppercase font-semibold">or use email & password</span>
-                <div className="flex-grow border-t border-[var(--gray-300)]"></div>
-              </div>
             </div>
           )}
 
@@ -386,26 +361,43 @@ export default function LoginPage() {
             onChange={(e) => setRememberMe(e.target.checked)}
           />
 
-          <Link href="/forgot-password" className="block text-sm text-[var(--teal-500)] hover:underline">
+          <Link href="/forgot-password" className="block text-sm text-[#0B8A96] hover:underline">
             Forgot password?
           </Link>
 
-          {/* UX-04: role="alert" on error */}
-          {error && <p className="text-sm text-[var(--red-600)]" role="alert" aria-live="polite">{error}</p>}
+          {error && <p className="text-sm text-red-600" role="alert" aria-live="polite">{error}</p>}
 
-          {/* UX-01: "Sign in" instead of "Continue" */}
           <Button
             type="submit"
             fullWidth
-            disabled={loading || !email || !password}
+            disabled={loading || passkeyLoading || !email || !password}
             data-testid="login-submit"
           >
             {loading ? "Signing in…" : STEP_LABELS[step]}
           </Button>
+
+          {passkeySupported && (
+            <div className="space-y-3 pt-1">
+              <div className="relative flex items-center">
+                <div className="flex-grow border-t border-slate-200"></div>
+                <span className="mx-4 flex-shrink text-xs font-semibold uppercase text-slate-400">or</span>
+                <div className="flex-grow border-t border-slate-200"></div>
+              </div>
+              <button
+                type="button"
+                onClick={handlePasskeySignIn}
+                disabled={loading || passkeyLoading || !email}
+                className="flex w-full cursor-pointer items-center justify-center gap-2 rounded-lg border-[1.5px] border-[#0B8A96] bg-transparent px-4 py-3 text-sm font-semibold text-[#0B8A96] transition-colors hover:bg-[#0B8A96]/5 disabled:cursor-not-allowed disabled:opacity-40"
+              >
+                <Fingerprint className="h-5 w-5 shrink-0" />
+                <span>{passkeyLoading ? "Authenticating…" : "Sign in with Passkey / biometric"}</span>
+              </button>
+            </div>
+          )}
         </form>
       ) : (
         <form key="mfa" onSubmit={handleMfa} className="login-form-enter space-y-4">
-          <h2 className="font-sora text-lg font-semibold text-[var(--gray-900)]">
+          <h2 className="font-sora text-lg font-semibold text-[#0C1F3D]">
             {mfaMode === "backup"
               ? "Enter backup code"
               : mfaChannel === "email"
@@ -457,7 +449,7 @@ export default function LoginPage() {
                   </>
                 ) : (
                   <div className="flex items-center justify-between">
-                    <p className="text-xs text-[var(--gray-500)]">This code expires in 5 minutes.</p>
+                    <p className="text-xs text-[var(--gray-500)]">This code expires in 10 minutes.</p>
                     {/* UX-02: Resend code for email OTP */}
                     <button
                       type="button"
@@ -519,8 +511,7 @@ export default function LoginPage() {
             </>
           )}
 
-          {/* UX-04: role="alert" on error */}
-          {error && <p className="text-sm text-[var(--red-600)]" role="alert" aria-live="polite">{error}</p>}
+          {error && <p className="text-sm text-red-600" role="alert" aria-live="polite">{error}</p>}
 
           {/* UX-01: "Verify code" label */}
           <Button

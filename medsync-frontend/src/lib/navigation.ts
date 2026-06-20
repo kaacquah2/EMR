@@ -27,6 +27,7 @@ const COMMON_NAV = {
   auditLogs: { href: "/admin/audit-logs", label: "Audit Logs" },
   facilities: { href: "/admin/facilities", label: "Facility config" },
   rbacReview: { href: "/admin/rbac-review", label: "RBAC review" },
+  overtime: { href: "/admin/overtime-tracking", label: "Overtime Tracking" },
   superAdminDashboard: { href: "/superadmin", label: "Dashboard" },
   superAdminNetwork: { href: "/superadmin/network", label: "Network Overview" },
   superAdminHospitals: { href: "/superadmin/hospitals", label: "Hospitals" },
@@ -49,6 +50,7 @@ export const navByRole: Record<string, NavItem[]> = {
     COMMON_NAV.patientSearch,
     COMMON_NAV.appointments,
     COMMON_NAV.alerts,
+    { href: "/incidents", label: "Incidents" },
     COMMON_NAV.referrals,
     COMMON_NAV.interopHub,
   ],
@@ -56,8 +58,12 @@ export const navByRole: Record<string, NavItem[]> = {
   nurse: [
     COMMON_NAV.dashboard,
     COMMON_NAV.emergencyQueue,
+    COMMON_NAV.patientSearch,
+    COMMON_NAV.admissions,
+    { href: "/worklist", label: "Worklist" },
     { href: "/worklist/handover", label: "Shift Handover" },
     COMMON_NAV.alerts,
+    { href: "/incidents", label: "Report Incident" },
   ],
 
   receptionist: [
@@ -74,12 +80,26 @@ export const navByRole: Record<string, NavItem[]> = {
 
   pharmacy_technician: [
     COMMON_NAV.dashboard,
+    { href: "/pharmacy", label: "Pharmacy Worklist" },
+    { href: "/pharmacy/inventory", label: "Stock & Inventory" },
+  ],
+
+  radiology_technician: [
+    COMMON_NAV.dashboard,
   ],
 
   billing_staff: [
     COMMON_NAV.dashboard,
+    { href: "/billing", label: "Billing & Invoices" },
     COMMON_NAV.patientSearch,
     COMMON_NAV.appointments,
+  ],
+
+  ward_clerk: [
+    COMMON_NAV.dashboard,
+    COMMON_NAV.patientSearch,
+    COMMON_NAV.admissions,
+    COMMON_NAV.alerts,
   ],
 
   hospital_admin: [
@@ -89,11 +109,13 @@ export const navByRole: Record<string, NavItem[]> = {
     COMMON_NAV.appointments,
     COMMON_NAV.admissions,
     COMMON_NAV.alerts,
+    { href: "/incidents", label: "Incidents" },
     COMMON_NAV.referrals,
     COMMON_NAV.userManagement,
     COMMON_NAV.facilities,
     COMMON_NAV.rbacReview,
     COMMON_NAV.auditLogs,
+    COMMON_NAV.overtime,
     COMMON_NAV.interopHub,
   ],
 
@@ -149,6 +171,7 @@ const DOCTOR_EXACT_ALLOWED = new Set([
   "/patients/search",
   "/appointments",
   "/alerts",
+  "/incidents",
   "/referrals",
   "/interop",
   "/unauthorized",
@@ -172,16 +195,23 @@ function isDoctorPathnameAccessible(path: string): boolean {
 const NURSE_EXACT_ALLOWED = new Set([
   "/dashboard",
   "/worklist",
+  "/worklist/handover",
   "/patients/search",
   "/appointments",
   "/alerts",
   "/admissions",
+  "/incidents",
+  "/emergency",
   "/unauthorized",
 ]);
 
 function isNursePathnameAccessible(path: string): boolean {
   if (NURSE_EXACT_ALLOWED.has(path)) return true;
   const segments = path.split("/").filter(Boolean);
+
+  // Nurse shift management pages (/nurse/*)
+  if (segments[0] === "nurse") return true;
+
   if (segments[0] !== "patients" || !segments[1] || !pathSegmentIsUuid(segments[1])) {
     return false;
   }
@@ -219,14 +249,46 @@ function isReceptionistPathnameAccessible(path: string): boolean {
   return RECEPTIONIST_EXACT_ALLOWED.has(path);
 }
 
+const WARD_CLERK_EXACT_ALLOWED = new Set([
+  "/dashboard",
+  "/patients/search",
+  "/admissions",
+  "/alerts",
+  "/unauthorized",
+]);
+
+function isWardClerkPathnameAccessible(path: string): boolean {
+  if (WARD_CLERK_EXACT_ALLOWED.has(path)) return true;
+  const segments = path.split("/").filter(Boolean);
+  if (segments[0] !== "patients" || !segments[1] || !pathSegmentIsUuid(segments[1])) {
+    return false;
+  }
+  if (segments.length === 2) return true;
+  return false;
+}
+
 export function isPathnameAccessible(role: string, pathname: string, options?: NavigationOptions): boolean {
   const path = pathname.replace(/\/$/, "") || "/";
   if (path === "/unauthorized") return true;
   if (path === "" || path === "/") return true;
+  // Settings accessible to all authenticated roles
+  if (path.startsWith("/settings")) return true;
   if (role === "doctor") return isDoctorPathnameAccessible(path);
   if (role === "nurse") return isNursePathnameAccessible(path);
-  if (role === "lab_technician") return isLabTechnicianPathnameAccessible(path);
+  if (role === "lab_technician") return isLabTechnicianPathnameAccessible(path) || path === "/incidents";
   if (role === "receptionist") return isReceptionistPathnameAccessible(path);
+  if (role === "ward_clerk") return isWardClerkPathnameAccessible(path);
+  if (role === "pharmacy_technician") {
+    const allowed = new Set(["/dashboard", "/pharmacy", "/pharmacy/inventory", "/unauthorized"]);
+    return allowed.has(path);
+  }
+  if (role === "billing_staff") {
+    const allowed = new Set(["/dashboard", "/billing", "/patients/search", "/appointments", "/unauthorized"]);
+    return allowed.has(path);
+  }
+  if (role === "radiology_technician") {
+    return path === "/dashboard" || path === "/unauthorized";
+  }
 
   const nav = getNavigation(role, options);
 
@@ -255,7 +317,7 @@ export function isPathnameAccessible(role: string, pathname: string, options?: N
     const sub = `/${segments[0]}/${segments[1]}`;
     if (sub === "/admin/facilities") return role === ROLES.SUPER_ADMIN || role === ROLES.HOSPITAL_ADMIN;
     // RBAC-03: super_admin must be able to access rbac-review
-    if (sub === "/admin/rbac-review") return role === ROLES.HOSPITAL_ADMIN || role === ROLES.SUPER_ADMIN;
+    if (sub === "/admin/rbac-review" || sub === "/admin/overtime-tracking") return role === ROLES.HOSPITAL_ADMIN || role === ROLES.SUPER_ADMIN;
     if (sub === "/admin/users" || sub === "/admin/audit-logs") {
       return role === ROLES.HOSPITAL_ADMIN || role === ROLES.SUPER_ADMIN;
     }

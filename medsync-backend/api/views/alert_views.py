@@ -85,6 +85,8 @@ def alert_resolve(request, pk):
     alert.resolved_at = timezone.now()
     alert.resolved_by = request.user
     alert.save(update_fields=["status", "resolved_at", "resolved_by"])
+    from api.signals_alerts import broadcast_alert_resolved
+    broadcast_alert_resolved(alert)
     return Response({
         "id": str(alert.id),
         "status": alert.status,

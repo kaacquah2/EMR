@@ -31,6 +31,10 @@ def _dev_bypass_emails() -> set[str]:
 PERMISSION_MATRIX = {
     # Health endpoint (public)
     "health": {"public": ["GET"]},
+    # OpenAPI / Swagger UI (public)
+    "schema": {"public": ["GET"]},
+    "docs": {"public": ["GET"]},
+    "redoc": {"public": ["GET"]},
     # Auth endpoints (public)
     "auth/login": {"public": ["POST"]},
     "auth/mfa-verify": {"public": ["POST"]},
@@ -43,6 +47,14 @@ PERMISSION_MATRIX = {
     "auth/logout-cookie": {"authenticated": ["POST"]},
     "auth/me": {"authenticated": ["GET"]},
     "auth/csrf-token": {"authenticated": ["POST"]},
+    "auth/set-device-pin": {
+        "nurse": ["POST"],
+        "lab_technician": ["POST"],
+        "pharmacy_technician": ["POST"],
+        "radiology_technician": ["POST"],
+        "ward_clerk": ["POST"],
+    },
+    "auth/session-unlock": {"public": ["POST"]},
     # Step-up endpoints
     "auth/step-up/request": {"authenticated": ["POST"]},
     "auth/step-up/verify": {"authenticated": ["POST"]},
@@ -68,6 +80,7 @@ PERMISSION_MATRIX = {
         "doctor": ["GET"],
         "nurse": ["GET"],
         "lab_technician": ["GET"],
+        "pharmacy_technician": ["GET"],
         "receptionist": ["GET"],
         "radiology_technician": ["GET"],
         "billing_staff": ["GET"],
@@ -91,6 +104,7 @@ PERMISSION_MATRIX = {
         "nurse": ["GET"],
         "receptionist": ["GET"],
         "lab_technician": ["GET"],
+        "pharmacy_technician": ["GET"],
         "radiology_technician": ["GET"],
         "billing_staff": ["GET"],
         "ward_clerk": ["GET"],
@@ -283,6 +297,7 @@ PERMISSION_MATRIX = {
         "doctor": ["GET"],
         "hospital_admin": ["GET"],
         "super_admin": ["GET"],
+        "ward_clerk": ["GET"],
     },
     "admissions/create": {
         "doctor": ["POST"],
@@ -572,6 +587,7 @@ PERMISSION_MATRIX = {
     "admin/wards/<pk>/beds": {
         "hospital_admin": ["GET"],
         "super_admin": ["GET"],
+        "ward_clerk": ["GET"],
     },
     "admin/beds": {
         "hospital_admin": ["POST"],
@@ -580,6 +596,7 @@ PERMISSION_MATRIX = {
     "admin/beds/<pk>": {
         "hospital_admin": ["PATCH"],
         "super_admin": ["PATCH"],
+        "ward_clerk": ["PATCH"],
     },
     # Clinical/lab/admission extended workflows
     "lab/attachments/upload": {
@@ -591,12 +608,14 @@ PERMISSION_MATRIX = {
         "doctor": ["GET"],
         "hospital_admin": ["GET"],
         "super_admin": ["GET"],
+        "ward_clerk": ["GET"],
     },
     "admissions/ward/<pk>/dashboard": {
         "nurse": ["GET"],
         "doctor": ["GET"],
         "hospital_admin": ["GET"],
         "super_admin": ["GET"],
+        "ward_clerk": ["GET"],
     },
     "records/prescriptions/pending-by-ward": {"nurse": ["GET"]},
     "alerts/active-by-ward": {"nurse": ["GET"]},
@@ -608,6 +627,7 @@ PERMISSION_MATRIX = {
         "radiology_technician": ["POST"],
         "hospital_admin": ["POST"],
         "super_admin": ["POST"],
+        "ward_clerk": ["POST"],
     },
     "shifts/<pk>/end": {
         "nurse": ["POST"],
@@ -616,6 +636,7 @@ PERMISSION_MATRIX = {
         "radiology_technician": ["POST"],
         "hospital_admin": ["POST"],
         "super_admin": ["POST"],
+        "ward_clerk": ["POST"],
     },
     "shifts/current": {
         "nurse": ["GET"],
@@ -624,6 +645,7 @@ PERMISSION_MATRIX = {
         "radiology_technician": ["GET"],
         "hospital_admin": ["GET"],
         "super_admin": ["GET"],
+        "ward_clerk": ["GET"],
     },
     "shifts/<pk>/break/start": {
         "nurse": ["POST"],
@@ -632,6 +654,7 @@ PERMISSION_MATRIX = {
         "radiology_technician": ["POST"],
         "hospital_admin": ["POST"],
         "super_admin": ["POST"],
+        "ward_clerk": ["POST"],
     },
     "shifts/<pk>/break/end": {
         "nurse": ["POST"],
@@ -640,6 +663,7 @@ PERMISSION_MATRIX = {
         "radiology_technician": ["POST"],
         "hospital_admin": ["POST"],
         "super_admin": ["POST"],
+        "ward_clerk": ["POST"],
     },
     "shifts/<pk>/handover": {
         "nurse": ["POST"],
@@ -648,6 +672,7 @@ PERMISSION_MATRIX = {
         "radiology_technician": ["POST"],
         "hospital_admin": ["POST"],
         "super_admin": ["POST"],
+        "ward_clerk": ["POST"],
     },
     "shifts/handover-history": {
         "nurse": ["GET"],
@@ -656,6 +681,7 @@ PERMISSION_MATRIX = {
         "radiology_technician": ["GET"],
         "hospital_admin": ["GET"],
         "super_admin": ["GET"],
+        "ward_clerk": ["GET"],
     },
     "shifts/<pk>/statistics": {
         "nurse": ["GET"],
@@ -664,6 +690,7 @@ PERMISSION_MATRIX = {
         "radiology_technician": ["GET"],
         "hospital_admin": ["GET"],
         "super_admin": ["GET"],
+        "ward_clerk": ["GET"],
     },
     "shifts/roster": {"hospital_admin": ["GET"], "super_admin": ["GET"]},
     "shifts/roster/create": {"hospital_admin": ["POST"], "super_admin": ["POST"]},
@@ -764,6 +791,11 @@ PERMISSION_MATRIX = {
         "hospital_admin": ["POST"],
         "billing_staff": ["POST"],
         "super_admin": ["POST"],
+    },
+    "nhis/status": {
+        "billing_staff": ["GET"],
+        "hospital_admin": ["GET"],
+        "super_admin": ["GET"],
     },
     "patients/<pk>/billing-history": {
         "hospital_admin": ["GET"],
@@ -1041,6 +1073,7 @@ PERMISSION_MATRIX = {
         "nurse": ["POST"],
         "hospital_admin": ["POST"],
         "super_admin": ["POST"],
+        "ward_clerk": ["POST"],
     },
     "encounters/<uuid:encounter_id>/cds-alerts": {
         "doctor": ["GET"],
@@ -1194,7 +1227,7 @@ class PermissionValidator:
         request,
         endpoint: str,
         reason: str,
-        extra_data: dict = None,
+        extra_data: Optional[dict] = None,
     ):
         """Log permission denial for audit trail."""
         user = getattr(request, "user", None)

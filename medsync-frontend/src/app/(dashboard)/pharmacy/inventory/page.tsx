@@ -1,29 +1,28 @@
 'use client'
 
-import { useEffect } from 'react'
-import { useRouter } from 'next/navigation'
 import { useAuth } from '@/lib/auth-context'
+import { PharmacyDashboard } from '@/components/features/pharmacy/PharmacyDashboard'
+import { Breadcrumbs } from '@/components/ui/breadcrumbs'
+
+const ALLOWED = ['pharmacy_technician', 'hospital_admin', 'super_admin']
 
 export default function PharmacyInventoryPage() {
   const { user } = useAuth()
-  const router = useRouter()
 
-  useEffect(() => {
-    if (!user) {
-      router.push('/login')
-    }
-  }, [user, router])
+  if (!user) return null
 
-  if (!user) {
-    return <div>Loading...</div>
+  if (!ALLOWED.includes(user.role ?? '')) {
+    return (
+      <div className="rounded-lg bg-[#FEF3C7] p-4 text-[#B45309]">
+        You do not have permission to view pharmacy inventory.
+      </div>
+    )
   }
 
   return (
-    <div className="mx-auto max-w-2xl py-10 px-4">
-      <h1 className="text-2xl font-bold text-slate-900 dark:text-slate-100">Pharmacy Inventory</h1>
-      <p className="mt-2 text-sm text-slate-600 dark:text-slate-400">
-        Pharmacy inventory management is not deployed in the demo runtime.
-      </p>
+    <div className="space-y-6">
+      <Breadcrumbs items={[{ label: 'Pharmacy' }, { label: 'Inventory' }]} />
+      <PharmacyDashboard />
     </div>
   )
 }

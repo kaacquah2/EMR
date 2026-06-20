@@ -1,7 +1,10 @@
 import csv
 import io
+import logging
 import secrets
 import pyotp
+
+logger = logging.getLogger(__name__)
 from django.db import transaction
 from django.utils import timezone
 from django.utils.dateparse import parse_datetime
@@ -229,7 +232,7 @@ def user_invite(request):
         "email_sent": email_sent,
     }
     if not email_sent:
-        response_data["email_error"] = email_error
+        response_data["email_error"] = email_error or ""
 
     return Response(
         response_data,
@@ -599,7 +602,7 @@ def user_resend_invite(request, pk):
         "email_sent": email_sent,
     }
     if not email_sent:
-        response_data["email_error"] = email_error
+        response_data["email_error"] = email_error or ""
 
     return Response(response_data)
 
@@ -1676,7 +1679,7 @@ def patient_transfer(request, admission_id):
         "reason": "string"
     }
     """
-    if request.user.role not in ('doctor', 'nurse', 'hospital_admin', 'super_admin'):
+    if request.user.role not in ('doctor', 'nurse', 'hospital_admin', 'super_admin', 'ward_clerk'):
         return Response({'message': 'Permission denied'}, status=status.HTTP_403_FORBIDDEN)
     
     hospital = get_effective_hospital(request)
@@ -2057,7 +2060,7 @@ def hospital_equipment(request):
             qs = qs.filter(category=category)
         return Response({"data": EquipmentSerializer(qs, many=True).data})
     
-    if request.method == "POST":
+    elif request.method == "POST":
         if request.user.role != "hospital_admin":
             return Response({"message": "Permission denied"}, status=status.HTTP_403_FORBIDDEN)
         data = request.data
@@ -2071,4 +2074,6 @@ def hospital_equipment(request):
             current_ward_id=data.get("ward_id"),
         )
         return Response(EquipmentSerializer(eq).data, status=status.HTTP_201_CREATED)
+    
+    return Response({"message": "Method not allowed"}, status=status.HTTP_405_METHOD_NOT_ALLOWED)
 

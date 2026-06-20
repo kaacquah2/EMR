@@ -2,7 +2,6 @@ import uuid
 from django.db import models
 from core.models import Hospital, User, Ward, Bed
 from django_cryptography.fields import encrypt
-from api.tenancy import TenantManager
 
 
 class Patient(models.Model):
@@ -40,9 +39,9 @@ class Patient(models.Model):
     registered_at = models.ForeignKey(Hospital, on_delete=models.PROTECT, related_name="+")
     created_by = models.ForeignKey(User, on_delete=models.PROTECT)
 
-    tenant_field = "registered_at"
-    objects = models.Manager()
-    tenant_objects = TenantManager()
+    # Hospital scoping is enforced via the get_patient_queryset() helper in
+    # api/utils.py — the single source of truth for multi-tenant filtering.
+    # See api/utils.py for the full super-admin / view-as scoping matrix.
     is_archived = models.BooleanField(default=False, db_index=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
@@ -307,12 +306,11 @@ class Appointment(models.Model):
 
 class PatientConsent(models.Model):
     """
-    Tracks patient consent for data sharing and clinical AI features.
+    Tracks patient consent for data sharing and clinical features.
     Required for GHANA NDPA and HIPAA-aligned data residency.
     """
     CONSENT_TYPES = [
         ("data_sharing", "External Data Sharing (NHIS/GHS)"),
-        ("ai_analysis", "Clinical AI Analysis"),
         ("research", "Anonymized Research"),
         ("marketing", "Communications/Marketing"),
     ]

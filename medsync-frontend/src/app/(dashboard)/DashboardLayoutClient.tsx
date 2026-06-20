@@ -9,6 +9,8 @@ import { ViewAsBanner } from "@/components/layout/ViewAsBanner";
 import { NetworkStatusBanner } from "@/components/ui/NetworkStatusBanner";
 import { GracePeriodBanner } from "@/components/ui/GracePeriodBanner";
 import { CommandPalette } from "@/components/ui/CommandPalette";
+import { PinUnlockModal } from "@/components/ui/PinUnlockModal";
+import { PinSetupModal } from "@/components/ui/PinSetupModal";
 import { useAuth } from "@/lib/auth-context";
 import { useSidebar } from "@/lib/sidebar-context";
 import { isPathnameAccessible } from "@/lib/navigation";
@@ -82,6 +84,8 @@ function DashboardLayoutContent({
       </div>
       <BottomNav />
       <CommandPalette />
+      <PinUnlockModal />
+      <PinSetupModal />
     </>
   );
 }

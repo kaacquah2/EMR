@@ -12,7 +12,7 @@ from api.utils import get_request_hospital
 @permission_classes([IsAuthenticated])
 def bed_list_by_ward(request, ward_id):
     """List beds for a ward. Query params: status (optional)."""
-    if request.user.role not in ("hospital_admin", "super_admin", "doctor", "nurse"):
+    if request.user.role not in ("hospital_admin", "super_admin", "doctor", "nurse", "ward_clerk"):
         return Response(
             {"message": "Permission denied"},
             status=status.HTTP_403_FORBIDDEN,
@@ -28,7 +28,7 @@ def bed_list_by_ward(request, ward_id):
             {"message": "Ward not found"},
             status=status.HTTP_404_NOT_FOUND,
         )
-    if request.user.role == "nurse" and request.user.ward_id != ward.id:
+    if request.user.role in ("nurse", "ward_clerk") and request.user.ward_id != ward.id:
         return Response(
             {"message": "Permission denied"},
             status=status.HTTP_403_FORBIDDEN,
@@ -103,7 +103,7 @@ def bed_create(request):
 @permission_classes([IsAuthenticated])
 def bed_update(request, bed_id):
     """Update bed status. Body: status (available|occupied|reserved|maintenance)."""
-    if request.user.role not in ("hospital_admin", "super_admin", "doctor", "nurse"):
+    if request.user.role not in ("hospital_admin", "super_admin", "doctor", "nurse", "ward_clerk"):
         return Response(
             {"message": "Permission denied"},
             status=status.HTTP_403_FORBIDDEN,
@@ -118,7 +118,7 @@ def bed_update(request, bed_id):
             {"message": "Bed not found"},
             status=status.HTTP_404_NOT_FOUND,
         )
-    if request.user.role == "nurse" and request.user.ward_id != bed.ward_id:
+    if request.user.role in ("nurse", "ward_clerk") and request.user.ward_id != bed.ward_id:
         return Response(
             {"message": "Permission denied"},
             status=status.HTTP_403_FORBIDDEN,

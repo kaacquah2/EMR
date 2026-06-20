@@ -180,7 +180,7 @@ def revoke_consent(request, pk: str) -> Union[RevokeOk, RevokeErr]:
     consent.withdraw(user=request.user, reason=reason)
     log_event(
         request.user,
-        "CONSENT_WITHDRAWN",
+        "CONSENT_REVOKED",
         resource_type="consent",
         resource_id=consent.id,
         hospital=get_request_hospital(request),

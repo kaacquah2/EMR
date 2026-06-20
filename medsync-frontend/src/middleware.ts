@@ -1,3 +1,18 @@
+/**
+ * Next.js edge middleware — UX-layer route gating only.
+ *
+ * SECURITY NOTE: The `medsync_role` cookie read below is set client-side and is
+ * NOT HttpOnly, so it can be edited by any user in their browser's DevTools.
+ * This middleware therefore provides a UX convenience (redirect to /unauthorized
+ * before the page renders) but is NOT a security boundary.
+ *
+ * True authorization is enforced by the Django backend on every API call:
+ *   - JWT bearer token verification (SimpleJWT)
+ *   - Role/permission check (shared/permissions.py:PermissionEnforcementMiddleware)
+ *   - Hospital scoping (api/utils.py get_*_queryset helpers)
+ *
+ * Do NOT gate data fetches or sensitive actions on client-side role values.
+ */
 import { NextResponse, type NextRequest } from "next/server";
 import { isPathnameAccessible } from "./lib/navigation";
 

@@ -48,7 +48,7 @@ function ResetPasswordForm() {
         throw new Error("Unable to reset password. Please try again.");
       }
       login(data);
-      document.cookie = "medsync_session=1; path=/; max-age=28800";
+      document.cookie = "medsync_session=1; path=/; max-age=28800; SameSite=Strict; Secure";
       window.location.href = "/dashboard";
     } catch (err) {
       setError(err instanceof Error ? err.message : "Unable to reset password. Please try again.");

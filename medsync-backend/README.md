@@ -8,12 +8,10 @@ Django REST API for MedSync EMR (Ghana Inter-Hospital Electronic Medical Records
 
 ### For reviewers
 
-- **What this is:** Django REST API for a centralized, multi-hospital EMR (Ghana). Auth (JWT + TOTP MFA), patients/records/encounters, admissions, lab orders, admin, audit, FHIR/HL7, inter-hospital interoperability (global patient registry, referrals, consent, break-glass), and **AI clinical decision support** (risk prediction, triage, diagnosis assistance).
-- **Quick verify:** From repo root `medsync-backend/`: `python -m venv .venv` → activate → `pip install -r requirements-local.txt` → `cp .env.example .env` (optional for dev; SQLite used if `DEBUG=True` and no `DATABASE_URL`) → `python manage.py migrate` → `python manage.py setup_dev` → `python dev_server.py` (or `python manage.py runserver`). Run tests: `python -m pytest api/tests/ -v`. Health: `GET http://localhost:8000/api/v1/health`.
-  - **AI Training (Optional):** `python -c "import os, django; os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'medsync_backend.settings'); django.setup(); from api.ai.train_models import run_training; run_training(data_source='synthetic')"` to train models on synthetic Ghana data in ~2 minutes. Models saved to `api/ai/models/v{version}/`.
-- **Key topics:** Security and structure (Codebase Audit), Governance, Multi-Tenancy, AI Training Pipeline (see section below), full API route table and role matrix — all in this README below.
-- **Dev credentials:** [docs/DEV_CREDENTIALS.md](../docs/DEV_CREDENTIALS.md)
-- **Daphne timeout fix:** See [DAPHNE_FIX.md](../DAPHNE_FIX.md) — eliminates "took too long to shut down" warnings during file reloads.
+- **What this is:** Django REST API for a centralized, multi-hospital EMR (Ghana). Auth (JWT + TOTP MFA), patients/records/encounters, admissions, lab orders, admin, audit, FHIR/HL7, inter-hospital interoperability (global patient registry, referrals, consent, break-glass), and **rule-based clinical decision support** (drug–drug interactions, allergy checks, NEWS2/qSOFA scoring).
+- **Quick verify:** From repo root `medsync-backend/`: `python -m venv .venv` → activate → `pip install -r requirements-local.txt` → `cp .env.example .env` (optional for dev; SQLite used if `DEBUG=True` and no `DATABASE_URL`) → `python manage.py migrate` → `python manage.py setup_dev` → `python manage.py seed_demo_walkthrough` → `python dev_server.py` (or `python manage.py runserver`). Run tests: `python -m pytest api/tests/ -v`. Health: `GET http://localhost:8000/api/v1/health`.
+- **Key topics:** Security and structure (Codebase Audit), Governance, Multi-Tenancy, Inter-Hospital Interoperability, full API route table and role matrix — all in this README below.
+- **Dev credentials:** `python manage.py seed_demo_walkthrough` prints demo credentials after seeding.
 
 ### Production Readiness
 
@@ -124,6 +122,59 @@ python manage.py runserver        # Uses DAPHNE_APPLICATION_CLOSE_TIMEOUT from s
 
 **Why this matters:**
 During rapid file changes, the file reloader kills old Daphne processes. With a 2-second timeout, requests in progress are forcefully killed. With 5 seconds, they can complete gracefully, eliminating the noisy warnings in your logs.
+
+---
+
+## 📧 Email & SMTP Configuration (MFA OTP Support)
+
+By default, the development environment uses `django.core.mail.backends.console.EmailBackend`. This logs all outgoing emails (such as MFA One-Time Passwords (OTP) and password reset links) directly to the console instead of sending them.
+
+For a live demo or to test email delivery, you must configure a real SMTP provider.
+
+### How to Switch to SMTP Backend
+In your local `.env` file, configure the following variables.
+
+#### 1. Mailtrap (Recommended for Testing & Development)
+Mailtrap captures all outgoing emails in a safe sandbox mailbox without sending them to real recipients.
+```ini
+# Optional: defaults to smtp backend when credentials are set
+EMAIL_BACKEND=django.core.mail.backends.smtp.EmailBackend
+EMAIL_HOST=sandbox.smtp.mailtrap.io
+EMAIL_PORT=2525
+EMAIL_USE_TLS=True
+EMAIL_USE_SSL=False
+EMAIL_HOST_USER=your_mailtrap_username
+EMAIL_HOST_PASSWORD=your_mailtrap_password
+DEFAULT_FROM_EMAIL=MedSync EMR <noreply@medsync.gh>
+```
+
+#### 2. SendGrid (Free Tier/Production)
+```ini
+EMAIL_BACKEND=django.core.mail.backends.smtp.EmailBackend
+EMAIL_HOST=smtp.sendgrid.net
+EMAIL_PORT=587
+EMAIL_USE_TLS=True
+EMAIL_USE_SSL=False
+EMAIL_HOST_USER=apikey
+EMAIL_HOST_PASSWORD=your_sendgrid_api_key
+DEFAULT_FROM_EMAIL=MedSync EMR <your_verified_sender@domain.com>
+```
+
+#### 3. Mailgun (Free Tier/Production)
+```ini
+EMAIL_BACKEND=django.core.mail.backends.smtp.EmailBackend
+EMAIL_HOST=smtp.mailgun.org
+EMAIL_PORT=587
+EMAIL_USE_TLS=True
+EMAIL_USE_SSL=False
+EMAIL_HOST_USER=postmaster@your_mailgun_domain.com
+EMAIL_HOST_PASSWORD=your_mailgun_smtp_password
+DEFAULT_FROM_EMAIL=MedSync EMR <noreply@your_mailgun_domain.com>
+```
+
+> [!IMPORTANT]
+> - Ensure your SMTP credentials are **never committed** to git control.
+> - Email OTP is the primary MFA verification method for most clinical roles. If you log in using an account not in the `DEV_PERMISSION_BYPASS_EMAILS` list, you will need a working SMTP server to receive and submit the OTP login token.
 
 ---
 
@@ -613,400 +664,46 @@ There is no separate multi-identifier table (e.g. multiple ID types per patient)
 
 ---
 
-## AI Intelligence Module
+## Clinical Decision Support (Rule-Based CDS)
 
-**Overview:** Disease risk prediction (XGBoost), clinical decision support (differential diagnosis), triage (severity), patient similarity (k-NN), referral recommendation, multi-agent orchestration. LLM chat is out of scope for Phase 1.
+MedSync provides **rule-based** clinical decision support, not machine learning. The CDS
+engine (`api/services/cds_engine.py`) runs deterministic safety checks whenever a
+prescription is created or updated.
 
-**Components:** Data layer (`api/ai/data_processor.py`, `feature_engineering.py`); ML models under `api/ai/ml_models/` (risk_predictor, diagnosis_classifier, triage_classifier, similarity_matcher) loading from `api/ai/models/*.joblib` or `MEDSYNC_AI_MODELS_DIR`; services in `api/ai/services/services.py`; orchestrator `api/ai/agents/orchestrator.py`; persistence and AuditLog; REST in `api/views/ai_views.py` with `get_request_hospital(request)`.
+> **Note:** An earlier prototype included ML models (XGBoost, scikit-learn, FAISS). Those
+> components were removed before v1.0 because they required external data access (MIMIC-IV,
+> PhysioNet credentials) and deployed ML models that a student project cannot safely validate
+> clinically. The rule-based approach is simpler, fully auditable, and sufficient for
+> demonstrating the safety-alert feature for the project defence.
 
-### Model artifacts (where the “models” live)
+### What the CDS engine checks
 
-- **Default directory:** `medsync-backend/api/ai/models/`
-- **Expected files:** `risk_predictor.joblib`, `triage_classifier.joblib`, `diagnosis_classifier.joblib`, `similarity_matcher.joblib`
-- **Override directory at runtime:** set `MEDSYNC_AI_MODELS_DIR` (see `medsync_backend/settings.py`)
+| Check | Trigger | What it catches |
+|-------|---------|-----------------|
+| Drug-drug interaction | On prescription save | Pairs in `drug_interactions.json` (curated list) |
+| Drug-allergy conflict | On prescription save | Patient allergy list vs. drug class |
+| Renal dosing alert | On prescription save | Renally-cleared drugs for patients with CKD |
+| Duplicate therapy | On prescription save | Two drugs in the same class concurrently |
 
-**API endpoints (base `/api/v1`):** All require `Authorization: Bearer <token>`.
+### Vital sign scoring (deterministic)
 
-| Method | Path | Purpose | Roles |
-|--------|------|---------|-------|
-| POST | `/ai/analyze-patient/<patient_id>` | Full multi-agent analysis (risk, triage, diagnosis, optional similarity/referral, summary) | doctor, nurse, hospital_admin, super_admin |
-| POST | `/ai/risk-prediction/<patient_id>` | 5-year disease risk scores | doctor, nurse, super_admin |
-| POST | `/ai/clinical-decision-support/<patient_id>` | Differential diagnosis (optional body: chief_complaint) | doctor, super_admin |
-| POST | `/ai/triage/<patient_id>` | Triage level and ESI (optional body: chief_complaint) | doctor, nurse, super_admin |
-| POST | `/ai/find-similar-patients/<patient_id>?k=10` | Similar cases (k max 50) | doctor, super_admin |
-| POST | `/ai/referral-recommendation/<patient_id>` | Recommended hospitals (optional body: required_specialty) | doctor, hospital_admin, super_admin |
-| GET | `/ai/analysis-history/<patient_id>?limit=10&offset=0` | Past AI analyses | doctor, nurse, super_admin |
+| Score | Implementation |
+|-------|---------------|
+| NEWS2 | `api/vitals_utils.calculate_news2()` -- RCUK scoring table |
+| qSOFA | `api/vitals_utils.calculate_qsofa()` |
 
-**Training:** `api/ai/train_models.py` writes `risk_predictor.joblib`, `triage_classifier.joblib`, `diagnosis_classifier.joblib`, `similarity_matcher.joblib` to `api/ai/models/` (or `--output-dir`). Synthetic data by default; custom data path for future use. Run: `python manage.py shell -c "from api.ai.train_models import run_training; run_training()"` or `python api/ai/train_models.py`. Set `MEDSYNC_AI_MODELS_DIR` if using non-default dir.
+### CDS alerts in the UI
 
-**Quick start (generate/update model files):**
+When a check fires, a `ClinicalAlert` record is created and surfaced in the
+doctor dashboard alert panel. All alerts are audited (`ACKNOWLEDGE_CDS_ALERT`
+action in AuditLog).
 
-From repo root:
+### Future roadmap (ML -- planned, not implemented)
 
-```bash
-# Installs backend deps, runs migrations, trains models into medsync-backend/api/ai/models/
-bash scripts/setup_ai.sh
-```
-
-Or from `medsync-backend/`:
-
-```bash
-python -c "import os; os.environ.setdefault('DJANGO_SETTINGS_MODULE','medsync_backend.settings'); import django; django.setup(); from api.ai.train_models import run_training; run_training()"
-```
-
-**Deployment checklist (AI):** Dependencies in requirements-local.txt (scikit-learn, xgboost, numpy, pandas, joblib); migrate; optional model files or rule-based placeholders; `MEDSYNC_AI_MODELS_DIR` if needed; cache (e.g. Redis) for risk prediction; permissions in `api/permissions.py` for ai/* routes; audit all AI actions; HTTPS and hospital scope; smoke test `POST /api/v1/ai/analyze-patient/<patient_uuid>`.
-
----
-
-## AI Model Training & Deployment
-
-MedSync includes a comprehensive AI/ML pipeline for clinical decision support. The system trains models on hybrid data (synthetic Ghana-specific + public UCI/MIMIC datasets) and enforces hospital-level approval before clinical deployment.
-
-### Quick Start: Train Models
-
-From the `medsync-backend/` directory:
-
-```bash
-# Option 1: Via Django management command (recommended)
-python manage.py train_ai_models --data-source hybrid --model-version 1.0.0-hybrid
-
-# Option 2: Via Python directly
-python -c "import os, django; os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'medsync_backend.settings'); django.setup(); from api.ai.train_models import run_training; run_training()"
-
-# Option 3: Via shell script (if available)
-bash scripts/setup_ai.sh
-```
-
-### Training Pipeline Overview
-
-**Input:** Hybrid dataset (7,000 samples) =  
-- 3,000 synthetic patients (Ghana-specific: 25% malaria, 2% sickle cell, tropical conditions)
-- 4,000 UCI readmission dataset (public benchmark)
-
-**Process:**
-1. Feature engineering → 26-dimensional vectors (vitals, labs, demographics, comorbidities)
-2. Train 3-model ensemble:
-   - Logistic Regression (baseline, interpretable)
-   - Random Forest (robust, non-linear patterns)
-   - XGBoost (state-of-the-art, gradient boosting)
-3. 5-fold stratified cross-validation
-4. Calculate AUC-ROC, sensitivity, specificity per disease
-5. Save models, scaler, metrics, metadata
-
-**Output:** Models saved to `api/ai/models/v{version}/`
-- `logistic_regression.joblib` — Serialized LR model
-- `random_forest.joblib` — Serialized RF model
-- `xgboost.joblib` — Serialized XGBoost model
-- `scaler.joblib` — Feature normalization (StandardScaler)
-- `metadata.json` — Training info (timestamp, feature names, class names)
-- `metrics.json` — Validation metrics (AUC, sensitivity, specificity)
-
-### Training Models Locally
-
-#### Quick Start (Synthetic Data)
-```bash
-cd medsync-backend
-python manage.py train_ai_models --data-source synthetic --model-version 1.0.0
-```
-
-#### Hybrid Approach (Best for Development)
-```bash
-python manage.py train_ai_models --data-source hybrid --model-version 1.0.0-hybrid
-```
-
-#### With MIMIC Data (Production)
-```bash
-# First, download MIMIC-IV data from PhysioNet (see "MIMIC-IV Access" section above)
-# Then:
-export MIMIC_DATA_PATH="/path/to/mimic-iv/csv"
-python manage.py train_ai_models --data-source mimic-iv --model-version 1.0.0-mimic
-```
-
-#### Custom Data
-```bash
-python manage.py train_ai_models --data-path /path/to/data.csv --model-version custom-1.0
-```
-
-#### Validation Metrics
-
-Trained models are validated against these thresholds:
-- **AUC-ROC** ≥ 0.80 (discriminative ability)
-- **Sensitivity** ≥ 0.75 (recall of positive cases)
-- **Specificity** ≥ 0.85 (recall of negative cases)
-
-If a model fails validation, training halts with error. See metrics at: `api/ai/models/v{version}/metrics.json`
-
-To skip validation (development only):
-```bash
-python manage.py train_ai_models --skip-validation --data-source synthetic
-```
-
-#### Model Storage & Versioning
-
-All trained models are organized by version:
-```
-api/ai/models/
-├── v1.0.0/              # Synthetic Ghana data
-├── v1.0.0-hybrid/       # Hybrid synthetic + UCI
-├── v1.0.0-mimic/        # MIMIC-IV data
-└── logistic_regression.joblib  # Legacy (fallback)
-```
-
-To load a specific version, set in `.env`:
-```bash
-AI_MODEL_VERSION=1.0.0-hybrid
-```
-
-### Configuration
-
-**Settings** (`medsync_backend/settings.py`):
-```python
-# Model version and training status
-AI_MODEL_VERSION = "1.0.0-hybrid"  # Currently deployed version
-AI_MODELS_TRAINED_ON_REAL_DATA = True  # Switch to True after real data training
-AI_MODELS_VALIDATION_METRICS = {
-    'auc': 0.5921,
-    'sensitivity': 0.9013,
-    'specificity': 0.2948,
-    'training_date': '2026-04-20'
-}
-
-# AI deployment: set to False to disable AI features globally (circuit breaker)
-DISABLE_AI_CLINICAL_FEATURES = False
-
-# Clinical threshold: only return predictions with confidence ≥ this (0.0-1.0)
-AI_CONFIDENCE_THRESHOLD = 0.75  # Set to 0.80+ for clinical deployment
-```
-
-**Environment variables** (`.env`):
-```bash
-# Data source options: "synthetic", "uci", "mimic", "kaggle", "hybrid"
-AI_TRAINING_DATA_SOURCE=hybrid
-
-# Model version to deploy
-AI_MODEL_VERSION=1.0.0-hybrid
-
-# Disable AI features if needed (circuit breaker)
-DISABLE_AI_CLINICAL_FEATURES=False
-```
-
-### Data Sources
-
-The training pipeline supports multiple public data sources (no PHI):
-
-| Source | Size | Use | Config |
-|--------|------|-----|--------|
-| **Synthetic Ghana** | 3,000 | Local prevalence (malaria, sickle cell) | Built-in (NDARRAY) |
-| **UCI Readmission** | 4,000+ | Benchmark readmission prediction | public API (auto-download) |
-| **MIMIC-IV** | 50,000+ | ICU data (if credentials provided) | `MIMIC_TOKEN` env var |
-| **Kaggle** | Various | Additional datasets | `KAGGLE_USERNAME`, `KAGGLE_KEY` |
-| **WHO/Open-i** | Global | Reference data | Auto-download |
-
-#### MIMIC-IV Access for Research
-
-MIMIC-IV is a large, publicly-available dataset of de-identified intensive care unit (ICU) patients. To access MIMIC-IV data:
-
-1. **Register for PhysioNet:** Visit [https://physionet.org/](https://physionet.org/) and create an account
-2. **Complete Credentialed Access Agreement:** Sign the PhysioNet DUA (Data Use Agreement) and provide your institution/research details
-3. **Approval (typically 1-2 days):** You'll receive email confirmation with access
-4. **Download Data:** Log into PhysioNet and download MIMIC-IV CSV files (admissions.csv, patients.csv, diagnoses_icd.csv, procedures_icd.csv, prescriptions.csv)
-5. **Use in Training:** Set env var and run:
-   ```bash
-   export MIMIC_DATA_PATH="/path/to/mimic-iv/csv"
-   python manage.py train_ai_models --data-source mimic-iv
-   ```
-
-**License:** MIMIC-IV is free for research via PhysioNet Credentialed Access.
-
-**Note for this project:** Using pre-downloaded synthetic MIMIC-like data or the hybrid approach (synthetic + UCI) is acceptable and requires no registration. Start with `--data-source hybrid` for development and testing.
-
-### Hospital-Level Approval Workflow
-
-Before clinical use, hospital admins must explicitly approve AI features:
-
-1. **Train models** → `python manage.py train_ai_models`
-2. **System admin reviews metrics** → Check `api/ai/models/v{version}/metrics.json`
-3. **Hospital admin approves** → `POST /api/v1/admin/ai-deployment-approval`
-   ```json
-   {
-     "model_version": "1.0.0-hybrid",
-     "hospital_id": "<hospital_uuid>",
-     "approved": true,
-     "notes": "Metrics reviewed; suitable for clinical use"
-   }
-   ```
-4. **Approval logged** → `AIDeploymentLog` records who, when, which hospital
-5. **AI features enabled** → Doctor/nurse can now use AI analysis endpoints
-
-**Revocation:** If issues detected, hospital admin can call same endpoint with `approved: false` to instantly disable AI for their facility.
-
-### Model Loading & Versioning
-
-On startup, the backend attempts to load models in this order:
-
-1. **Versioned directory:** `api/ai/models/v{AI_MODEL_VERSION}/` (e.g., `v1.0.0-hybrid/`)
-2. **Legacy files:** `api/ai/models/` (if versioned doesn't exist)
-3. **Rule-based fallback:** If no files found, use hard-coded scoring rules (always available, but lower accuracy)
-
-**Check loaded version:**
-```bash
-curl http://localhost:8000/api/v1/ai/status
-# Response includes: model_version, enabled, avg_response_ms, analyses_24h
-```
-
-### Troubleshooting
-
-| Issue | Cause | Solution |
-|-------|-------|----------|
-| "Models not found" | Missing `api/ai/models/v{version}/` | Run `python manage.py train_ai_models` |
-| "Training fails on import" | scikit-learn/xgboost missing | `pip install -r requirements-local.txt` |
-| "AI endpoints return 503" | `DISABLE_AI_CLINICAL_FEATURES=True` | Set to `False` in settings or `.env` |
-| "Low accuracy metrics" | Public data only, not real patient outcomes | Plan to retrain with hospital data after go-live |
-| "Inference timeout" | Model too large or hardware slow | Consider model compression or GPU |
-
-### Monitoring & Metrics
-
-**Daily metrics** (available to super_admin):
-
-```bash
-curl -H "Authorization: Bearer <token>" \
-  http://localhost:8000/api/v1/superadmin/analytics/ai-models
-```
-
-Returns: daily inferences, avg response time, errors, hospital-level adoption rate.
-
-**Audit trail:** All AI analyses logged in `AuditLog` with action type `AI_ANALYSIS`. Check:
-
-```bash
-curl -H "Authorization: Bearer <token>" \
-  http://localhost:8000/api/v1/superadmin/audit-logs?action=AI_ANALYSIS
-```
-
-### Post-MVP Roadmap
-
-- **Real data training:** After pilot hospitals go live, collect de-identified outcomes (diagnoses, admissions, readmissions) to retrain models on local patient data
-- **Parallel agents:** Full async CrewAI orchestration for <1 second multi-agent analysis
-- **FAISS indexing:** Swap exhaustive patient similarity search for approximate nearest neighbor (100x faster at scale)
-- **Model monitoring:** Drift detection and automated retraining pipelines
-- **Federated learning:** Train on encrypted data across hospitals without centralizing patient records
-
-### Testing & Validation
-
-**Verify AI training pipeline is working:**
-
-```bash
-# Test 1: Synthetic data generation and model training
-cd medsync-backend
-python test_ml_pipeline.py
-
-# Expected output:
-# ✓ Synthetic Data Generation: PASS
-# ✓ Disease-Stratified Cohorts: PASS
-# ✓ Age-Stratified Cohorts: PASS
-# ✓ Model Loading: PASS
-# 4/4 tests passed
-```
-
-**Run AI-specific unit tests:**
-
-```bash
-# Test AI deployment log, metrics validation, and circuit breaker
-python -m pytest api/tests/test_ai_clinical_deployment.py -v
-
-# Test AI analysis endpoints (requires authentication)
-python -m pytest api/tests/test_ai_views.py -v
-```
-
-**Key test coverage:**
-
-| Test | Location | What it covers |
-|------|----------|----------------|
-| Synthetic data generation | `test_ml_pipeline.py` | Ghana disease prevalence, readmission simulation |
-| Disease-stratified cohorts | `test_ml_pipeline.py` | Malaria, diabetes, elderly patients |
-| Model validation | `test_ml_pipeline.py` | Ensemble model loading, metrics validation |
-| AI deployment workflow | `test_ai_clinical_deployment.py` | Hospital approval, circuit breaker, metrics thresholds |
-| AI endpoints | `test_ai_views.py` | Authorization, patient analysis, risk prediction |
-
-**Performance benchmarks (synthetic data, 2,000 samples):**
-
-| Step | Time | Target |
-|------|------|--------|
-| Synthetic data generation | 0.3s | <5s |
-| Feature extraction | 0.2s | <5s |
-| 3-model ensemble training (5-fold CV) | ~78s | <300s (5 min) |
-| Model evaluation & metrics | 0.1s | <5s |
-| **Total training time** | **~78s** | **<5 min** ✓ |
-
-
-
-### FAISS: Fast Similarity Search at Scale
-
-**Problem:** Similarity search uses exhaustive O(n) cosine similarity, which takes 500ms-5s at 100k+ patients. Unacceptable for clinical worklists.
-
-**Solution:** FAISS (Facebook AI Similarity Search) provides approximate nearest neighbor search in O(log n) time with <100ms query latency at 1M patients.
-
-#### Setup
-
-```bash
-# FAISS is in requirements.txt (faiss-cpu by default)
-pip install -r requirements-local.txt
-
-# Or if GPU available:
-pip install faiss-gpu
-```
-
-#### Building the Index
-
-The similarity index is built nightly (2 AM) via Celery Beat:
-
-```bash
-# Check Celery Beat is scheduled
-grep rebuild-similarity-index medsync_backend/settings.py
-```
-
-Or manually rebuild:
-
-```python
-from api.tasks.ai_tasks import rebuild_similarity_index
-rebuild_similarity_index.delay()
-```
-
-#### Using FAISS in Similarity Search
-
-The `POST /ai/find-similar-patients/<patient_id>` endpoint automatically uses FAISS if available:
-
-```bash
-curl -X POST \
-  -H "Authorization: Bearer <token>" \
-  http://localhost:8000/api/v1/ai/find-similar-patients/<patient_uuid>
-```
-
-Response includes timing header: `X-Query-Time: 45ms` (vs 5000ms without FAISS).
-
-#### Monitoring Index Status
-
-```bash
-curl -H "Authorization: Bearer <token>" \
-  http://localhost:8000/api/v1/admin/ai/similarity-index
-```
-
-Returns:
-```json
-{
-  "num_patients": 15000,
-  "size_mb": 24.5,
-  "last_rebuilt": "2026-04-20T02:00:00Z",
-  "ready": true
-}
-```
-
-#### Implementation Details
-
-- **Module:** `api/ai/faiss_indexer.py` (FaissIndexer class)
-- **Index type:** `IndexFlatIP` (inner product on normalized vectors = cosine similarity)
-- **Storage:** `api/ai/indexes/similarity_index.faiss` (binary FAISS file) + `similarity_index.pkl` (metadata)
-- **Update frequency:** Nightly rebuild via Celery Beat; incremental add support for <100 new patients
-- **Performance:** Expected 50x speedup at clinical scale (100k-1M patients)
+If real patient outcome data becomes available from partner hospitals, the intended
+next step is a logistic-regression risk model trained on de-identified local data,
+replacing the hardcoded drug-class lists with a curated, versioned terminology
+source (RxNorm or SNOMED CT subset for Ghana).
 
 ---
 
@@ -1227,13 +924,15 @@ All endpoints except `GET /health` require `Authorization: Bearer <access_token>
 
 ---
 
-## Celery Task Queue & Fallback
+## Task Execution & Scheduling
 
-**Status:** ✅ **COMPLETE** — Graceful fallback to synchronous execution when Redis/broker unavailable
+**Status:** ✅ **COMPLETE** — In-process synchronous task execution is used for reliable offline-first operation.
 
 ### Overview
 
-The system uses Celery for asynchronous tasks (PDF exports, AI analysis, no-show marking). To improve resilience in environments where Redis/broker may be temporarily unavailable, a fallback mechanism automatically switches tasks to synchronous execution.
+Previously, the system supported an asynchronous task queue via Celery and Redis. To simplify operations and fully support offline-first local/on-premise deployments in locations with intermittent internet connectivity (such as regional hospitals in Ghana), Celery and Redis were completely removed from the technology stack.
+
+All background operations (such as generating patient PDFs and executing AI model predictions) now run synchronously in-process using the `execute_task_sync_or_async` wrapper. 
 
 ### Architecture
 
@@ -1241,135 +940,33 @@ The system uses Celery for asynchronous tasks (PDF exports, AI analysis, no-show
 - `export_tasks.py` — PDF export of patient records and encounters
 - `ai_tasks.py` — Comprehensive AI analysis and risk prediction
 - `appointment_tasks.py` — Automated no-show marking and notifications
-- `fallback.py` — **NEW** Broker availability checking and sync/async routing
+- `fallback.py` — Wrapper for synchronous task execution
 
-**Key Functions** (in `api/tasks/fallback.py`):
-
-```python
-def can_use_celery() -> bool:
-    """Check if Celery broker is accessible (tries connection). Returns bool."""
-    
-def execute_task_sync_or_async(task_func, *args, timeout=None, **kwargs) -> result:
-    """Execute task async if broker available, else synchronous. Returns task result."""
-```
-
-### Behavior
-
-1. **Broker Available:** Tasks execute via `task.apply_async()` (asynchronous via Redis)
-2. **Broker Unavailable:** Tasks execute directly (synchronous blocking call)
-3. **Partial Failure:** If async execution fails, automatic fallback to sync
-4. **Logging:** All state transitions logged at INFO/WARNING level
-
-**Example Usage:**
-
+**Key API:**
 ```python
 from api.tasks import export_patient_pdf_task, execute_task_sync_or_async
 
-# Will try async first, fall back to sync if broker is down
+# Runs the task synchronously in-process
 result = execute_task_sync_or_async(
     export_patient_pdf_task,
     patient_id='550e8400-e29b-41d4-a716-446655440000',
-    format_type='summary',
-    timeout=30
+    format_type='summary'
 )
-# Returns: {"status": "success", "patient_id": "...", "format": "summary", "size_bytes": 1024}
 ```
 
-### Configuration
+### Scheduled Jobs
 
-Celery settings in `medsync_backend/settings.py`:
-
-| Setting | Value | Purpose |
-|---------|-------|---------|
-| `CELERY_BROKER_URL` | `redis://127.0.0.1:6379/0` | Redis broker endpoint (env: `CELERY_BROKER_URL`) |
-| `CELERY_RESULT_BACKEND` | `redis://127.0.0.1:6379/0` | Result storage backend |
-| `CELERY_TASK_SERIALIZER` | `json` | Task payload format (JSON only, no pickle) |
-| `CELERY_TASK_TIME_LIMIT` | 30 min | Hard timeout for task execution |
-| `CELERY_TASK_SOFT_TIME_LIMIT` | 5 min | Soft timeout (gives task time to cleanup) |
-| `CELERY_BROKER_CONNECTION_RETRY_ON_STARTUP` | `True` | Retry if broker unavailable at startup |
-| `CELERY_BEAT_SCHEDULE` | (beat config) | Scheduled tasks (no-show marking every 15 min) |
-
-### Testing
-
-Run fallback tests:
+Scheduled jobs, such as marking appointment no-shows, run as standard Django management commands:
 
 ```bash
-python -m pytest api/tests/test_celery_fallback.py -v
+python manage.py mark_no_shows
 ```
 
-**Test Coverage:**
-- ✅ Broker available → async execution
-- ✅ Broker unavailable → sync execution
-- ✅ Celery not installed → sync execution
-- ✅ Async error → fallback to sync
-- ✅ Timeout handling (default 5 min)
-- ✅ Real task execution (eager mode)
-- ✅ Task chaining with fallback
+To schedule this to run automatically (e.g., every 15 minutes), configure a system cron job on the host server:
 
-**Result:** 14/14 unit tests pass + 2 integration tests pass (100%)
-
-### Runtime Behavior
-
-**Startup (with Redis unavailable):**
+```cron
+*/15 * * * *  /app/.venv/bin/python /app/manage.py mark_no_shows
 ```
-WARNING:api.tasks.fallback:Celery broker unavailable: ConnectionError: Error 10061 ...
-INFO:api.tasks.fallback:Executing task export_patient_pdf_task synchronously (Celery unavailable)
-```
-
-**Export Task Result:**
-```json
-{
-  "status": "success",
-  "patient_id": "550e8400-e29b-41d4-a716-446655440000",
-  "format": "summary",
-  "size_bytes": 2048
-}
-```
-
-**Logs in Synchronous Mode:**
-```
-INFO api.tasks.fallback: Executing task export_patient_pdf_task synchronously (Celery unavailable) with args: ('550e8400...',), kwargs: {'format_type': 'summary'}
-```
-
-### Integration Points
-
-Tasks can be called from:
-1. **Views** (HTTP endpoints) — e.g., POST `/patients/<id>/export`
-2. **Management commands** — e.g., `python manage.py export_all_patients`
-3. **Scheduled jobs** (Celery Beat) — no-show marking every 15 minutes
-4. **Signals** — On model save, trigger async processing
-
-To integrate a new view with fallback:
-
-```python
-from api.tasks import your_task_func, execute_task_sync_or_async
-
-@api_view(['POST'])
-def your_endpoint(request):
-    result = execute_task_sync_or_async(
-        your_task_func,
-        request.data['param'],
-        timeout=60
-    )
-    return Response(result)
-```
-
-### Troubleshooting
-
-| Issue | Symptom | Solution |
-|-------|---------|----------|
-| Broker unavailable | Tasks execute synchronously | Check Redis: `redis-cli ping` |
-| Slow sync execution | Long response times | Move heavy tasks to background (async preferred) |
-| Task timeout | AsyncResult.get() raises TimeLimitExceeded | Increase `timeout` param or `CELERY_TASK_SOFT_TIME_LIMIT` |
-| Missing task result | Result backend down but broker OK | Both must be available or both unavailable for consistency |
-
-### Health Check
-
-```bash
-curl http://localhost:8000/api/v1/health
-```
-
-Includes Celery broker status in response (if health endpoint extended).
 
 ---
 
@@ -1513,13 +1110,8 @@ Before deploying to production:
 | POST | `/nurse/shift/start` | Nurse shift start | nurse, super_admin |
 | POST | `/nurse/shift/<uuid>/handover` | Nurse shift handover | nurse, super_admin |
 | GET | `/nurse/overdue-vitals` | Overdue vitals (ward) | nurse, super_admin |
-| POST | `/ai/analyze-patient/<uuid>` | Full AI analysis (see AI Intelligence Module) | doctor, nurse, hospital_admin, super_admin |
-| POST | `/ai/risk-prediction/<uuid>` | Disease risk prediction | doctor, nurse, super_admin |
-| POST | `/ai/clinical-decision-support/<uuid>` | Differential diagnosis | doctor, super_admin |
-| POST | `/ai/triage/<uuid>` | Triage level | doctor, nurse, super_admin |
-| POST | `/ai/find-similar-patients/<uuid>` | Similar patients | doctor, super_admin |
-| POST | `/ai/referral-recommendation/<uuid>` | Referral recommendations | doctor, hospital_admin, super_admin |
-| GET | `/ai/analysis-history/<uuid>` | Past AI analyses | doctor, nurse, super_admin |
+| GET | `/cds/alerts/<patient_uuid>` | Active CDS alerts for a patient | doctor, nurse, super_admin |
+| POST | `/cds/acknowledge/<alert_uuid>` | Acknowledge a CDS alert | doctor, super_admin |
 
 ### X-View-As-Hospital (super admin view-as)
 
@@ -1792,8 +1384,8 @@ Seeded users (after `setup_dev`) and shared TOTP: **[docs/DEV_CREDENTIALS.md](..
 - `THROTTLE_ANON` — Rate limit for unauthenticated requests, e.g. `"60/hour"` (default: 60/hour)
 - `THROTTLE_USER` — Rate limit for authenticated requests, e.g. `"1000/hour"` (default: 1000/hour)
 - `DATABASE_URL` — **Required in production** (Neon Postgres). When set, SSL is enforced (`sslmode=require`). If unset and `DEBUG=True`, SQLite (`db.sqlite3`) is used for local dev only. **Local Postgres:** see [docs/TESTING_AND_CI.md](../docs/TESTING_AND_CI.md#postgresql-local-development).
-- `REDIS_URL` — Optional; required for multi-worker WebSocket broadcasting (Channels). If unset, the in-memory channel layer is used (single-process only).
-- `MEDSYNC_AI_MODELS_DIR` — Optional override for AI `.joblib` model directory (default `api/ai/models/`).
+- `BACKUP_S3_BUCKET` — S3 bucket name for `python manage.py dbbackup --upload`.
+- `BACKUP_S3_PREFIX` — Optional key prefix for S3 backups (default: `medsync-backups/`).
 - `PASSWORD_RESET_FRONTEND_URL`, `PASSWORD_RESET_TOKEN_EXPIRY_HOURS` — Password reset flow configuration (see `.env.example`).
 - `AUDIT_LOG_SIGNING_KEY` — **Must be overridden in production** for tamper-evident audit chain signatures.
 
@@ -1827,403 +1419,21 @@ Optional: Redis, Pillow (see `requirements-local.txt`).
 
 ## Backend Codebase Map
 
-<details>
-<summary>Directory Tree</summary>
+The key directories and their roles:
 
-```text
-├── api
-│   ├── ai
-│   │   ├── agents
-│   │   │   ├── __init__.py
-│   │   │   └── orchestrator.py
-│   │   ├── ml_models
-│   │   │   ├── __init__.py
-│   │   │   ├── diagnosis_classifier.py
-│   │   │   ├── risk_predictor.py
-│   │   │   ├── similarity_matcher.py
-│   │   │   └── triage_classifier.py
-│   │   ├── models
-│   │   │   ├── v1.0-test
-│   │   │   │   ├── logistic_regression.joblib
-│   │   │   │   ├── metadata.json
-│   │   │   │   ├── metrics.json
-│   │   │   │   ├── random_forest.joblib
-│   │   │   │   ├── scaler.joblib
-│   │   │   │   └── xgboost.joblib
-│   │   │   ├── v1.0.0-hybrid
-│   │   │   │   ├── logistic_regression.joblib
-│   │   │   │   ├── metadata.json
-│   │   │   │   ├── metrics.json
-│   │   │   │   ├── random_forest.joblib
-│   │   │   │   ├── scaler.joblib
-│   │   │   │   └── xgboost.joblib
-│   │   │   ├── v1.0.0-hybrid-mixed
-│   │   │   │   ├── logistic_regression.joblib
-│   │   │   │   ├── metadata.json
-│   │   │   │   ├── metrics.json
-│   │   │   │   ├── random_forest.joblib
-│   │   │   │   ├── scaler.joblib
-│   │   │   │   └── xgboost.joblib
-│   │   │   ├── v1.0.0-mgmt-test
-│   │   │   │   ├── logistic_regression.joblib
-│   │   │   │   ├── metadata.json
-│   │   │   │   ├── metrics.json
-│   │   │   │   ├── random_forest.joblib
-│   │   │   │   ├── scaler.joblib
-│   │   │   │   └── xgboost.joblib
-│   │   │   ├── v1.0.0-synthetic
-│   │   │   │   ├── logistic_regression.joblib
-│   │   │   │   ├── metadata.json
-│   │   │   │   ├── metrics.json
-│   │   │   │   ├── random_forest.joblib
-│   │   │   │   ├── scaler.joblib
-│   │   │   │   └── xgboost.joblib
-│   │   │   ├── v1.0.0-uci
-│   │   │   │   ├── logistic_regression.joblib
-│   │   │   │   ├── metadata.json
-│   │   │   │   ├── metrics.json
-│   │   │   │   ├── random_forest.joblib
-│   │   │   │   ├── scaler.joblib
-│   │   │   │   └── xgboost.joblib
-│   │   │   ├── .gitkeep
-│   │   │   ├── diagnosis_classifier.joblib
-│   │   │   ├── risk_predictor.joblib
-│   │   │   ├── similarity_matcher.joblib
-│   │   │   └── triage_classifier.joblib
-│   │   ├── prompts
-│   │   │   ├── templates
-│   │   │   │   └── summary_v1.0.0.txt
-│   │   │   └── prompt_manager.py
-│   │   ├── services
-│   │   │   ├── __init__.py
-│   │   │   └── services.py
-│   │   ├── __init__.py
-│   │   ├── data_processor.py
-│   │   ├── datasets.py
-│   │   ├── faiss_indexer.py
-│   │   ├── feature_engineering.py
-│   │   ├── governance.py
-│   │   ├── model_config.py
-│   │   ├── model_registry.py
-│   │   ├── persistence.py
-│   │   ├── safety_gates.py
-│   │   ├── synthetic_data.py
-│   │   └── train_models.py
-│   ├── db
-│   │   ├── __init__.py
-│   │   └── base.py
-│   ├── management
-│   │   ├── commands
-│   │   │   ├── __init__.py
-│   │   │   ├── load_demo_patients.py
-│   │   │   ├── runserver.py
-│   │   │   └── train_ai_models.py
-│   │   └── __init__.py
-│   ├── middleware
-│   │   ├── __init__.py
-│   │   └── anomaly_detection.py
-│   ├── migrations
-│   │   ├── 0001_initial_ai_models.py
-│   │   ├── 0002_rename_ai_analysis_patient_created_idx_ai_analysis_patient_34fc39_idx_and_more.py
-│   │   ├── 0003_ai_analysis_job.py
-│   │   ├── 0004_batchimportitem_batchimportjob_bulkinvitationitem_and_more.py
-│   │   ├── 0005_alter_aianalysis_analysis_type_and_more.py
-│   │   ├── 0006_add_ai_deployment_log.py
-│   │   ├── 0007_modelmetrics_aideploymentapproval.py
-│   │   └── __init__.py
-│   ├── services
-│   │   ├── __init__.py
-│   │   ├── audit_service.py
-│   │   └── consent_service.py
-│   ├── tasks
-│   │   ├── __init__.py
-│   │   ├── ai_tasks.py
-│   │   ├── appointment_tasks.py
-│   │   ├── export_tasks.py
-│   │   └── fallback.py
-│   ├── tests
-│   │   ├── __init__.py
-│   │   ├── conftest.py
-│   │   ├── test_ai_clinical_deployment.py
-│   │   ├── test_ai_services.py
-│   │   ├── test_ai_views.py
-│   │   ├── test_alert_policy.py
-│   │   ├── test_appointment_bulk_import.py
-│   │   ├── test_async_ai_analysis.py
-│   │   ├── test_auth.py
-│   │   ├── test_break_glass.py
-│   │   ├── test_break_glass_middleware.py.disabled
-│   │   ├── test_break_glass_time_window.py
-│   │   ├── test_celery_beat_schedule.py
-│   │   ├── test_celery_fallback.py
-│   │   ├── test_celery_infrastructure.py
-│   │   ├── test_consent_scoping.py
-│   │   ├── test_dashboard_hospital_admin.py
-│   │   ├── test_encounter_draft.py
-│   │   ├── test_fhir_compliance.py
-│   │   ├── test_health.py
-│   │   ├── test_integration_three_phases.py
-│   │   ├── test_jwt_algorithm.py
-│   │   ├── test_lab_role_spec.py
-│   │   ├── test_lab_tech_data_guard.py
-│   │   ├── test_no_show_feature.py
-│   │   ├── test_no_show_override.py
-│   │   ├── test_nurse_role_spec.py
-│   │   ├── test_orchestrator.py
-│   │   ├── test_password_policy.py
-│   │   ├── test_password_policy_alignment.py
-│   │   ├── test_password_reset_security.py
-│   │   ├── test_permissions.py
-│   │   ├── test_phase7_password_recovery.py
-│   │   ├── test_phi_encryption.py
-│   │   ├── test_rate_limiting_edge_cases.py
-│   │   ├── test_rbac_conditional_enforcement.py
-│   │   ├── test_rbac_coverage.py
-│   │   ├── test_rbac_hospital_scoping.py
-│   │   ├── test_referral_edge_cases.py
-│   │   ├── test_referral_state_machine.py
-│   │   ├── test_role_change_session.py
-│   │   ├── test_role_spec_gap_alignment.py
-│   │   ├── test_security_fixes.py
-│   │   ├── test_task_endpoints.py
-│   │   ├── test_utils.py
-│   │   ├── test_vitals_overdue.py
-│   │   ├── test_walkin_queue.py
-│   │   └── test_webauthn_passkey.py
-│   ├── views
-│   │   ├── __init__.py
-│   │   ├── admin_ai_views.py
-│   │   ├── admin_views.py
-│   │   ├── admission_views.py
-│   │   ├── ai_admin_views.py
-│   │   ├── ai_views.py
-│   │   ├── alert_views.py
-│   │   ├── appointment_views.py
-│   │   ├── audit_views.py
-│   │   ├── auth_views.py
-│   │   ├── batch_operations_views.py
-│   │   ├── bed_views.py
-│   │   ├── billing_views.py
-│   │   ├── break_glass_views.py
-│   │   ├── consent_views.py
-│   │   ├── dashboard_views.py
-│   │   ├── emergency_views.py
-│   │   ├── encounter_views.py
-│   │   ├── fhir_views.py
-│   │   ├── global_patient_views.py
-│   │   ├── health_views.py
-│   │   ├── lab_views.py
-│   │   ├── mar_views.py
-│   │   ├── nurse_views.py
-│   │   ├── password_recovery_views.py
-│   │   ├── patient_views.py
-│   │   ├── pharmacy_views.py
-│   │   ├── push_views.py
-│   │   ├── record_views.py
-│   │   ├── referral_views.py
-│   │   ├── report_views.py
-│   │   ├── root_views.py
-│   │   ├── shift_views.py
-│   │   ├── superadmin_views.py
-│   │   ├── task_views.py
-│   │   └── vitals_monitoring_views.py
-│   ├── __init__.py
-│   ├── apps.py
-│   ├── audit_logging.py
-│   ├── batch_models.py
-│   ├── circuit_breaker.py
-│   ├── consumers.py
-│   ├── decorators.py
-│   ├── integrations.py
-│   ├── models.py
-│   ├── models_deployment_log.py
-│   ├── optimistic_locking.py
-│   ├── pagination.py
-│   ├── password_policy.py
-│   ├── permissions.py
-│   ├── permissions_helpers.py
-│   ├── rate_limiting.py
-│   ├── routing.py
-│   ├── serializers.py
-│   ├── signals_alerts.py
-│   ├── state_machines.py
-│   ├── urls.py
-│   ├── utils.py
-│   ├── validators.py
-│   └── vitals_utils.py
-├── core
-│   ├── management
-│   │   └── commands
-│   │       ├── dev_totp_code.py
-│   │       ├── enable_mfa.py
-│   │       ├── fix_migration_history.py
-│   │       ├── manage_superadmin_access.py
-│   │       └── setup_dev.py
-│   ├── migrations
-│   │   ├── 0001_initial.py
-│   │   ├── 0002_hie_shared_record_access_consent_referral.py
-│   │   ├── 0003_blueprint_alerts_encounters.py
-│   │   ├── 0004_audit_log_chain_hash_default.py
-│   │   ├── 0005_workflow_department_lab_unit.py
-│   │   ├── 0006_patient_identifiers_duplicates.py
-│   │   ├── 0007_invoice_billing.py
-│   │   ├── 0008_alter_auditlog_action.py
-│   │   ├── 0009_userpasswordhistory.py
-│   │   ├── 0010_superadminhospitalaccess.py
-│   │   ├── 0011_phase7_password_recovery.py
-│   │   ├── 0012_mfasession_and_more.py
-│   │   ├── 0013_beds.py
-│   │   ├── 0014_auditlog_signature_and_more.py
-│   │   ├── 0015_backupcoderatelimit.py
-│   │   ├── 0016_tasksubmission.py
-│   │   ├── 0017_superadminhospitalaccess_accepted_at.py
-│   │   ├── 0018_mfasession_email_otp_hash.py
-│   │   ├── 0019_user_last_role_reviewed_at.py
-│   │   ├── 0020_add_mfa_failure_model.py
-│   │   ├── 0021_add_password_reset_attempt_model.py
-│   │   ├── 0022_add_hospital_ai_enabled.py
-│   │   ├── 0023_add_version_field.py
-│   │   ├── 0024_auditlog_audit_resource_idx.py
-│   │   ├── 0025_announcement.py
-│   │   ├── 0026_userpasskey.py
-│   │   ├── 0027_userpasskey_is_synced_userpasskey_last_ip_address_and_more.py
-│   │   ├── 0028_add_ai_deployment_log.py
-│   │   ├── 0029_hospital_archive_reason_hospital_archived_at_and_more.py
-│   │   ├── 0030_alter_auditlog_chain_hash_alter_auditlog_signature_and_more.py
-│   │   └── __init__.py
-│   ├── __init__.py
-│   ├── admin.py
-│   ├── apps.py
-│   ├── models.py
-│   └── reference_data.py
-├── data
-│   └── datasets
-│       └── uci_readmission.csv
-├── docs
-│   ├── API_REFERENCE.md
-│   ├── OPERATIONS_RUNBOOK.md
-│   └── REDIS.md
-├── interop
-│   ├── management
-│   │   ├── commands
-│   │   │   ├── __init__.py
-│   │   │   └── backfill_global_patients.py
-│   │   └── __init__.py
-│   ├── migrations
-│   │   ├── 0001_initial.py
-│   │   ├── 0002_hie_shared_record_access_consent_referral.py
-│   │   ├── 0003_global_patient_identifiers.py
-│   │   ├── 0004_add_break_glass_expires_at.py
-│   │   ├── 0005_breakglass_review_fields.py
-│   │   ├── 0006_breakglass_reason_code.py
-│   │   ├── 0007_add_version_field.py
-│   │   ├── 0008_alter_globalpatient_date_of_birth_and_more.py
-│   │   └── __init__.py
-│   ├── __init__.py
-│   ├── admin.py
-│   ├── apps.py
-│   └── models.py
-├── medsync_backend
-│   ├── __init__.py
-│   ├── asgi.py
-│   ├── celery.py
-│   ├── settings.py
-│   ├── urls.py
-│   └── wsgi.py
-├── ml
-│   └── synthea_converter.py
-├── patients
-│   ├── migrations
-│   │   ├── 0001_blueprint_alerts_encounters.py
-│   │   ├── 0002_clinical_alert.py
-│   │   ├── 0003_appointment_scheduling.py
-│   │   ├── 0004_patient_identifiers_duplicates.py
-│   │   ├── 0005_invoice_billing.py
-│   │   ├── 0006_admission_bed.py
-│   │   ├── 0007_add_no_show_fields.py
-│   │   ├── 0008_encrypt_phi_fields.py
-│   │   ├── 0009_add_version_field.py
-│   │   ├── 0010_add_walkin_fields.py
-│   │   ├── 0011_emergency_triage.py
-│   │   ├── 0012_alter_appointment_chief_complaint_and_more.py
-│   │   ├── 0013_invoiceitem_appointment_updated_at_and_more.py
-│   │   └── __init__.py
-│   ├── __init__.py
-│   ├── admin.py
-│   ├── apps.py
-│   └── models.py
-├── records
-│   ├── migrations
-│   │   ├── 0001_blueprint_alerts_encounters.py
-│   │   ├── 0002_encounter.py
-│   │   ├── 0003_workflow_encounter_lab.py
-│   │   ├── 0004_rename_records_enc_dept_st_idx_records_enc_assigne_51c098_idx_and_more.py
-│   │   ├── 0005_clinical_docs_visit_status.py
-│   │   ├── 0006_radiology_order.py
-│   │   ├── 0007_nurseshift_shifthandover_and_more.py
-│   │   ├── 0008_nursingnote_handover_signatures.py
-│   │   ├── 0009_laborder_state_machine_fields.py
-│   │   ├── 0010_encounter_draft.py
-│   │   ├── 0011_sbar_handover_signatures.py
-│   │   ├── 0012_add_encounter_template.py
-│   │   ├── 0013_add_version_field.py
-│   │   ├── 0014_incident_medicationadministration_and_more.py
-│   │   ├── 0015_pharmacy_dispensing.py
-│   │   ├── 0016_medication_schedule.py
-│   │   ├── 0017_rename_records_enc_patient_fa1f48_idx_encounter_patient_0dba2d_idx_and_more.py
-│   │   ├── 0018_remove_encounter_records_enc_patient_fa1f48_idx_and_more.py
-│   │   ├── 0019_encounter_updated_at_and_more.py
-│   │   └── __init__.py
-│   ├── __init__.py
-│   ├── admin.py
-│   ├── apps.py
-│   └── models.py
-├── scripts
-│   ├── pip-audit.sh
-│   ├── production_security_fixes.py
-│   └── validate-rbac-coverage.py
-├── shared
-│   ├── migrations
-│   │   └── __init__.py
-│   ├── utils
-│   │   └── __init__.py
-│   ├── __init__.py
-│   ├── apps.py
-│   ├── models.py
-│   └── permissions.py
-├── templates
-│   ├── force_password_reset_email.html
-│   ├── invitation_email.html
-│   ├── password_reset_email.html
-│   └── super_admin_password_reset_notification.html
-├── .env
-├── .env.example
-├── .gitignore
-├── activate_mfa.py
-├── check_emergency_fields.py
-├── check_mfa.py
-├── check_verify_sig.py
-├── conftest.py
-├── db.sqlite3
-├── dev_server.py
-├── download_datasets.py
-├── full_test_results.txt
-├── grant_admin_access.py
-├── integration_test_e2e.py
-├── load-test.js
-├── manage.py
-├── mfa_diagnostic.py
-├── pyrightconfig.json
-├── pytest.ini
-├── README.md
-├── requirements-local.txt
-├── run_training.py
-├── SETUP_COMPLETE.txt
-├── test_hospital_approval.py
-├── test_mfa_endpoint.py
-├── test_ml_pipeline.py
-├── test_output.txt
-└── test_results.txt
+| Path | Purpose |
+|------|---------|
+| `medsync_backend/` | Django project config (settings, urls, wsgi, asgi) |
+| `core/` | Shared models: User, Hospital, Ward, Bed, AuditLog, MFA |
+| `patients/` | Patient, Allergy, PatientAdmission, ClinicalAlert, Appointment |
+| `records/` | Encounter, MedicalRecord, Diagnosis, Prescription, LabOrder/Result, Vital, NursingNote |
+| `interop/` | GlobalPatient (MPI), FacilityPatient, Consent, ConsentScope, Referral, BreakGlassLog, SharedRecordAccess |
+| `shared/` | RBAC permission matrix and PermissionEnforcementMiddleware |
+| `api/views/` | DRF function-based views (auth, patient, record, admin, FHIR, interop, break-glass) |
+| `api/services/` | Business logic layer: cds_engine, consent_service, audit_service, backup_status |
+| `api/integrations/` | NHIS/NHIA client (typed, retry, circuit breaker, mock fallback) |
+| `api/middleware/` | anomaly_detection (excessive patient access alerting) |
+| `api/tests/` | Pytest suite: RBAC, PHI encryption, consent scoping, break-glass, referral state machine, regression |
+| `core/management/commands/` | setup_dev, dbbackup, fix_migration_history |
+| `interop/management/commands/` | seed_interop_demo, seed_demo_walkthrough, backfill_global_patients |
 
-```
-</details>

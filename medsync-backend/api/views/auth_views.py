@@ -250,7 +250,7 @@ def login(request):
 
     # ==================== PHASE 2: Adaptive MFA (Risk-Tier Computation) ====================
     # Compute risk tier based on device, IP, time, and role
-    from api.auth_utils import compute_login_risk_tier
+    from api.auth_utils import compute_login_risk_tier, compute_device_fingerprint
     from core.models import TrustedDevice
     
     risk_context = compute_login_risk_tier(user, request)
@@ -263,6 +263,14 @@ def login(request):
         # Generate tokens without MFA challenge
         refresh = get_tokens_for_user(user, request, risk_tier=1, mfa_method='none')
         access_token = str(refresh.access_token)
+        
+        # Check if they need to setup a PIN
+        pin_setup_required = False
+        device_fingerprint = compute_device_fingerprint(request)
+        td = TrustedDevice.objects.filter(user=user, device_fingerprint=device_fingerprint, is_active=True).first()
+        if td and not td.pin_hash:
+            pin_setup_required = True
+            
         cookie_token, _client_cookie = _create_cookie_session(
             user,
             request,
@@ -278,13 +286,14 @@ def login(request):
                 'user': UserSerializer(user).data,
                 'mfa_required': False,
                 'risk_tier': 1,
-                'message': 'Login successful (trusted device)'
+                'message': 'Login successful (trusted device)',
+                'pin_setup_required': pin_setup_required,
             }
         )
         
         # Log successful authentication without MFA
         audit_log(
-            user, 'LOGIN_SUCCESS',
+            user, 'LOGIN',
             request=request,
             risk_tier=1,
             mfa_method='none',
@@ -310,17 +319,91 @@ def login(request):
     # Fall through to existing MFA flow below
     mfa_method = 'email_otp'
 
-    # Passkeys are not deployed in the demo runtime.
-    if not user.is_mfa_enabled or not user.totp_secret:
+    # Check for Tier 2 Passkey routing
+    is_tier2 = user.role in ('doctor', 'receptionist')
+    has_passkeys = False
+    if is_tier2:
+        from core.models import UserPasskey
+        has_passkeys = UserPasskey.objects.filter(user=user).exists()
+        
+    if is_tier2 and has_passkeys:
+        # Generate WebAuthn options and challenge
+        from webauthn import generate_authentication_options
+        from webauthn.helpers.structs import (
+            UserVerificationRequirement,
+            PublicKeyCredentialDescriptor,
+            PublicKeyCredentialType,
+        )
+        from webauthn.helpers import bytes_to_base64url, options_to_json_dict
+        from core.models import UserPasskey
+        
+        passkeys = UserPasskey.objects.filter(user=user)
+        allow_credentials = [
+            PublicKeyCredentialDescriptor(
+                type=PublicKeyCredentialType.PUBLIC_KEY,
+                id=pk.credential_id,
+                transports=pk.transports or [],
+            )
+            for pk in passkeys
+        ]
+        options = generate_authentication_options(
+            rp_id=settings.WEBAUTHN_RP_ID,
+            allow_credentials=allow_credentials,
+            user_verification=UserVerificationRequirement.REQUIRED,
+        )
+        challenge_b64 = bytes_to_base64url(options.challenge)
+        
+        # Store challenge in session
+        request.session['passkey_auth_challenge'] = challenge_b64
+        request.session['passkey_auth_user_id'] = str(user.id)
+        request.session.set_expiry(settings.WEBAUTHN_CHALLENGE_TTL)
+        
+        otp_expiry_minutes = getattr(settings, 'MFA_OTP_EXPIRY_MINUTES', 10)
+        mfa_token = secrets.token_urlsafe(48)
+        expires_at = timezone.now() + timezone.timedelta(minutes=otp_expiry_minutes)
+        MFASession.objects.create(
+            user=user,
+            token=mfa_token,
+            expires_at=expires_at,
+            ip_address=get_client_ip(request),
+            user_agent=request.META.get("HTTP_USER_AGENT", ""),
+        )
+
+        return Response(
+            {
+                "mfa_required": True,
+                "mfa_token": mfa_token,
+                "mfa_channel": "passkey",
+                "passkey_options": options_to_json_dict(options)
+            }
+        )
+
+    # Ensure MFA is required for Tier 2-5 and user-enabled MFA
+    role_requires_mfa = user.role in ('doctor', 'receptionist', 'billing_staff', 'hospital_admin', 'super_admin')
+    if not role_requires_mfa and (not user.is_mfa_enabled or not user.totp_secret):
         return Response(
             {"message": "MFA not configured"},
             status=status.HTTP_403_FORBIDDEN,
         )
-    # PHASE 1: Use database-backed MFASession instead of cache (Task 5)
-    # This ensures MFA sessions persist across service restarts and cache clears
+
+    otp_expiry_minutes = getattr(settings, 'MFA_OTP_EXPIRY_MINUTES', 10)
     mfa_token = secrets.token_urlsafe(48)
-    expires_at = timezone.now() + timezone.timedelta(minutes=5)
-    use_app = _mfa_use_authenticator_only(user.email)
+    expires_at = timezone.now() + timezone.timedelta(minutes=otp_expiry_minutes)
+
+    # Channel selection logic:
+    # - Clinical floor roles (nurse, lab, pharmacy, radiology, ward_clerk) default to
+    #   EMAIL OTP — they work in patient areas where personal phones may be banned,
+    #   they often wear gloves, and many won't install an authenticator app on a
+    #   personal device. Email is available on the ward workstation.
+    # - Desk-based roles (billing, receptionist) also default to email OTP.
+    # - Admin roles (hospital_admin, super_admin, doctor) get TOTP if configured —
+    #   they are more likely to have set it up voluntarily and benefit from the speed.
+    # - TOTP is always opt-in; email OTP is the universal fallback.
+    TOTP_PREFERRED_ROLES = ('doctor', 'hospital_admin', 'super_admin')
+    use_app = (
+        user.role in TOTP_PREFERRED_ROLES
+        and bool(user.totp_secret and user.is_mfa_enabled)
+    )
 
     if use_app:
         MFASession.objects.create(
@@ -422,7 +505,9 @@ def login(request):
 
 
 def _generate_backup_codes(count=8):
-    codes = [secrets.token_hex(4) for _ in range(count)]
+    # token_hex(8) → 16 hex chars = 64 bits of entropy (OWASP recommendation: ≥ 64 bits).
+    # Previously used token_hex(4) = 8 chars = 32 bits which is below the recommended floor.
+    codes = [secrets.token_hex(8) for _ in range(count)]
     return codes, [hashlib.sha256(c.encode()).hexdigest() for c in codes]
 
 
@@ -638,6 +723,17 @@ def mfa_verify(request):
         extra_data={'risk_tier': 2, 'mfa_method': 'email_otp'},
     )
 
+    # Prompt PIN setup for ALL roles on a newly-trusted device that has no PIN yet.
+    # This ensures that on inactivity lockout, any role can re-enter via PIN
+    # instead of going through full MFA again — critical for shared ward terminals
+    # and on-call doctors who need fast re-entry.
+    trusted_device = TrustedDevice.objects.filter(
+        user=user,
+        device_fingerprint=device_fingerprint,
+        is_active=True,
+    ).first()
+    pin_setup_required = trusted_device is not None and not trusted_device.pin_hash
+
     response = Response({
         "access_token": str(refresh.access_token),
         "refresh_token": str(refresh),
@@ -646,6 +742,7 @@ def mfa_verify(request):
         "user_profile": _user_to_dict(user),
         "risk_tier": 2,
         "mfa_method": "email_otp",
+        "pin_setup_required": pin_setup_required,
     })
     return _set_httponly_cookie(response, cookie_token)
 
@@ -1719,24 +1816,36 @@ def passkey_auth_complete(request):
         passkey.save(update_fields=['sign_count', 'last_used_at', 'last_ip_address'])
         
         # Issue JWT tokens
-        refresh = get_tokens_for_user(user, request)
+        refresh = get_tokens_for_user(user, request, risk_tier=2, mfa_method='passkey')
+        access_token = str(refresh.access_token)
         update_user_activity(user.id)
-
         
+        cookie_token, _client_cookie = _create_cookie_session(
+            user,
+            request,
+            access_token,
+            str(refresh),
+            risk_tier=2,
+            mfa_method='passkey',
+        )
+
         # Clear session
         del request.session['passkey_auth_challenge']
         del request.session['passkey_auth_user_id']
         
         # Log successful authentication
-        audit_log(user, "LOGIN", resource_type="PASSKEY", request=request)
+        audit_log(user, "LOGIN", resource_type="PASSKEY", request=request, risk_tier=2, mfa_method='passkey')
         
-        return Response({
-            "access_token": str(refresh.access_token),
+        response = Response({
+            "access_token": access_token,
             "refresh_token": str(refresh),
             "role": user.role,
             "hospital_id": str(user.hospital_id) if user.hospital_id else None,
             "user_profile": _user_to_dict(user),
+            "risk_tier": 2,
+            "mfa_method": "passkey",
         })
+        return _set_httponly_cookie(response, cookie_token)
         
     except Exception as e:
         _logger.error(f"Error in passkey_auth_complete: {e}", exc_info=True)
@@ -2228,3 +2337,194 @@ def get_csrf_token_endpoint(request):
         "csrf_token": csrf_token,
         "header_name": "X-CSRFToken"
     })
+
+
+@api_view(["POST"])
+@permission_classes([IsAuthenticated])
+def set_device_pin(request):
+    """
+    POST /api/v1/auth/set-device-pin
+    
+    Set a 4-digit PIN for the current trusted device.
+    PIN is hashed as bcrypt(pin + user_id_salt).
+    """
+    import bcrypt
+    user = request.user
+    is_tier1 = user.role in ('nurse', 'lab_technician', 'pharmacy_technician', 'radiology_technician', 'ward_clerk')
+    if not is_tier1:
+        return Response(
+            {"message": "PIN setup is only available for clinical workstation roles."},
+            status=status.HTTP_403_FORBIDDEN
+        )
+        
+    pin = request.data.get("pin") or request.data.get("pin_hash")
+    if not pin or not str(pin).isdigit() or len(str(pin)) != 4:
+        return Response(
+            {"message": "A 4-digit numeric PIN is required."},
+            status=status.HTTP_400_BAD_REQUEST
+        )
+        
+    from api.auth_utils import compute_device_fingerprint
+    from core.models import TrustedDevice
+    
+    device_fingerprint = compute_device_fingerprint(request)
+    
+    # Get or create the trusted device for this user and device fingerprint
+    trusted_device, created = TrustedDevice.objects.get_or_create(
+        user=user,
+        device_fingerprint=device_fingerprint,
+        defaults={
+            "expires_at": timezone.now() + timezone.timedelta(days=30),
+            "is_active": True,
+            "user_agent": request.META.get("HTTP_USER_AGENT", "")[:500],
+            "ip_address": get_client_ip(request),
+        }
+    )
+    
+    # Hash PIN as bcrypt(pin + user_id_salt)
+    pin_bytes = (str(pin) + str(user.id)).encode('utf-8')
+    hashed = bcrypt.hashpw(pin_bytes, bcrypt.gensalt()).decode('utf-8')
+    
+    trusted_device.pin_hash = hashed
+    trusted_device.save()
+    
+    audit_log(
+        user, "PIN_SET",
+        request=request,
+        extra_data={"device_fingerprint": device_fingerprint}
+    )
+    
+    return Response({"message": "Workstation PIN set successfully."})
+
+
+@api_view(["POST"])
+@permission_classes([AllowAny])
+def session_unlock(request):
+    """
+    POST /api/v1/auth/session-unlock
+    
+    Unlock a timed-out session using a 4-digit PIN.
+    Accepts pin/pin_hash and returns a refreshed access token.
+    """
+    import bcrypt
+    
+    # Extract pin
+    pin = request.data.get("pin") or request.data.get("pin_hash")
+    if not pin:
+        return Response(
+            {"message": "PIN is required."},
+            status=status.HTTP_400_BAD_REQUEST
+        )
+        
+    # Find user using cookie or refresh_token
+    cookie_token = request.COOKIES.get('medsync_session')
+    refresh_token = request.data.get("refresh_token")
+    
+    user = None
+    client_cookie = None
+    
+    if cookie_token:
+        cookie_hash = hashlib.sha256(cookie_token.encode()).hexdigest()
+        try:
+            client_cookie = ClientCookie.objects.get(
+                cookie_token=cookie_hash,
+                is_revoked=False
+            )
+            user = client_cookie.user
+        except ClientCookie.DoesNotExist:
+            pass
+            
+    if not user and refresh_token:
+        try:
+            refresh = RefreshToken(refresh_token)
+            user_id = refresh.payload.get('user_id')
+            user = User.objects.get(id=user_id)
+        except Exception:
+            pass
+            
+    if not user:
+        return Response(
+            {"message": "Invalid or expired session. Please sign in again."},
+            status=status.HTTP_401_UNAUTHORIZED
+        )
+        
+    # Verify user is Tier 1
+    is_tier1 = user.role in ('nurse', 'lab_technician', 'pharmacy_technician', 'radiology_technician', 'ward_clerk')
+    if not is_tier1:
+        return Response(
+            {"message": "PIN unlock is only available for clinical workstation roles."},
+            status=status.HTTP_403_FORBIDDEN
+        )
+        
+    # Find trusted device
+    from api.auth_utils import compute_device_fingerprint
+    from core.models import TrustedDevice
+    
+    device_fingerprint = compute_device_fingerprint(request)
+    trusted_device = TrustedDevice.objects.filter(
+        user=user,
+        device_fingerprint=device_fingerprint,
+        is_active=True
+    ).first()
+    
+    if not trusted_device or not trusted_device.pin_hash:
+        return Response(
+            {"message": "Workstation is not trusted or PIN is not configured."},
+            status=status.HTTP_400_BAD_REQUEST
+        )
+        
+    # Verify PIN
+    pin_bytes = (str(pin) + str(user.id)).encode('utf-8')
+    if not bcrypt.checkpw(pin_bytes, trusted_device.pin_hash.encode('utf-8')):
+        audit_log(
+            user, "LOGIN_FAILED",
+            request=request,
+            extra_data={"reason": "Invalid PIN unlock attempt"}
+        )
+        return Response(
+            {"message": "Invalid PIN."},
+            status=status.HTTP_401_UNAUTHORIZED
+        )
+        
+    # Reset lockouts or activity
+    update_user_activity(user.id)
+    
+    # Generate new tokens
+    refresh = get_tokens_for_user(user, request, risk_tier=1, mfa_method='none')
+    access_token = str(refresh.access_token)
+    
+    response_data = {
+        "access_token": access_token,
+        "refresh_token": str(refresh),
+        "user_profile": _user_to_dict(user),
+        "message": "Session unlocked successfully."
+    }
+    
+    if client_cookie:
+        new_cookie_token = secrets.token_urlsafe(32)
+        new_cookie_hash = hashlib.sha256(new_cookie_token.encode()).hexdigest()
+        client_cookie.cookie_token = new_cookie_hash
+        client_cookie.access_token_jwt = encrypt_jwt(access_token)
+        client_cookie.refresh_token_jwt = encrypt_jwt(str(refresh))
+        client_cookie.expires_at = timezone.now() + timedelta(minutes=getattr(settings, 'JWT_ACCESS_MINUTES', 15))
+        client_cookie.save()
+        
+        audit_log(
+            user, "SESSION_UNLOCK",
+            request=request,
+            risk_tier=1,
+            mfa_method='none',
+            extra_data={"device": device_fingerprint}
+        )
+        
+        response = Response(response_data)
+        return _set_httponly_cookie(response, new_cookie_token)
+    else:
+        audit_log(
+            user, "SESSION_UNLOCK",
+            request=request,
+            risk_tier=1,
+            mfa_method='none',
+            extra_data={"device": device_fingerprint}
+        )
+        return Response(response_data)

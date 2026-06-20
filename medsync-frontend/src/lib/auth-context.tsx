@@ -48,14 +48,37 @@ interface AuthContextValue extends AuthState {
   viewAsHospitalName: string | null;
   setViewAs: (id: string | null, name: string | null) => void;
   getViewAsHeader: () => string | null;
+  isLocked: boolean;
+  setIsLocked: (locked: boolean) => void;
+  pinSetupRequired: boolean;
+  setPinSetupRequired: (req: boolean) => void;
 }
 
 const AuthContext = createContext<AuthContextValue | null>(null);
 
-const INACTIVITY_MS = 15 * 60 * 1000;
 const WARNING_MS = 2 * 60 * 1000;
-/** Show warning when this much time has passed without activity (15min - 2min). */
-const WARNING_AT_MS = INACTIVITY_MS - WARNING_MS;
+
+// Per-role inactivity timeouts. Clinical floor roles get longer windows because
+// nurses/lab techs frequently step away from the screen to attend patients.
+// Admin/finance roles keep tighter windows for compliance.
+const INACTIVITY_BY_ROLE: Record<string, number> = {
+  nurse:                30 * 60 * 1000,  // 30 min — busy ward, frequent interruptions
+  lab_technician:       30 * 60 * 1000,  // 30 min — bench work away from screen
+  pharmacy_technician:  25 * 60 * 1000,  // 25 min — dispensing counter workflow
+  radiology_technician: 25 * 60 * 1000,  // 25 min — scan room duties
+  ward_clerk:           25 * 60 * 1000,  // 25 min — desk but handles physical tasks
+  doctor:               45 * 60 * 1000,  // 45 min — long consultations, ward rounds
+  receptionist:         20 * 60 * 1000,  // 20 min — desk-based, moderate traffic
+  billing_staff:        15 * 60 * 1000,  // 15 min — finance: strict compliance
+  hospital_admin:       15 * 60 * 1000,  // 15 min — admin: strict compliance
+  super_admin:          10 * 60 * 1000,  // 10 min — highest privilege: tightest window
+};
+const DEFAULT_INACTIVITY_MS = 15 * 60 * 1000;
+
+function getInactivityMs(role: string | undefined): number {
+  if (!role) return DEFAULT_INACTIVITY_MS;
+  return INACTIVITY_BY_ROLE[role] ?? DEFAULT_INACTIVITY_MS;
+}
 
 function loadStoredAuth(): Partial<AuthState> | null {
   if (typeof window === "undefined") return null;
@@ -131,6 +154,23 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   });
   const lastActivityRef = useRef<number>(0);
 
+  const [isLocked, setIsLockedState] = useState<boolean>(() => {
+    if (typeof window === "undefined") return false;
+    return sessionStorage.getItem("medsync_session_locked") === "true";
+  });
+  const [pinSetupRequired, setPinSetupRequired] = useState(false);
+
+  const setIsLocked = useCallback((locked: boolean) => {
+    setIsLockedState(locked);
+    if (typeof window !== "undefined") {
+      if (locked) {
+        sessionStorage.setItem("medsync_session_locked", "true");
+      } else {
+        sessionStorage.removeItem("medsync_session_locked");
+      }
+    }
+  }, []);
+
   const setViewAs = useCallback((id: string | null, name: string | null) => {
     setViewAsState({ id, name });
     if (typeof window !== "undefined") {
@@ -165,13 +205,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     let cancelled = false;
     (async () => {
       try {
-        // Create a temporary API client for this hydration request
-        // This ensures 401 triggers token refresh automatically
-        // Use callbacks to avoid referencing functions before they're defined
         const apiClient = createApiClient(
           () => state.accessToken,
           async () => {
-            // Inline refresh logic to avoid circular dependency
             const refresh = state.refreshToken;
             if (!refresh) {
               return false;
@@ -228,21 +264,16 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         }
       } catch (err) {
         if (cancelled) return;
-        // Handle auth failure: on 401 after refresh attempt, or persistent network errors
         const error = err as { statusCode?: number; detail?: { error?: string } };
         const is401 = error?.statusCode === 401;
         const isNetworkError = error?.detail?.error === "TIMEOUT_OR_ABORT";
         if (is401 || isNetworkError) {
-          // Clear auth state and don't leave user in loading state
           sessionStorage.removeItem(AUTH_STORAGE_KEY);
           setState({ accessToken: null, refreshToken: null, user: null, isAuthenticated: false });
-          // Redirect to login if we're in browser context
           if (typeof window !== "undefined") {
             window.location.href = "/login";
           }
         }
-        // For other errors, just silently fail and don't set hydrated state
-        // This allows the app to load without user data rather than getting stuck
       }
     })();
     return () => {
@@ -260,9 +291,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       isAuthenticated: false,
     });
     warningShownRef.current = false;
+    setIsLocked(false);
+    setPinSetupRequired(false);
     if (typeof window !== "undefined") {
       sessionStorage.removeItem(AUTH_STORAGE_KEY);
       sessionStorage.removeItem(VIEW_AS_STORAGE_KEY);
+      sessionStorage.removeItem("medsync_session_locked");
       localStorage.removeItem(AUTH_STORAGE_KEY);
       localStorage.removeItem(AUTH_PERSISTENT_HINT);
       if (accessToken) {
@@ -289,39 +323,55 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           /* ignore */
         }
       }
-      document.cookie = "medsync_session=; path=/; max-age=0";
-      document.cookie = "medsync_role=; path=/; max-age=0";
+      // Clear client-set cookies only (medsync_session, medsync_role are NOT HttpOnly,
+      // so document.cookie can clear them). Backend-set HttpOnly cookies are cleared
+      // by the /auth/logout-cookie call above.
+      document.cookie = "medsync_session=; path=/; max-age=0; SameSite=Strict; Secure";
+      document.cookie = "medsync_role=; path=/; max-age=0; SameSite=Strict; Secure";
       window.location.href = "/login";
     }
-  }, [state.accessToken, state.refreshToken]);
+  }, [state.accessToken, state.refreshToken, setIsLocked]);
 
   const updateActivity = useCallback(() => {
-    lastActivityRef.current = Date.now();
-  }, []);
+    if (!isLocked) {
+      lastActivityRef.current = Date.now();
+    }
+  }, [isLocked]);
+
+  const handleTimeout = useCallback(() => {
+    setShowInactivityWarning(false);
+    // All roles: lock the screen rather than logging out.
+    // - Clinical floor roles (nurse, lab, pharmacy, etc.) need to re-enter quickly
+    //   between patients without losing their work context.
+    // - Admin/doctor roles also benefit from fast re-entry vs. full re-login + MFA.
+    // Full logout only if there's no PIN set up (first-time device, no PIN configured).
+    setIsLocked(true);
+  }, [setIsLocked]);
 
   useEffect(() => {
-    if (!state.isAuthenticated) return;
+    if (!state.isAuthenticated || isLocked) return;
+    const inactivityMs = getInactivityMs(state.user?.role);
+    const warningAtMs = inactivityMs - WARNING_MS;
     const check = () => {
       const elapsed = Date.now() - lastActivityRef.current;
-      if (elapsed >= INACTIVITY_MS) {
-        setShowInactivityWarning(false);
-        logout();
-      } else if (elapsed >= WARNING_AT_MS && !warningShownRef.current) {
+      if (elapsed >= inactivityMs) {
+        handleTimeout();
+      } else if (elapsed >= warningAtMs && !warningShownRef.current) {
         warningShownRef.current = true;
         setShowInactivityWarning(true);
       }
     };
     const id = setInterval(check, 30000);
     return () => clearInterval(id);
-  }, [state.isAuthenticated, logout]);
+  }, [state.isAuthenticated, state.user?.role, isLocked, handleTimeout]);
 
   useEffect(() => {
-    if (!state.isAuthenticated) return;
+    if (!state.isAuthenticated || isLocked) return;
     const events = ["mousedown", "keydown", "scroll", "touchstart"];
     const handler = () => updateActivity();
     events.forEach((e) => window.addEventListener(e, handler));
     return () => events.forEach((e) => window.removeEventListener(e, handler));
-  }, [state.isAuthenticated, updateActivity]);
+  }, [state.isAuthenticated, isLocked, updateActivity]);
 
   const login = useCallback((tokens: AuthTokens, options?: LoginOptions) => {
     const next = {
@@ -331,11 +381,17 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       isAuthenticated: true,
     };
     setState(next);
+    
+    // Check if PIN setup is required (from tokens payload)
+    const isPinSetupRequired = (tokens as unknown as { pin_setup_required?: boolean }).pin_setup_required;
+    if (isPinSetupRequired) {
+      setPinSetupRequired(true);
+    }
+
     if (typeof window !== "undefined") {
       saveStoredAuth(next, options?.rememberMe);
       const maxAge = 8 * 60 * 60; // 8 hours in seconds
-      // medsync_session gates server-side layout access (dashboard/layout.tsx + middleware.ts)
-      document.cookie = `medsync_session=1; path=/; max-age=${maxAge}; SameSite=Strict`;
+      document.cookie = `medsync_session=1; path=/; max-age=${maxAge}; SameSite=Strict; Secure`;
       if (tokens.user_profile?.role) {
         document.cookie = `medsync_role=${tokens.user_profile.role}; path=/; max-age=${maxAge}; SameSite=Strict; Secure`;
       }
@@ -418,6 +474,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     viewAsHospitalName: viewAs.name,
     setViewAs,
     getViewAsHeader,
+    isLocked,
+    setIsLocked,
+    pinSetupRequired,
+    setPinSetupRequired,
   };
 
   return (
@@ -426,7 +486,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       <InactivityModal
         open={showInactivityWarning}
         onStayLoggedIn={handleStayLoggedIn}
-        onLogout={logout}
+        onLogout={handleTimeout}
       />
     </AuthContext.Provider>
   );

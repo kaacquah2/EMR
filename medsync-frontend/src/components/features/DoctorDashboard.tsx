@@ -27,9 +27,9 @@ function AllergyIndicator({ hasAllergy }: { hasAllergy?: boolean }) {
 }
 
 export function DoctorDashboard() {
-  const { user } = useAuth();
+  const { user, accessToken } = useAuth();
   const { encounters, summary, fetch: fetchWorklist } = useWorklistEncounters();
-  const { alerts, fetch: fetchAlerts } = useAlerts("active", undefined, user?.hospital_id || null);
+  const { alerts, fetch: fetchAlerts } = useAlerts("active", undefined, user?.hospital_id || null, accessToken);
   const { resolve: resolveAlert, loading: resolvingAlert } = useResolveAlert();
   const { stats: metrics, loading: dashboardLoading, error: dashboardError, refresh: fetchDashboard } = useDashboardStats();
 

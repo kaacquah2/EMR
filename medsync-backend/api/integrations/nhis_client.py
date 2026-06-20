@@ -56,14 +56,14 @@ class NHISError(Exception):
 
 class NHISRetryableError(NHISError):
     """Transient error — caller should retry (network timeout, 429, 503)."""
-    def __init__(self, message: str, status_code: int = None):
+    def __init__(self, message: str, status_code: Optional[int] = None):
         super().__init__(message)
         self.status_code = status_code
 
 
 class NHISClaimError(NHISError):
     """Permanent claim error — do NOT retry (invalid member, bad data, 400/422)."""
-    def __init__(self, message: str, error_code: str = None, status_code: int = None):
+    def __init__(self, message: str, error_code: Optional[str] = None, status_code: Optional[int] = None):
         super().__init__(message)
         self.error_code = error_code
         self.status_code = status_code
@@ -417,7 +417,7 @@ class NHISClient:
         payload = {
             "facility_code": self.facility_code,
             "member_id": nhis_member_id,
-            "correlation_id": str(invoice_id),
+            "correlation_id": invoice_id,
             "visit_date": (visit_date or timezone.now()).date().isoformat(),
             "diagnosis_codes": diagnosis_codes,
             "attending_provider_id": attending_provider_id,
@@ -479,19 +479,56 @@ class NHISClient:
 
     def _mock_eligibility(self, nhis_member_id: str) -> NHISEligibilityResult:
         """
-        Offline fallback used in development / when NHIS_API_KEY is not set.
-        Returns a plausible-looking but clearly mock result.
+        Offline mock with realistic Ghana NHIS scenarios.
+        Behaviour driven by nhis_member_id suffix for demo control:
+          - ends in '0' → EXPIRED card
+          - ends in '9' → SUSPENDED card  
+          - ends in '5' → PREGNANT exemption (free care)
+          - everything else → ACTIVE
         """
         logger.warning(
-            "NHIS API not configured (NHIS_API_KEY missing). "
-            "Returning MOCK eligibility result for %s. "
-            "Set NHIS_API_BASE_URL, NHIS_API_KEY, NHIS_FACILITY_CODE in settings for production.",
+            "NHIS API not configured. Returning MOCK eligibility for %s "
+            "(set NHIS_API_KEY for production NHIA connectivity).",
             nhis_member_id,
         )
+        suffix = (nhis_member_id or "")[-1] if nhis_member_id else ""
+        
+        if suffix == "0":
+            return NHISEligibilityResult(
+                is_eligible=False,
+                member_id=nhis_member_id,
+                member_name="[MOCK] Kwame Asante",
+                card_status="EXPIRED",
+                card_expiry_date=datetime.now() - timedelta(days=45),
+                benefit_package="BASIC",
+                facility_contracted=True,
+            )
+        if suffix == "9":
+            return NHISEligibilityResult(
+                is_eligible=False,
+                member_id=nhis_member_id,
+                member_name="[MOCK] Ama Boateng",
+                card_status="SUSPENDED",
+                card_expiry_date=datetime.now() + timedelta(days=200),
+                benefit_package=None,
+                facility_contracted=True,
+            )
+        if suffix == "5":
+            return NHISEligibilityResult(
+                is_eligible=True,
+                member_id=nhis_member_id,
+                member_name="[MOCK] Adwoa Mensah",
+                card_status="ACTIVE",
+                card_expiry_date=datetime.now() + timedelta(days=365),
+                benefit_package="BASIC",
+                exemption_category="PREGNANT",  # Free care under Ghana NHIS
+                facility_contracted=True,
+            )
+        # Default: active member
         return NHISEligibilityResult(
             is_eligible=True,
             member_id=nhis_member_id,
-            member_name="[OFFLINE MODE — Mock]",
+            member_name="[MOCK] Emmanuel Tetteh",
             card_status="ACTIVE",
             card_expiry_date=datetime.now() + timedelta(days=365),
             benefit_package="BASIC",
@@ -505,7 +542,7 @@ class NHISClient:
         """Offline fallback: simulate a successful claim submission."""
         from django.utils import timezone as tz
         now = tz.now()
-        reference = f"NHIS-MOCK-{now.strftime('%Y%m%d')}-{str(invoice_id)[:8].upper()}"
+        reference = f"NHIS-MOCK-{now.strftime('%Y%m%d')}-{invoice_id[:8].upper()}"
         logger.warning(
             "NHIS API not configured. Returning MOCK claim reference: %s", reference
         )

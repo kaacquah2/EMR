@@ -159,6 +159,7 @@ def stock_list_create(request):
                 {'error': str(e)},
                 status=status.HTTP_400_BAD_REQUEST
             )
+    return Response(status=status.HTTP_405_METHOD_NOT_ALLOWED)
 
 
 @api_view(['GET'])
@@ -440,8 +441,9 @@ def check_expiry_manual_trigger(request):
     if not _is_pharmacy_staff(request.user):
         return Response({'error': 'Insufficient permissions'}, status=status.HTTP_403_FORBIDDEN)
     
+    hospital = get_effective_hospital(request)
     try:
-        result = check_expiring_stock_task()
+        result = check_expiring_stock_task(hospital=hospital)
         return Response({'message': 'Expiry check complete', 'result': result})
     except Exception as e:
         logger.error("Error running expiry check: %s", e)
@@ -478,10 +480,20 @@ def dispense_confirm(request, prescription_id):
     except Prescription.DoesNotExist:
         return Response({'error': 'Prescription not found'}, status=status.HTTP_404_NOT_FOUND)
     
-    if prescription.status not in ('pending', 'dispensing', 'partially_dispensed'):
+    # dispense-confirm is the second step of the two-phase dispense protocol.
+    # The first step (pharmacy/dispense/<id>) transitions pending → dispensing and
+    # runs drug-interaction checks.  Requiring dispensing|partially_dispensed here
+    # ensures those checks cannot be bypassed by calling dispense-confirm directly.
+    if prescription.status not in ('dispensing', 'partially_dispensed'):
         return Response(
-            {'error': f'Prescription status must be pending, dispensing, or partially_dispensed, not "{prescription.status}"'},
-            status=status.HTTP_400_BAD_REQUEST
+            {
+                'error': (
+                    f'Prescription must be in dispensing or partially_dispensed status '
+                    f'before confirming (current: "{prescription.status}"). '
+                    'Call POST /pharmacy/dispense/<id> first.'
+                )
+            },
+            status=status.HTTP_400_BAD_REQUEST,
         )
     
     try:

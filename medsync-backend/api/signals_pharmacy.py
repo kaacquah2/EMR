@@ -244,7 +244,8 @@ def _create_low_stock_alert(drug_stock, hospital):
             severity='warning',
             status='active'
         )
-        
+        from api.signals_alerts import broadcast_stock_alert
+        broadcast_stock_alert(alert)
         logger.info(f"Low-stock alert created for {drug_stock.drug_name} at {hospital.name}")
     
     except Exception as e:

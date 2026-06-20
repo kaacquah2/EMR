@@ -10,7 +10,7 @@ export default function AdmissionsListPage() {
   const { user } = useAuth();
   const { admissions, loading } = useAdmissions();
 
-  const allowed = ["doctor", "hospital_admin", "nurse", "super_admin"].includes(user?.role ?? "");
+  const allowed = ["doctor", "hospital_admin", "nurse", "super_admin", "ward_clerk"].includes(user?.role ?? "");
   if (!allowed) {
     return (
       <div className="rounded-lg bg-[#FEF3C7] p-4 text-[#B45309]">
@@ -22,7 +22,7 @@ export default function AdmissionsListPage() {
   return (
     <div className="space-y-6">
       <h1 className="font-sora text-2xl font-bold text-slate-900 dark:text-slate-100">
-        {user?.role === "nurse" ? "Ward Patients" : "Active Admissions"}
+        {user?.role === "nurse" || user?.role === "ward_clerk" ? "Ward Patients" : "Active Admissions"}
       </h1>
 
       <Card className="p-6">

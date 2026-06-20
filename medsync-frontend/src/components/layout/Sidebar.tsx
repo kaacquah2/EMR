@@ -22,7 +22,6 @@ import {
   AlertTriangle,
   Building2,
   Shield,
-  Brain,
   Bed,
   Pill,
   Beaker,
@@ -32,6 +31,7 @@ import {
   Heart,
   Stethoscope,
   LogOut,
+  Clock,
   type LucideIcon,
 } from "lucide-react";
 
@@ -52,7 +52,6 @@ const navIconMap: Record<string, LucideIcon> = {
   
   // Doctor
   "My Encounters": FileText,
-  "AI Suite": Brain,
   "Referral Network": Activity,
   
   // Nurse
@@ -74,6 +73,7 @@ const navIconMap: Record<string, LucideIcon> = {
   "RBAC Review": Shield,
   "Audit Logs": FileText,
   "Reports": ClipboardList,
+  "Overtime Tracking": Clock,
   
   // Super Admin
   "Hospitals": Building2,
@@ -82,7 +82,6 @@ const navIconMap: Record<string, LucideIcon> = {
   "Break-glass review": Shield,
   "Facilities": Building2,
   "System health": Heart,
-  "AI integration": Brain,
   "Inter-Hospital Hub": Network,
   "Network Overview": Activity,
 };
@@ -499,8 +498,8 @@ export function Sidebar() {
         )}
       </nav>
 
-      {/* Shift widget for nurses */}
-      {role === "nurse" && !collapsed && <ShiftWidget />}
+      {/* Shift widget for shift-based staff */}
+      {["nurse", "doctor", "lab_technician", "radiology_technician", "ward_clerk"].includes(role) && !collapsed && <ShiftWidget />}
 
       <div className={"border-t border-[#1A3A5C] border-t-[#0B8A96]/30 " + (collapsed ? "p-2" : "p-4")}>
         {!collapsed && (

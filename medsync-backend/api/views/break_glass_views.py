@@ -1,4 +1,3 @@
-import hashlib
 from django.conf import settings
 from django.core.mail import send_mail
 from django.utils import timezone
@@ -10,7 +9,13 @@ from rest_framework.response import Response
 
 from core.models import AuditLog, User
 from interop.models import GlobalPatient, BreakGlassLog
-from api.utils import get_global_patient_queryset, get_effective_hospital, get_request_hospital
+from api.utils import (
+    get_global_patient_queryset,
+    get_effective_hospital,
+    get_request_hospital,
+    sanitize_audit_resource_id,
+    get_client_ip,
+)
 from api.serializers import BreakGlassLogSerializer
 from api.decorators import requires_step_up
 
@@ -20,23 +25,21 @@ def _interop_role_ok(user):
 
 
 def _audit_emergency(user, global_patient_id, request, hospital=None):
-    prev = AuditLog.objects.filter(user=user).order_by("-timestamp").first()
-    prev_hash = prev.chain_hash if prev else "0"
-    data = f"{prev_hash}{user.id}EMERGENCY_ACCESSglobal_patient{global_patient_id}"
-    chain_hash = hashlib.sha256(data.encode()).hexdigest()
-    try:
-        rid = __import__("uuid").UUID(global_patient_id)
-    except (ValueError, TypeError):
-        rid = None
+    """Write a tamper-evident EMERGENCY_ACCESS audit entry.
+
+    Let AuditLog.save() build the chain hash and HMAC signature via its
+    standard path — the previous manual hash computation was being discarded
+    by save() anyway (save() unconditionally recomputes both fields for new
+    rows) and bypassed sanitize_audit_resource_id.
+    """
     AuditLog.objects.create(
         user=user,
         action="EMERGENCY_ACCESS",
         resource_type="global_patient",
-        resource_id=rid,
+        resource_id=sanitize_audit_resource_id(global_patient_id),
         hospital=hospital or getattr(user, "hospital", None),
-        ip_address=request.META.get("REMOTE_ADDR", "127.0.0.1"),
+        ip_address=get_client_ip(request),
         user_agent=request.META.get("HTTP_USER_AGENT", "") or "",
-        chain_hash=chain_hash,
     )
 
 

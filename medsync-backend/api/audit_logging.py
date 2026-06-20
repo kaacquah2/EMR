@@ -9,10 +9,14 @@ Expands audit logging to capture:
 - Object-level access attempts (allowed and denied)
 """
 
+import logging
+
 from core.models import AuditLog, User
 from django.utils import timezone
 from api.utils import sanitize_audit_resource_id, get_client_ip
 import json
+
+logger = logging.getLogger(__name__)
 import re
 
 
@@ -206,7 +210,7 @@ def audit_log_extended(
         return audit
     except Exception as e:
         # Prevent audit logging failures from breaking application
-        print(f"Failed to create audit log: {e}")
+        logger.error("Failed to create audit log: %s", e, exc_info=True)
         return None
 
 

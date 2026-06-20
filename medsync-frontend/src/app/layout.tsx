@@ -1,9 +1,11 @@
 import type { Metadata } from "next";
+import "@/lib/timezone-setup";
 import "./globals.css";
 import "../styles/clinical-print.css";
 import { AuthProvider } from "@/lib/auth-context";
 import { ToastProvider } from "@/lib/toast-context";
 import { ThemeProvider } from "@/lib/theme-context";
+
 
 export const metadata: Metadata = {
   title: "MedSync — One Record. Every Hospital.",

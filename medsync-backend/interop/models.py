@@ -28,7 +28,10 @@ class GlobalPatient(models.Model):
     ]
 
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
-    national_id = encrypt(models.CharField(max_length=50, unique=True, null=True, blank=True))
+    # unique=True on a non-deterministically encrypted column is meaningless —
+    # each encryption produces different ciphertext, so the DB constraint never
+    # triggers.  Uniqueness is enforced at application level in save() below.
+    national_id = encrypt(models.CharField(max_length=50, null=True, blank=True))
     ghana_health_id = encrypt(models.CharField(max_length=50, blank=True, null=True))
     nhis_number = encrypt(models.CharField(max_length=50, blank=True, null=True))
     passport_number = encrypt(models.CharField(max_length=50, blank=True, null=True))
@@ -79,6 +82,26 @@ class GlobalPatient(models.Model):
             models.Index(fields=["data_residency_country", "data_residency_locked"]),
         ]
 
+
+    def save(self, *args, **kwargs):
+        """Enforce application-level uniqueness on national_id.
+
+        The field is non-deterministically encrypted, so a DB UNIQUE constraint
+        on the ciphertext column would never catch duplicate plaintext values.
+        We enforce uniqueness here instead.
+        """
+        if self.national_id:
+            dup_qs = GlobalPatient.objects.filter(national_id=self.national_id)
+            if self.pk:
+                dup_qs = dup_qs.exclude(pk=self.pk)
+            # Python-level comparison — django-cryptography decrypts on access.
+            duplicates = [gp for gp in dup_qs if gp.national_id == self.national_id]
+            if duplicates:
+                from django.core.exceptions import ValidationError
+                raise ValidationError(
+                    {"national_id": "A GlobalPatient with this national ID already exists."}
+                )
+        super().save(*args, **kwargs)
 
     @property
     def full_name(self):
@@ -132,7 +155,18 @@ class ConsentScope(models.Model):
 
 
 class Consent(models.Model):
-    """Consent for a facility to access a global patient's records."""
+    """Consent for a facility to access a global patient's records.
+
+    Granular consent fields:
+    - `excluded_scopes` (M2M → ConsentScope): clinical categories the patient
+      wants hidden (e.g. HIV, MentalHealth).  Enforced in cross_facility_records()
+      via Python-level post-filter on `MedicalRecord.category`.
+    - `consented_record_ids` (JSONField): explicit allow-list of record UUIDs;
+      when non-empty, cross_facility_records() restricts the response to those
+      records only.  Supports the NDPA 2012 data-minimisation principle.
+    - `consented_encounter_ids` (JSONField): same as above for encounter-level
+      granularity; not yet enforced at the encounter query layer (future work).
+    """
 
     SCOPE_SUMMARY = "SUMMARY"
     SCOPE_FULL_RECORD = "FULL_RECORD"
@@ -204,7 +238,22 @@ class Consent(models.Model):
 
 
 class Referral(models.Model):
-    """Referral of a global patient from one facility to another."""
+    """Referral of a global patient from one facility to another.
+
+    Field notes (future work):
+    - `record_ids_to_share` / `encounter_ids_to_share`: populated at referral
+      creation time but not yet used by cross_facility_records() to scope the
+      returned records.  Future work: respect these lists to implement finer-
+      grained "share only specific encounters" referral semantics.
+    - `is_reverse_referral`: models a step-down or return referral but no API
+      workflow exists yet; kept for future implementation.
+    - `admin_approved`: hook for a dual-approval workflow; not enforced in the
+      current state machine.  Future work: require admin sign-off for referrals
+      to tertiary facilities.
+    - `STATUS_INFO_REQUESTED` / `STATUS_EXPIRED` / `STATUS_CANCELLED`: present
+      in the state machine but not exposed via the HTTP PATCH endpoint; they are
+      available for future workflow additions without a migration.
+    """
 
     STATUS_PENDING = "PENDING"
     STATUS_ACCEPTED = "ACCEPTED"
@@ -338,8 +387,13 @@ class BreakGlassLog(models.Model):
         return timezone.now() > self.expires_at
 
 
-class Encounter(models.Model):
-    """Facility-owned encounter; can be linked to MedicalRecord later."""
+class FacilityEncounter(models.Model):
+    """Facility-owned encounter for cross-facility context.
+
+    Renamed from ``Encounter`` to ``FacilityEncounter`` to avoid confusion with
+    ``records.models.Encounter`` which is the primary clinical encounter model.
+    Can be linked to MedicalRecord later.
+    """
 
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     facility_patient = models.ForeignKey(
@@ -354,4 +408,7 @@ class Encounter(models.Model):
     deleted_at = models.DateTimeField(null=True, blank=True)
 
     class Meta:
+        # Keep original table name to avoid migration rename
+        db_table = "interop_encounter"
         indexes = [models.Index(fields=["facility_patient", "-created_at"])]
+

@@ -328,10 +328,15 @@ def check_rate_limit(key, limit, window_seconds):
             return False, 0, window_seconds
 
         if current_count >= limit:
-            # Calculate retry-after
+            # cache.ttl() is only available on the Redis backend; DatabaseCache
+            # and LocMemCache do not implement it.  Fall back to the full window
+            # when the method is absent so the except branch is never silently hit.
             try:
-                expiry = cache.ttl(key)  # Returns seconds until expiry
-                retry_after = max(1, expiry) if expiry else window_seconds
+                if hasattr(cache, 'ttl'):
+                    expiry = cache.ttl(key)
+                    retry_after = max(1, expiry) if expiry else window_seconds
+                else:
+                    retry_after = window_seconds
             except Exception:
                 retry_after = window_seconds
             return False, 0, retry_after

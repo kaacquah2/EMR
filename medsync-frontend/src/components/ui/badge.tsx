@@ -35,6 +35,10 @@ export const roleAccentColours: Record<string, string> = {
   nurse: "#059669",
   lab_technician: "#D97706",
   receptionist: "#0B8A96",
+  pharmacy_technician: "#10B981",
+  radiology_technician: "#6366F1",
+  billing_staff: "#0EAFBE",
+  ward_clerk: "#8B5CF6",
 };
 
 const Badge = React.forwardRef<HTMLSpanElement, BadgeProps>(

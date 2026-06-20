@@ -1,19 +1,14 @@
 """
 ASGI config for medsync_backend.
 
-Channels/WebSockets have been removed; this is a standard Django ASGI application
-suitable for Uvicorn or Daphne. For production we use gunicorn WSGI (wsgi.py).
+MedSync runs as a standard WSGI application via Gunicorn.
+This ASGI entrypoint is provided for compatibility (e.g. Railway, Render)
+but uses the plain Django ASGI handler — no WebSocket support required.
 """
 import os
-import sys
-from pathlib import Path
-
-_backend_root = Path(__file__).resolve().parent.parent
-if str(_backend_root) not in sys.path:
-    sys.path.insert(0, str(_backend_root))
-
-from django.core.asgi import get_asgi_application
 
 os.environ.setdefault("DJANGO_SETTINGS_MODULE", "medsync_backend.settings")
+
+from django.core.asgi import get_asgi_application  # noqa: E402
 
 application = get_asgi_application()

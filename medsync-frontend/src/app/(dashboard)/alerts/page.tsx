@@ -19,9 +19,9 @@ const severityColor: Record<string, "default" | "active" | "pending"> = {
 
 export default function AlertsPage() {
   const router = useRouter();
-  const { user } = useAuth();
+  const { user, accessToken } = useAuth();
   const [statusFilter, setStatusFilter] = useState<string>("active");
-  const { alerts, loading, fetch } = useAlerts(statusFilter, undefined, user?.hospital_id ?? undefined);
+  const { alerts, loading, fetch } = useAlerts(statusFilter, undefined, user?.hospital_id ?? undefined, accessToken);
   const { resolve, loading: resolving } = useResolveAlert();
 
   useEffect(() => {

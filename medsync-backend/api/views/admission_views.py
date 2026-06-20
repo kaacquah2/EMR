@@ -14,7 +14,7 @@ from api.utils import get_patient_queryset, get_effective_hospital, get_request_
 @api_view(["GET"])
 @permission_classes([IsAuthenticated])
 def admissions_list(request):
-    if request.user.role not in ("doctor", "hospital_admin", "nurse", "super_admin"):
+    if request.user.role not in ("doctor", "hospital_admin", "nurse", "super_admin", "ward_clerk"):
         return Response(
             {"message": "Permission denied"},
             status=status.HTTP_403_FORBIDDEN,
@@ -31,7 +31,7 @@ def admissions_list(request):
         ).select_related("patient", "ward", "bed", "admitted_by")
     else:
         qs = PatientAdmission.objects.none()
-    if request.user.role == "nurse" and request.user.ward_id:
+    if request.user.role in ("nurse", "ward_clerk") and request.user.ward_id:
         qs = qs.filter(ward=request.user.ward)
     data = [
         {
@@ -54,7 +54,7 @@ def admissions_list(request):
 @api_view(["GET"])
 @permission_classes([IsAuthenticated])
 def admissions_by_ward(request, ward_id):
-    if request.user.role not in ("nurse", "doctor", "hospital_admin", "super_admin"):
+    if request.user.role not in ("nurse", "doctor", "hospital_admin", "super_admin", "ward_clerk"):
         return Response(
             {"message": "Permission denied"},
             status=status.HTTP_403_FORBIDDEN,
@@ -70,7 +70,7 @@ def admissions_by_ward(request, ward_id):
             {"message": "Ward not found"},
             status=status.HTTP_404_NOT_FOUND,
         )
-    if request.user.role == "nurse" and request.user.ward_id != ward.id:
+    if request.user.role in ("nurse", "ward_clerk") and request.user.ward_id != ward.id:
         return Response(
             {"message": "Permission denied"},
             status=status.HTTP_403_FORBIDDEN,
@@ -234,8 +234,8 @@ def admissions_by_ward_dashboard(request, ward_id):
         }, ...]
     }
     """
-    # Only nurses can access dashboard data for their own ward
-    if request.user.role != "nurse":
+    # Only nurses and ward clerks can access dashboard data for their own ward
+    if request.user.role not in ("nurse", "ward_clerk"):
         return Response(
             {"message": "Permission denied"},
             status=status.HTTP_403_FORBIDDEN,

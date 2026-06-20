@@ -14,17 +14,27 @@ from api.models import DrugStock, StockAlert
 logger = logging.getLogger(__name__)
 
 
-def check_expiring_stock_task():
+def check_expiring_stock_task(hospital=None):
     """
     Check for stock expiring within 30 days and create StockAlert records.
 
+    Args:
+        hospital: Scope to a single Hospital instance. When None (cron path),
+                  all hospitals are checked. Always pass a hospital when called
+                  from an HTTP request to avoid cross-tenant alert creation.
+
     Runs daily (via management command / cron) or on-demand.
     """
-    expiry_threshold = timezone.now().date() + timedelta(days=30)
+    today = timezone.now().date()
+    expiry_threshold = today + timedelta(days=30)
 
-    expiring_stock = DrugStock.objects.filter(
+    base_qs = DrugStock.objects.all()
+    if hospital is not None:
+        base_qs = base_qs.filter(hospital=hospital)
+
+    expiring_stock = base_qs.filter(
         expiry_date__lte=expiry_threshold,
-        expiry_date__gt=timezone.now().date(),
+        expiry_date__gt=today,
         quantity__gt=0,
     )
 
@@ -37,8 +47,8 @@ def check_expiring_stock_task():
         ).exists()
 
         if not existing:
-            days_to_expiry = (stock.expiry_date - timezone.now().date()).days
-            alert = StockAlert.objects.create(
+            days_to_expiry = (stock.expiry_date - today).days
+            StockAlert.objects.create(
                 hospital=stock.hospital,
                 drug_stock=stock,
                 alert_type='expiring_soon',
@@ -52,8 +62,8 @@ def check_expiring_stock_task():
             alert_count += 1
             logger.info("Expiry alert created for %s at %s", stock.drug_name, stock.hospital.name)
 
-    expired_stock = DrugStock.objects.filter(
-        expiry_date__lte=timezone.now().date(),
+    expired_stock = base_qs.filter(
+        expiry_date__lte=today,
         quantity__gt=0,
     )
 
@@ -65,7 +75,7 @@ def check_expiring_stock_task():
         ).exists()
 
         if not existing:
-            alert = StockAlert.objects.create(
+            StockAlert.objects.create(
                 hospital=stock.hospital,
                 drug_stock=stock,
                 alert_type='expired',

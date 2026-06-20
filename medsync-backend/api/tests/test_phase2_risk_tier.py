@@ -57,9 +57,9 @@ class TestRiskTierComputation:
         )
         
         self.user = User.objects.create_user(
-            email="doctor@test.gh",
+            email="nurse@test.gh",
             password="Test123!@#",
-            role="doctor",
+            role="nurse",
             hospital=self.hospital
         )
     
@@ -83,7 +83,9 @@ class TestRiskTierComputation:
             expires_at=timezone.now() + timedelta(days=30)
         )
         
-        result = compute_login_risk_tier(self.user, request)
+        from unittest.mock import patch
+        with patch('api.auth_utils.is_within_business_hours', return_value=True):
+            result = compute_login_risk_tier(self.user, request)
         
         assert result['risk_tier'] == 1
         assert 'device' in result['factors']

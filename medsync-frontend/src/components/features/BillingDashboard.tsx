@@ -6,20 +6,15 @@ import {
   AlertCircle, 
   Clock, 
   TrendingUp,
-  FileSearch,
-  Filter,
-  Download,
   CheckCircle2,
   XCircle,
   Plus,
   Search,
   DollarSign,
-  FileText,
   CreditCard,
   Layers,
   ChevronRight,
-  Loader2,
-  Check
+  Loader2
 } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -46,23 +41,15 @@ import {
   YAxis, 
   CartesianGrid, 
   Tooltip, 
-  ResponsiveContainer, 
-  BarChart,
-  Bar,
-  Cell
+  ResponsiveContainer
 } from "recharts";
 import { useApi } from "@/hooks/use-api";
 import { useToast } from "@/lib/toast-context";
 import { isBenignApiNetworkFailure } from "@/lib/api-client";
 import { usePollWhenVisible } from "@/hooks/use-poll-when-visible";
+import { formatDate as formatDateGhana } from "@/lib/utils";
 
 // Invoice interface
-interface InvoiceItem {
-  description: string;
-  quantity: number;
-  unit_price: number; // in cents
-  service_type: string;
-}
 
 interface Invoice {
   id: string;
@@ -115,10 +102,7 @@ export function BillingDashboard() {
   // Dashboard state
   const [metrics, setMetrics] = useState<DashboardMetrics | null>(null);
   const [invoices, setInvoices] = useState<Invoice[]>([]);
-  const [loadingMetrics, setLoadingMetrics] = useState(true);
   const [loadingInvoices, setLoadingInvoices] = useState(true);
-  const [metricsError, setMetricsError] = useState<string | null>(null);
-  const [invoicesError, setInvoicesError] = useState<string | null>(null);
 
   // Tab State
   const [activeTab, setActiveTab] = useState("overview");
@@ -163,17 +147,12 @@ export function BillingDashboard() {
   // Fetch Dashboard Metrics
   const fetchMetrics = useCallback(async () => {
     try {
-      setLoadingMetrics(true);
       const res = await api.get<DashboardMetrics>("/billing/dashboard");
       setMetrics(res);
-      setMetricsError(null);
     } catch (err) {
       if (!isBenignApiNetworkFailure(err)) {
         console.error("Error fetching metrics:", err);
       }
-      setMetricsError("Failed to fetch billing metrics. Please check connection.");
-    } finally {
-      setLoadingMetrics(false);
     }
   }, [api]);
 
@@ -183,12 +162,10 @@ export function BillingDashboard() {
       setLoadingInvoices(true);
       const res = await api.get<{ data: Invoice[] }>("/billing/invoices");
       setInvoices(res.data || []);
-      setInvoicesError(null);
     } catch (err) {
       if (!isBenignApiNetworkFailure(err)) {
         console.error("Error fetching invoices:", err);
       }
-      setInvoicesError("Failed to fetch invoices list.");
     } finally {
       setLoadingInvoices(false);
     }
@@ -271,7 +248,7 @@ export function BillingDashboard() {
         return;
       }
       const price = parseFloat(item.priceGhs);
-      if (isNaN(price) || price < 0) {
+      if (isNaN(price) || price <= 0) {
         toast.error("Line item price must be a valid positive number.");
         return;
       }
@@ -425,11 +402,15 @@ export function BillingDashboard() {
     setIsSubmitNhisOpen(true);
   };
 
-  // Format date helper
-  const formatDate = (isoString: string) => {
-    const d = new Date(isoString);
-    return d.toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" });
-  };
+  const formatDate = (isoString: string) => formatDateGhana(isoString);
+
+  // Pre-compute NHIS invoice stats once to avoid repeated inline .filter() in render
+  const nhisStats = useMemo(() => {
+    const nhisInvoices = invoices.filter((i) => i.payment_method === "nhis");
+    const totalValue = nhisInvoices.reduce((acc, curr) => acc + curr.amount_cents / 100, 0);
+    const pendingCount = nhisInvoices.filter((i) => i.nhis_claim_status === "submitted").length;
+    return { nhisInvoices, totalValue, pendingCount };
+  }, [invoices]);
 
   // Status badges
   const getStatusBadge = (status: Invoice["status"]) => {
@@ -444,8 +425,12 @@ export function BillingDashboard() {
         return <Badge variant="default" className="bg-slate-100 text-slate-800 border-slate-200">Draft</Badge>;
       case "issued":
         return <Badge variant="default" className="bg-blue-100 text-blue-800 border-blue-200">Issued</Badge>;
+      case "partially_paid":
+        return <Badge variant="pending" className="bg-orange-100 text-orange-800 border-orange-200">Partial Pay</Badge>;
       case "cancelled":
         return <Badge variant="critical">Cancelled</Badge>;
+      default:
+        return null;
     }
   };
 
@@ -544,7 +529,7 @@ export function BillingDashboard() {
       </div>
 
       {/* Tabs Layout */}
-      <Tabs defaultValue="overview" onValueChange={setActiveTab} className="w-full">
+      <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
         <TabsList className="bg-slate-100 dark:bg-slate-800 p-1 rounded-xl">
           <TabsTrigger value="overview" className="rounded-lg">Revenue Overview</TabsTrigger>
           <TabsTrigger value="registry" className="rounded-lg">Invoices & Payments</TabsTrigger>
@@ -676,7 +661,6 @@ export function BillingDashboard() {
                     <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
                       {filteredInvoices.map((inv) => {
                         const totalGhs = inv.amount_cents / 100;
-                        const unpaidGhs = totalGhs - inv.paid_amount;
                         return (
                           <tr key={inv.id} className="hover:bg-slate-50/40 dark:hover:bg-slate-900/40 transition-colors">
                             <td className="px-6 py-4 font-mono font-bold text-[#0EAFBE] truncate max-w-[120px]">
@@ -731,7 +715,7 @@ export function BillingDashboard() {
                 <div className="flex items-center justify-between">
                   <div>
                     <p className="text-xs font-bold text-slate-500 uppercase tracking-widest">Total Claims Value</p>
-                    <p className="text-2xl font-black mt-1">₵{invoices.filter(i => i.payment_method === 'nhis').reduce((acc, curr) => acc + (curr.amount_cents / 100), 0).toFixed(2)}</p>
+                    <p className="text-2xl font-black mt-1">₵{nhisStats.totalValue.toFixed(2)}</p>
                   </div>
                   <div className="p-2 bg-[#0EAFBE]/10 rounded-lg">
                     <ClipboardCheck className="h-5 w-5 text-[#0EAFBE]" />
@@ -759,7 +743,7 @@ export function BillingDashboard() {
                 <div className="flex items-center justify-between">
                   <div>
                     <p className="text-xs font-bold text-slate-500 uppercase tracking-widest">Pending Review</p>
-                    <p className="text-2xl font-black mt-1">{invoices.filter(i => i.payment_method === 'nhis' && i.nhis_claim_status === 'submitted').length}</p>
+                    <p className="text-2xl font-black mt-1">{nhisStats.pendingCount}</p>
                   </div>
                   <div className="p-2 bg-amber-500/10 rounded-lg">
                     <Clock className="h-5 w-5 text-amber-500" />
@@ -805,14 +789,14 @@ export function BillingDashboard() {
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
-                    {invoices.filter(inv => inv.payment_method === 'nhis').length === 0 ? (
+                    {nhisStats.nhisInvoices.length === 0 ? (
                       <tr>
                         <td colSpan={7} className="text-center py-12 text-slate-500">
                           No NHIS claims or invoices registered yet.
                         </td>
                       </tr>
                     ) : (
-                      invoices.filter(inv => inv.payment_method === 'nhis').map((inv) => {
+                      nhisStats.nhisInvoices.map((inv) => {
                         const amount = inv.amount_cents / 100;
                         return (
                           <tr key={inv.id} className="hover:bg-slate-50/40 dark:hover:bg-slate-900/40 transition-colors">

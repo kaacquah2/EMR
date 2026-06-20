@@ -62,9 +62,12 @@ def compute_audit_chain_status(
     checked = 0
     for uid in user_ids:
         prev_hash = "0"
+        # Must match the write-time ordering in AuditLog.save():
+        # (timestamp ASC, id ASC) so equal-timestamp rows are processed in the
+        # same order as they were written (id is the stable tiebreaker).
         logs = (
             AuditLog.objects.filter(user_id=uid)
-            .order_by("timestamp")
+            .order_by("timestamp", "id")
             .only(
                 "user_id",
                 "action",
@@ -73,10 +76,14 @@ def compute_audit_chain_status(
                 "chain_hash",
                 "signature",
                 "timestamp",
+                "extra_data",
             )[:max_logs_per_user]
         )
         for log in logs:
-            data = f"{prev_hash}{log.user_id}{log.action}{log.resource_type or ''}{log.resource_id or ''}"
+            nonce = ""
+            if isinstance(log.extra_data, dict):
+                nonce = log.extra_data.get("_nonce", "")
+            data = f"{prev_hash}{log.user_id}{log.action}{log.resource_type or ''}{log.resource_id or ''}{nonce}"
             expected_hash = hashlib.sha256(data.encode()).hexdigest()
             expected_sig = hmac.new(signing_key, data.encode(), hashlib.sha256).hexdigest()
             checked += 1

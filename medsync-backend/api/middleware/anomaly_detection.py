@@ -97,15 +97,30 @@ def track_patient_access(user_id: str, patient_id: str) -> tuple[bool, int]:
     Track unique patient access in a 1-hour window.
     Returns (is_anomaly, unique_patient_count).
 
-    Prefers Redis (shared across all ASGI/Celery workers) so counts are
-    accurate in multi-process deployments. Falls back to per-process Django
-    cache only when Redis is unavailable (e.g. dev/test environments).
+    Prefers Redis (shared across all workers) so counts are accurate in
+    multi-process deployments.  Falls back to Django cache when Redis is
+    unavailable:
+    - DatabaseCache (production default): shared across workers; the 200-patient
+      threshold is enforced correctly, though concurrent updates may be off by
+      a small margin (no atomic set-union).
+    - LocMemCache (Vercel / single-worker dev): per-process; threshold is only
+      enforced within a single process.  A startup warning is logged to make
+      this limitation visible.
     """
     is_anomaly_redis, count_redis = _track_with_redis(user_id, patient_id)
     if count_redis > 0 or is_anomaly_redis:
         return is_anomaly_redis, count_redis
 
-    # Redis unavailable — fall back to per-process cache (dev/test only).
+    # Redis unavailable — fall back to Django cache.
+    from django.conf import settings
+    cache_backend = settings.CACHES.get("default", {}).get("BACKEND", "")
+    if "LocMemCache" in cache_backend:
+        logger.warning(
+            "Anomaly detection is using LocMemCache (per-process). "
+            "The %d-patient threshold is not enforced across multiple workers. "
+            "Configure REDIS_URL for accurate cross-worker anomaly detection.",
+            PATIENT_ACCESS_THRESHOLD,
+        )
     return _track_with_cache(user_id, patient_id)
 
 
@@ -128,10 +143,14 @@ def create_anomaly_alert(user, patient_count: int, window_hours: int) -> None:
             user=user,
             action="ANOMALY_DETECTED",
             resource_type="SecurityAlert",
-            resource_id=f"patient_access_{user.id}",
+            # resource_id is a CharField(max_length=64) — keep it as a string.
+            resource_id=f"patient_access_{user.id}"[:64],
             hospital=getattr(user, "hospital", None),
-            ip_address="system",
-            details={
+            # ip_address is a GenericIPAddressField; "system" is not a valid IP.
+            # Use None (allowed because the field is nullable) for non-request events.
+            ip_address=None,
+            # The correct field name on AuditLog is extra_data (JSONField).
+            extra_data={
                 "alert_type": "excessive_patient_access",
                 "patient_count": patient_count,
                 "window_hours": window_hours,

@@ -4,6 +4,7 @@ import React, { useEffect, useState, useCallback, useMemo } from "react";
 import { useAuth } from "@/lib/auth-context";
 import { useApi } from "@/hooks/use-api";
 import { useToast } from "@/lib/toast-context";
+import { usePollWhenVisible } from "@/hooks/use-poll-when-visible";
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -15,7 +16,6 @@ import {
   CheckCircle2, 
   AlertTriangle, 
   RefreshCw, 
-  Activity, 
   ArrowRight,
   UserCheck
 } from "lucide-react";
@@ -63,6 +63,7 @@ export function WardClerkDashboard() {
 
   const [dashboardBeds, setDashboardBeds] = useState<BedDashboardData[]>([]);
   const [dbBedsMapping, setDbBedsMapping] = useState<BedInfo[]>([]);
+  const [allWardAdmissions, setAllWardAdmissions] = useState<AdmissionDetail[]>([]);
   const [unassignedAdmissions, setUnassignedAdmissions] = useState<AdmissionDetail[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -106,12 +107,13 @@ export function WardClerkDashboard() {
       );
       setDbBedsMapping(bedsResp.data || []);
 
-      // Fetch Active Admissions and filter to unassigned in our ward
+      // Fetch Active Admissions for this ward
       const admissionsResp = await api.get<{ data: AdmissionDetail[] }>("/admissions");
-      const unassigned = (admissionsResp.data || []).filter(
-        (adm) => adm.ward_id === wardId && !adm.bed_id
+      const wardAdmissions = (admissionsResp.data || []).filter(
+        (adm) => adm.ward_id === wardId
       );
-      setUnassignedAdmissions(unassigned);
+      setAllWardAdmissions(wardAdmissions);
+      setUnassignedAdmissions(wardAdmissions.filter((adm) => !adm.bed_id));
 
     } catch (err) {
       console.error("Failed to load Ward Clerk Dashboard data:", err);
@@ -125,6 +127,7 @@ export function WardClerkDashboard() {
   useEffect(() => {
     void loadData();
   }, [loadData]);
+  usePollWhenVisible(() => loadData(true), 60_000, true);
 
   // Correlate bed dashboard status with DB Bed Info to get the DB ID and status
   const integratedBeds = useMemo(() => {
@@ -147,15 +150,11 @@ export function WardClerkDashboard() {
     return { total, occupied, available, maintenance };
   }, [integratedBeds, dbBedsMapping]);
 
-  // Find the active admission ID for a given patient in our beds
-  const findAdmissionId = (patientId: string) => {
-    // Since we also fetch unassignedAdmissions, let's search there or fetch active admissions
-    // Alternatively, we can find it in our admissions list. Let's list active ward admissions.
-    // For simplicity, we can fetch all admissions to match the patientId.
-    return api.get<{ data: AdmissionDetail[] }>("/admissions").then((res) => {
-      const found = res.data?.find((a) => a.patient_id === patientId && !a.bed_code);
-      return found?.admission_id || null;
-    });
+  // Find the active admission ID for a patient using already-fetched ward admissions.
+  // Does NOT filter on bed_code — patients in occupied beds must also be transferable.
+  const findAdmissionId = (patientId: string): string | null => {
+    const found = allWardAdmissions.find((a) => a.patient_id === patientId);
+    return found?.admission_id || null;
   };
 
   const handleUpdateBedStatus = async (bedId: string, newStatus: string) => {
@@ -165,6 +164,7 @@ export function WardClerkDashboard() {
       toast.success(`Bed status updated to ${newStatus}`);
       void loadData(true);
     } catch (err) {
+      console.error("Failed to update bed status:", err);
       toast.error("Failed to update bed status");
     }
   };
@@ -357,9 +357,8 @@ export function WardClerkDashboard() {
                               size="sm"
                               variant="secondary"
                               className="w-full text-xs flex items-center justify-center gap-1"
-                              onClick={async () => {
-                                // Find admission ID to execute transfer
-                                const admissionId = await findAdmissionId(bed.patient_id!);
+                              onClick={() => {
+                                const admissionId = findAdmissionId(bed.patient_id!);
                                 if (admissionId) {
                                   setTransferTarget({
                                     admissionId,

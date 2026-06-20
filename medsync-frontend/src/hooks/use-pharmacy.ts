@@ -3,7 +3,6 @@
 import { useState, useCallback, useEffect } from "react";
 import { useApi } from "./use-api";
 import { useAuth } from "@/lib/auth-context";
-import { useHospitalWS } from "./use-hospital-ws";
 
 // ============================================================================
 // TYPES
@@ -235,14 +234,6 @@ export function useDrugStock() {
     [api, getStock]
   );
 
-  // Listen for real-time stock updates
-  useHospitalWS(user?.hospital_id, (event) => {
-    // Refresh stock list on any stock-related event
-    if (event.type === "stock_alert" || event.type === "pharmacy_event" || event.type === "alert_event") {
-      getStock();
-    }
-  });
-
   return {
     stock,
     loading,
@@ -374,14 +365,6 @@ export function usePharmacyReports() {
     }
   }, [api]);
 
-  // Listen for real-time stock updates
-  useHospitalWS(user?.hospital_id, (event) => {
-    if (event.type === "stock_alert" || event.type === "pharmacy_event" || event.type === "alert_event") {
-      getLowStockReport();
-      getExpiringReport();
-    }
-  });
-
   return {
     lowStockItems,
     expiringItems,
@@ -499,19 +482,6 @@ export function usePharmacyWorklist() {
   useEffect(() => {
     fetchWorklist();
   }, [fetchWorklist]);
-
-  // Listen for real-time updates (new prescriptions or stock changes)
-  useHospitalWS(user?.hospital_id, (event) => {
-    // Refresh worklist on relevant events
-    if (
-      event.type === "stock_alert" || 
-      event.type === "pharmacy_event" || 
-      event.type === "alert_event" ||
-      event.type === "prescription_created" // Assuming this might be an event
-    ) {
-      fetchWorklist();
-    }
-  });
 
   return {
     data,

@@ -35,11 +35,6 @@ class Migration(migrations.Migration):
             new_name='core_passwo_email_05f693_idx',
             old_name='core_passwor_email_cb02e7_idx',
         ),
-        migrations.AddField(
-            model_name='hospital',
-            name='ai_enabled',
-            field=models.BooleanField(default=True, help_text='Enable/disable AI features for this hospital'),
-        ),
         migrations.AlterField(
             model_name='user',
             name='totp_secret',

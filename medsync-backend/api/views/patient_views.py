@@ -1,3 +1,5 @@
+import logging
+
 from io import BytesIO
 from rest_framework import status
 from django.conf import settings
@@ -11,6 +13,91 @@ from reportlab.lib.units import inch
 from reportlab.pdfgen import canvas as pdf_canvas
 from django.views.decorators.cache import cache_control
 from patients.models import Patient, Allergy
+
+logger = logging.getLogger(__name__)
+
+
+def _link_to_global_registry(patient, hospital):
+    """Find-or-create a GlobalPatient for *patient* and link them to *hospital*.
+
+    This is the "centralized MPI" hook: every newly registered local Patient
+    is automatically enrolled in the central Global Patient Index (GPID) so
+    that inter-hospital access works without any manual backfill step.
+
+    Matching strategy (in order):
+      1. Existing GlobalPatient whose `national_id` matches patient.ghana_health_id.
+      2. Existing GlobalPatient linked to patient.id via FacilityPatient.
+      3. Create a new GlobalPatient.
+
+    The FacilityPatient link (the bridge between a GlobalPatient and a local
+    Patient record) is created with `get_or_create`, so re-registrations and
+    retries are idempotent.
+    """
+    try:
+        from interop.models import GlobalPatient, FacilityPatient
+
+        national_id = patient.ghana_health_id or None
+        parts = (patient.full_name or "Unknown").strip().split(None, 1)
+        first_name = parts[0] if parts else "Unknown"
+        last_name = parts[1] if len(parts) > 1 else ""
+
+        # 1) Match by national_id (ghana_health_id used as the cross-system key)
+        gp = None
+        if national_id:
+            # Python-level comparison because national_id is encrypted (Fernet)
+            # so DB equality filters on ciphertext will not match plaintext.
+            for candidate in GlobalPatient.objects.all():
+                if candidate.national_id == national_id:
+                    gp = candidate
+                    break
+
+        # 2) Match by existing FacilityPatient link for this local patient
+        if not gp:
+            fp_existing = FacilityPatient.objects.filter(
+                patient=patient, deleted_at__isnull=True
+            ).select_related("global_patient").first()
+            if fp_existing:
+                gp = fp_existing.global_patient
+
+        # 3) Create a new GlobalPatient
+        if not gp:
+            gp = GlobalPatient.objects.create(
+                national_id=national_id,
+                first_name=first_name,
+                last_name=last_name,
+                date_of_birth=patient.date_of_birth,
+                gender=patient.gender,
+                blood_group=getattr(patient, "blood_group", "unknown") or "unknown",
+                phone=patient.phone,
+                ghana_health_id=patient.ghana_health_id,
+            )
+            logger.info(
+                "GlobalPatient created: %s → local patient %s at hospital %s",
+                gp.id, patient.id, hospital.id,
+            )
+
+        # 4) Create the FacilityPatient bridge (idempotent)
+        FacilityPatient.objects.get_or_create(
+            facility=hospital,
+            global_patient=gp,
+            defaults={
+                "local_patient_id": str(patient.id),
+                "patient": patient,
+            },
+        )
+        logger.info(
+            "FacilityPatient linked: GlobalPatient %s ↔ local patient %s @ %s",
+            gp.id, patient.id, hospital.id,
+        )
+        return gp
+
+    except Exception as exc:
+        # Never let MPI enrollment break patient registration.
+        # Log and continue — the patient record is already saved.
+        logger.error(
+            "Failed to link patient %s to GlobalPatient registry: %s",
+            getattr(patient, "id", "?"), exc,
+        )
 from records.models import (
     Diagnosis,
     Prescription,
@@ -60,7 +147,25 @@ def patient_search(request):
     if ghana_id:
         qs = qs.filter(ghana_health_id__icontains=ghana_id)
     elif dob:
-        qs = qs.filter(date_of_birth=dob)
+        # date_of_birth is a field-encrypted column; equality filtering at the
+        # DB layer matches ciphertext, not plaintext — it will never return rows.
+        # Instead we fetch the hospital-scoped queryset and filter in Python.
+        # The queryset is already restricted to one hospital so the result set
+        # is bounded by that facility's patient list.
+        try:
+            from datetime import date as _date
+            import datetime as _dt
+            parsed_dob = _dt.date.fromisoformat(dob)
+        except ValueError:
+            return Response(
+                {"message": "Invalid date format. Use YYYY-MM-DD."},
+                status=400,
+            )
+        matched_ids = [
+            p.pk for p in qs.only("id", "date_of_birth")
+            if p.date_of_birth == parsed_dob
+        ]
+        qs = qs.filter(pk__in=matched_ids)
     elif q:
         qs = qs.filter(
             Q(full_name__icontains=q)
@@ -142,8 +247,8 @@ def patient_create(request):
     try:
         with transaction.atomic():
             patient = serializer.save()
-            
-            # Handle allergies if provided (Legacy support for clinical creation)
+
+            # Handle allergies if provided (legacy support for clinical creation)
             allergies_data = request.data.get("allergies", [])
             for a in allergies_data or []:
                 if a.get("allergen"):
@@ -154,12 +259,20 @@ def patient_create(request):
                         severity=a.get("severity", "moderate"),
                         recorded_by=request.user,
                     )
-            
+
+            # ---------------------------------------------------------------
+            # Enroll in the Global Patient Index (Central MPI).
+            # Every registered patient is automatically linked to a GlobalPatient
+            # so that inter-hospital access works from day one — no manual backfill
+            # required.  Runs inside the same transaction; errors are caught and
+            # logged without rolling back the patient record.
+            # ---------------------------------------------------------------
+            _link_to_global_registry(patient, hospital)
+
             audit_log(request.user, "CREATE_PATIENT", resource_type="patient", resource_id=patient.id, hospital=hospital, request=request)
             return Response({"data": PatientSerializer(patient).data}, status=status.HTTP_201_CREATED)
     except Exception as e:
-        import logging
-        logging.getLogger(__name__).error(f"Patient creation failed: {str(e)}")
+        logger.error("Patient creation failed: %s", e)
         return Response({"message": "Failed to create patient record."}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 
@@ -554,6 +667,7 @@ def patient_chronic_programs(request, pk):
             notes=data.get("notes"),
         )
         return Response(ChronicDiseaseProgramSerializer(program).data, status=status.HTTP_201_CREATED)
+    return Response(status=status.HTTP_405_METHOD_NOT_ALLOWED)
 
 
 @api_view(["GET", "POST"])
@@ -586,3 +700,4 @@ def patient_family_links(request, pk):
             notes=data.get("notes"),
         )
         return Response(FamilyLinkSerializer(link).data, status=status.HTTP_201_CREATED)
+    return Response(status=status.HTTP_405_METHOD_NOT_ALLOWED)

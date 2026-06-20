@@ -4,7 +4,7 @@
 .env
 **/.env
 
-# Next.js app — deploy separately (e.g. Vercel); not used by start.sh / Daphne
+# Next.js app — deploy separately (e.g. Vercel); not used by start.sh / Gunicorn
 medsync-frontend/
 
 .git/

@@ -18,6 +18,8 @@ interface Shift {
   end_time?: string;
 }
 
+const SHIFT_ROLES = ["nurse", "doctor", "lab_technician", "radiology_technician", "ward_clerk"];
+
 export function ShiftWidget() {
   const router = useRouter();
   const { user } = useAuth();
@@ -31,7 +33,7 @@ export function ShiftWidget() {
 
   // Fetch current shift on mount
   useEffect(() => {
-    if (!user || user.role !== "nurse") {
+    if (!user || !SHIFT_ROLES.includes(user.role)) {
       setLoading(false);
       return;
     }
@@ -69,8 +71,8 @@ export function ShiftWidget() {
     return () => clearInterval(interval);
   }, []);
 
-  // Only show if user is a nurse
-  if (!user || user.role !== "nurse") return null;
+  // Only show if user is in a shift-based role
+  if (!user || !SHIFT_ROLES.includes(user.role)) return null;
 
   const handleToggleBreak = async () => {
     if (!shift) return;

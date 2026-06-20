@@ -1,6 +1,6 @@
-# MedSync EMR - Comprehensive Project Documentation
+﻿# MedSync EMR - Comprehensive Project Documentation
 
-**Status:** ~70% production-ready ? clinical data integrity is strong; deployability, security audit, and full Ghana regulatory workflows have documented gaps. See [docs/GO_NO_GO_CHECKLIST.md](docs/GO_NO_GO_CHECKLIST.md) and [MedSync_EMR_Master_Prompt.md](MedSync_EMR_Master_Prompt.md).
+**Status:** ~70% production-ready — clinical data integrity is strong; deployability, security hardening, and full Ghana regulatory workflows have documented gaps. See the [Evaluation & Future Work](docs/7_evaluation_and_future_work.md) chapter for the current production gap list.
 
 MedSync is a centralized, multi-hospital Electronic Medical Records (EMR) system for Ghana's inter-hospital network. It provides comprehensive patient and clinical records management, role-based access, inter-hospital interoperability (consent, referrals, break-glass), and HIPAA-compliant audit logging.
 
@@ -8,10 +8,9 @@ MedSync is a centralized, multi-hospital Electronic Medical Records (EMR) system
 
 ## Quick Links
 
-- **Backend:** `medsync-backend/README.md` �?? Django REST API setup, API reference, security details
-- **Frontend:** `medsync-frontend/README.md` �?? Next.js frontend setup, role-based dashboards
-- **Documentation index:** [docs/INDEX.md](docs/INDEX.md) �?? governance, roles, interop, dev credentials, testing/CI, Postgres dev
-- **Audit Reports:** `AUDIT_REPORT.md`, `CRITICAL_FIXES_GUIDE.md`, `EXECUTIVE_SUMMARY.md`
+- **Backend:** `medsync-backend/README.md` — Django REST API setup, API reference, security details
+- **Frontend:** `medsync-frontend/README.md` — Next.js frontend setup, role-based dashboards
+- **Documentation index:** [docs/README.md](docs/README.md) — full chapter index (architecture, security, developer guide, evaluation)
 
 ---
 
@@ -19,39 +18,34 @@ MedSync is a centralized, multi-hospital Electronic Medical Records (EMR) system
 
 ```
 EMR/
-�??�??�?? medsync-backend/               # Django REST API
-�??   �??�??�?? README.md                  # Backend setup, API docs, security details
-�??   �??�??�?? api/                       # REST endpoints
-�??   �??�??�?? core/                      # User, auth, audit models
-�??   �??�??�?? patients/                  # Patient & admission models
-�??   �??�??�?? records/                   # Clinical records (encounters, diagnoses, etc.)
-�??   �??�??�?? interop/                   # Cross-facility interop (referrals, consent, break-glass)
-�??   �??�??�?? requirements-local.txt     # Python deps (local/CI; prod-only: ../requirements.txt)
-�??   �??�??�?? manage.py                  # Django CLI
-�??
-�??�??�?? medsync-frontend/              # Next.js 16 + React 19 frontend
-�??   �??�??�?? README.md                  # Frontend setup, routes, role matrix
-�??   �??�??�?? src/
-�??   �??   �??�??�?? app/                   # Pages (auth, dashboard, etc.)
-�??   �??   �??�??�?? components/            # React components
-�??   �??   �??�??�?? hooks/                 # Custom hooks (API integration)
-�??   �??   �??�??�?? lib/                   # Utilities, auth context, types
-�??   �??�??�?? package.json               # Node dependencies
-�??   �??�??�?? next.config.ts             # Next.js config
-�??
-�??�??�?? docs/                          # Architecture & governance
-�??   �??�??�?? Multi_Tenancy_Architecture.md
-�??   �??�??�?? Governance_Model.md
-�??   �??�??�?? Access_Governance.md
-�??   �??�??�?? Operational_Model_Integration.md
-�??   �??�??�?? ... (see docs/README.md)
-�??
-�??�??�?? AUDIT_REPORT.md                # Comprehensive security audit (56KB)
-�??�??�?? CRITICAL_FIXES_GUIDE.md        # Implementation guide with code solutions (44KB)
-�??�??�?? EXECUTIVE_SUMMARY.md           # Leadership summary
-�??�??�?? FINAL_STATUS_REPORT.md         # Current status and timeline
-�??�??�?? README.md                      # This file
-
+├── medsync-backend/               # Django REST API
+│   ├── README.md                  # Backend setup, API docs, security details
+│   ├── api/                       # REST endpoints (33 view modules)
+│   ├── core/                      # User, auth, audit models
+│   ├── patients/                  # Patient & admission models
+│   ├── records/                   # Clinical records (encounters, diagnoses, etc.)
+│   ├── interop/                   # Cross-facility interop (referrals, consent, break-glass)
+│   ├── requirements-local.txt     # Python deps (local/CI)
+│   └── manage.py                  # Django CLI
+│
+├── medsync-frontend/              # Next.js 16 + React 19 frontend
+│   ├── README.md                  # Frontend setup, routes, role matrix
+│   └── src/
+│       ├── app/                   # Pages (auth, dashboard, etc.)
+│       ├── components/            # React components
+│       ├── hooks/                 # Custom hooks (API integration)
+│       └── lib/                   # Utilities, auth context, types
+│
+├── docs/                          # Portfolio documentation (see docs/README.md)
+│   ├── 1_project_overview.md
+│   ├── 2_system_architecture.md
+│   ├── 3_database_design.md
+│   ├── 4_security_and_compliance.md
+│   ├── 5_interoperability_and_workflows.md
+│   ├── 6_developer_manual.md
+│   └── 7_evaluation_and_future_work.md
+│
+└── README.md                      # This file
 ```
 
 ---
@@ -114,7 +108,7 @@ EMR/
 - �?? Referral workflows (requests, acceptance, completion)
 - �?? Consent management (SUMMARY or FULL_RECORD scope, with expiration)
 - �?? Break-glass emergency access (time-limited, fully audited, last 15 minutes)
-- �?? FHIR REST endpoints (read-only)
+- �?? FHIR REST endpoints (read for Patient/Encounter/Condition/DiagnosticReport; write for MedicationRequest/Observation)
 - �?? HL7 export capabilities
 
 **Security:**
@@ -124,7 +118,7 @@ EMR/
 - �?? Token rotation and blacklisting
 - �?? HTTPS/HSTS, CSP headers, CSRF protection
 - �?? Comprehensive audit logging with PHI sanitization
-- �?�️ **Tier 1 hardening items remain** (see [docs/GO_NO_GO_CHECKLIST.md](docs/GO_NO_GO_CHECKLIST.md))
+- �?�️ **Tier 1 hardening items remain** (see [Chapter 7](docs/7_evaluation_and_future_work.md))
 
 ---
 
@@ -132,7 +126,7 @@ EMR/
 
 ### Production Readiness: ~70%
 
-Clinical data integrity and core security are strong. Infrastructure hardening and Ghana regulatory workflows have remaining gaps. See [docs/GO_NO_GO_CHECKLIST.md](docs/GO_NO_GO_CHECKLIST.md) for the authoritative tier-by-tier checklist.
+Clinical data integrity and core security are strong. Infrastructure hardening and Ghana regulatory workflows have remaining gaps. See [Chapter 7: Evaluation & Future Work](docs/7_evaluation_and_future_work.md) for the current gap list.
 
 | Component | Status | Readiness |
 |-----------|--------|-----------|
@@ -236,11 +230,11 @@ npm run test:e2e  # E2E tests (requires both servers running)
 - [x] Load testing
 
 ### Phase 3: Compliance & Hardening
-- [x] HIPAA compliance audit
-- [x] Penetration testing
-- [x] Final security review
+- [ ] Formal HIPAA compliance audit (planned — requires third-party auditor)
+- [ ] Formal penetration test (planned — listed in Tier 1 blockers; see docs/7)
+- [x] Final security review (self-review completed; formal pen test pending)
 - [x] Monitoring & alerting setup
-- [x] AI Persistence Layer atomic transactions hardening
+- [x] Field-level PHI encryption + HMAC audit chain hardening
 
 ### Phase 4: Pre-Production
 - [x] Production deployment runbook
@@ -253,38 +247,9 @@ npm run test:e2e  # E2E tests (requires both servers running)
 
 ## Documentation
 
-### For Developers
-
-- **Backend README:** `medsync-backend/README.md`
-  - Setup, dependencies, migrations, API routes, security details
-  - Password policy, backup codes, 3-tier password recovery
-  - Audit logging, cross-facility access, FHIR/HL7
-
-- **Frontend README:** `medsync-frontend/README.md`
-  - Setup, dependencies, project structure
-  - Route matrix, role-based access, component architecture
-  - i18n, token handling, API integration
-
-- **Architecture Docs:** `docs/`
-  - Multi_Tenancy_Architecture.md �?? How hospital scoping works
-  - Governance_Model.md �?? Super Admin vs Hospital Admin
-  - Access_Governance.md �?? Cross-facility access rules
-  - Operational_Model_Integration.md �?? Workflow & role matrix
-
-### For Leadership / Project Management
-
-- **[docs/GO_NO_GO_CHECKLIST.md](docs/GO_NO_GO_CHECKLIST.md)** — Production readiness checklist (source of truth)
-- **[docs/DEPLOY_RUNBOOK.md](docs/DEPLOY_RUNBOOK.md)** — Step-by-step deployment runbook
-- **[docs/DISSERTATION_LIMITATIONS.md](docs/DISSERTATION_LIMITATIONS.md)** — Known limitations and scope
-
-### For Security / Compliance
-
-- **[docs/Security/](docs/Security/)** — Security audit reports and findings
-- **[docs/GO_NO_GO_CHECKLIST.md](docs/GO_NO_GO_CHECKLIST.md)** — Open Tier 1 security blockers
-- **`medsync-backend/README.md`** — Auth, audit logging, FHIR/HL7, security details
-
----
-
+- **Backend README:** `medsync-backend/README.md` — Setup, API routes, security, password policy, FHIR/HL7
+- **Frontend README:** `medsync-frontend/README.md` — Setup, role-based dashboards, component structure
+- **Portfolio docs:** [docs/README.md](docs/README.md) — 7-chapter documentation index covering architecture, security, interoperability, developer guide, and evaluation
 ## Key Roles & Access Levels
 
 | Role | Hospital Scope | Main Responsibilities | Pages Access |
@@ -318,7 +283,7 @@ npm run test:e2e  # E2E tests (requires both servers running)
 
 ### Open Gaps
 
-Remaining Tier 1 blockers (see [docs/GO_NO_GO_CHECKLIST.md](docs/GO_NO_GO_CHECKLIST.md)):
+Remaining Tier 1 blockers (see [Chapter 7](docs/7_evaluation_and_future_work.md) for full list):
 - Key rotation if any secrets were committed to git
 - Non-guessable Django admin URL in production (`ADMIN_URL` env var)
 - TLS/HTTPS at host/proxy layer + HSTS
@@ -327,7 +292,7 @@ Remaining Tier 1 blockers (see [docs/GO_NO_GO_CHECKLIST.md](docs/GO_NO_GO_CHECKL
 
 ### Next Steps
 
-Work through `docs/GO_NO_GO_CHECKLIST.md` Tier 1 items before processing any real patient data.
+Work through the Tier 1 items in [Chapter 7: Evaluation & Future Work](docs/7_evaluation_and_future_work.md) before processing any real patient data.
 
 ---
 
@@ -336,9 +301,9 @@ Work through `docs/GO_NO_GO_CHECKLIST.md` Tier 1 items before processing any rea
 **Questions about:**
 - **Setup:** See README.md in `medsync-backend/` or `medsync-frontend/`
 - **Architecture:** See `docs/` directory
-- **Security Issues:** See `docs/Security/` and `docs/GO_NO_GO_CHECKLIST.md`
-- **Current Status:** See `docs/GO_NO_GO_CHECKLIST.md`
-- **Deployment:** See `docs/DEPLOY_RUNBOOK.md`
+- **Security:** See [docs/4_security_and_compliance.md](docs/4_security_and_compliance.md)
+- **Current Status & Gaps:** See [docs/7_evaluation_and_future_work.md](docs/7_evaluation_and_future_work.md)
+- **Developer Guide:** See [docs/6_developer_manual.md](docs/6_developer_manual.md)
 
 ---
 
@@ -356,4 +321,4 @@ All audit logging, consent management, and access control are designed to suppor
 
 **Last Updated:** June 2026  
 **Production Readiness:** ~70% — clinical data integrity and security fundamentals are strong; infrastructure hardening and regulatory workflows have remaining gaps.  
-**Next:** Work through Tier 1 items in [docs/GO_NO_GO_CHECKLIST.md](docs/GO_NO_GO_CHECKLIST.md) before processing real patient data.
+**Next:** Work through Tier 1 items in [Chapter 7: Evaluation & Future Work](docs/7_evaluation_and_future_work.md) before processing real patient data.

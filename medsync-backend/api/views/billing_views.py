@@ -53,21 +53,22 @@ def billing_dashboard(request):
     # Base queryset
     invoices = Invoice.objects.filter(hospital=effective_hospital)
     
+    def _cents_to_decimal(qs, flt=Sum('amount_cents')):
+        cents = qs.aggregate(total=flt)['total'] or 0
+        return Decimal(str(cents)) / 100
+
     # Today's revenue (paid invoices)
-    today_revenue = invoices.filter(
-        status='paid',
-        paid_at__gte=today_start
-    ).aggregate(total=Sum('total_amount'))['total'] or Decimal('0.00')
-    
-    # Outstanding invoices
-    outstanding = invoices.filter(status__in=['pending', 'partially_paid'])
+    today_revenue = _cents_to_decimal(invoices.filter(status='paid', paid_at__gte=today_start))
+
+    # Outstanding invoices (issued or partial)
+    outstanding = invoices.filter(status__in=['issued', 'partial'])
     outstanding_count = outstanding.count()
-    outstanding_amount = outstanding.aggregate(total=Sum('total_amount'))['total'] or Decimal('0.00')
-    
+    outstanding_amount = _cents_to_decimal(outstanding)
+
     # NHIS claims
     nhis_pending = invoices.filter(payment_method='nhis', nhis_claim_status='submitted').count()
     nhis_approved = invoices.filter(
-        payment_method='nhis', 
+        payment_method='nhis',
         nhis_claim_status='approved',
         created_at__gte=month_start
     ).count()
@@ -76,17 +77,15 @@ def billing_dashboard(request):
         nhis_claim_status='rejected',
         created_at__gte=month_start
     ).count()
-    
+
     # Weekly revenue trend
     weekly_revenue = []
     for i in range(7):
         day_start = today_start - timedelta(days=i)
         day_end = day_start + timedelta(days=1)
-        day_revenue = invoices.filter(
-            status='paid',
-            paid_at__gte=day_start,
-            paid_at__lt=day_end
-        ).aggregate(total=Sum('total_amount'))['total'] or Decimal('0.00')
+        day_revenue = _cents_to_decimal(
+            invoices.filter(status='paid', paid_at__gte=day_start, paid_at__lt=day_end)
+        )
         weekly_revenue.append({
             'date': day_start.date().isoformat(),
             'revenue': float(day_revenue)
@@ -224,13 +223,13 @@ def record_payment(request, invoice_id):
         # Calculate new paid amount
         current_paid = invoice.paid_amount if hasattr(invoice, 'paid_amount') and invoice.paid_amount else Decimal('0.00')
         new_paid = current_paid + amount
-        
-        # Update invoice
+
+        # Update invoice — use model choices: 'paid' or 'partial'
         if new_paid >= invoice.total_amount:
             invoice.status = 'paid'
             invoice.paid_at = timezone.now()
         else:
-            invoice.status = 'partially_paid'
+            invoice.status = 'partial'
         
         if hasattr(invoice, 'paid_amount'):
             invoice.paid_amount = new_paid
@@ -477,9 +476,13 @@ def patient_billing_history(request, patient_id):
         })
     
     # Summary
-    total_billed = invoices_qs.aggregate(total=Sum('total_amount'))['total'] or Decimal('0.00')
-    total_paid = invoices_qs.filter(status='paid').aggregate(total=Sum('total_amount'))['total'] or Decimal('0.00')
-    outstanding = invoices_qs.filter(status__in=['pending', 'partially_paid']).aggregate(total=Sum('total_amount'))['total'] or Decimal('0.00')
+    def _sum_cents(qs):
+        cents = qs.aggregate(total=Sum('amount_cents'))['total'] or 0
+        return Decimal(str(cents)) / 100
+
+    total_billed = _sum_cents(invoices_qs)
+    total_paid = _sum_cents(invoices_qs.filter(status='paid'))
+    outstanding = _sum_cents(invoices_qs.filter(status__in=['issued', 'partial']))
     
     return Response({
         'patient_id': str(patient.id),
@@ -493,4 +496,45 @@ def patient_billing_history(request, patient_id):
         'invoices': invoices,
         'next_cursor': next_cursor,
         'has_more': has_more,
+    })
+
+
+@api_view(["GET"])
+@permission_classes([IsAuthenticated])
+def nhis_integration_status(request):
+    """
+    NHIS integration health check.
+    Returns current mode (mock/live), circuit breaker state,
+    and configuration status. Safe to call from admin dashboard.
+    """
+    if request.user.role not in ("billing_staff", "hospital_admin", "super_admin"):
+        return Response({"error": "Forbidden"}, status=403)
+    
+    from django.conf import settings
+    from api.integrations.nhis_client import NHISClient
+    client = NHISClient()
+    
+    is_configured = client._is_configured()
+    cb = NHISClient._circuit_breaker
+    
+    return Response({
+        "mode": "live" if is_configured else "mock",
+        "configured": is_configured,
+        "circuit_breaker": {
+            "state": cb.state if cb else "CLOSED",
+            "description": (
+                "NHIS API requests are passing normally"
+                if (not cb or cb.state == "CLOSED")
+                else "NHIS API is unavailable — claims queued for retry"
+            ),
+        },
+        "nhia_api_base": getattr(settings, "NHIS_API_BASE_URL", "") or "Not configured",
+        "facility_code": getattr(settings, "NHIS_FACILITY_CODE", "") or "Not configured",
+        "mock_note": (
+            None if is_configured else
+            "Running in offline/mock mode. Set NHIS_API_BASE_URL, "
+            "NHIS_API_KEY, and NHIS_FACILITY_CODE to connect to the "
+            "Ghana National Health Insurance Authority (NHIA) API. "
+            "Claim references are generated locally with prefix NHIS-MOCK-."
+        ),
     })

@@ -4,7 +4,6 @@ Circuit Breaker Pattern for external integrations.
 Provides resilience for:
 - NHIS API (mock)
 - Push notification gateway
-- AI inference services
 
 States:
 - CLOSED: Normal operation, requests pass through
@@ -188,10 +187,6 @@ class CircuitOpenError(Exception):
 # Pre-configured circuit breakers for common integrations
 nhis_circuit = CircuitBreaker("nhis_api")
 push_notification_circuit = CircuitBreaker("push_notifications")
-ai_inference_circuit = CircuitBreaker("ai_inference", CircuitBreakerConfig(
-    failure_threshold=3,  # AI is expensive, fail faster
-    recovery_timeout=120,  # Wait longer before retry
-))
 
 
 def get_all_circuit_statuses() -> list:
@@ -199,5 +194,4 @@ def get_all_circuit_statuses() -> list:
     return [
         nhis_circuit.get_status(),
         push_notification_circuit.get_status(),
-        ai_inference_circuit.get_status(),
     ]

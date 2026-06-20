@@ -24,27 +24,56 @@ logger = logging.getLogger(__name__)
 def get_fernet_cipher():
     """
     Get or create Fernet cipher instance from Django settings.
-    
-    Expects settings.ENCRYPTION_KEY to be a URL-safe base64-encoded 32-byte key.
-    Generate with: python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"
-    
-    For testing, if ENCRYPTION_KEY is not set, uses a hardcoded test key.
-    
+
+    Reads ``settings.FIELD_ENCRYPTION_KEY`` — the same key used for field-level
+    PHI encryption throughout the project.  Generate a new key with::
+
+        python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"
+
+    In DEBUG mode a fixed dev key is used so local development works without
+    setting environment variables.  In production the app will not start if the
+    key is missing or is the dev placeholder (caught by
+    ``_assert_no_placeholder_secrets`` in settings.py).
+
     Raises:
-        ValueError: If ENCRYPTION_KEY is invalid format
+        ImproperlyConfigured: In production when FIELD_ENCRYPTION_KEY is absent.
+        ValueError: If the key value is not a valid Fernet key.
     """
-    encryption_key = getattr(settings, 'ENCRYPTION_KEY', None)
-    
-    # Fallback to test key if not configured
+    from django.conf import settings as _settings
+    from django.core.exceptions import ImproperlyConfigured
+
+    encryption_key = getattr(_settings, "FIELD_ENCRYPTION_KEY", None)
+
     if not encryption_key:
-        encryption_key = "DdZxAzV7gTD0b-iMGMTo7T2krNXHyMehNMSYhyKhnqw="
-        logger.debug("Using test encryption key (no ENCRYPTION_KEY configured)")
-    
+        if getattr(_settings, "DEBUG", False):
+            # Dev-only fallback — safe because DEBUG=True prevents production
+            # deployment and _assert_no_placeholder_secrets() blocks production
+            # runs where FIELD_ENCRYPTION_KEY is absent.
+            encryption_key = "dev-only-encryption-key-do-not-use-in-production"
+            logger.warning(
+                "JWT cookie encryption is using the dev placeholder key. "
+                "Set FIELD_ENCRYPTION_KEY in production."
+            )
+        else:
+            raise ImproperlyConfigured(
+                "FIELD_ENCRYPTION_KEY must be set in production for JWT cookie encryption."
+            )
+
     try:
-        return Fernet(encryption_key.encode() if isinstance(encryption_key, str) else encryption_key)
+        # Fernet requires a URL-safe base64-encoded 32-byte key.  The dev
+        # placeholder is not a valid Fernet key, so in DEBUG mode we derive one
+        # deterministically rather than crashing on startup.
+        if encryption_key == "dev-only-encryption-key-do-not-use-in-production":
+            import base64, hashlib
+            raw = hashlib.sha256(encryption_key.encode()).digest()
+            encryption_key = base64.urlsafe_b64encode(raw).decode()
+
+        return Fernet(
+            encryption_key.encode() if isinstance(encryption_key, str) else encryption_key
+        )
     except Exception as e:
         logger.error(f"Failed to initialize Fernet cipher: {e}")
-        raise ValueError(f"Invalid ENCRYPTION_KEY: {e}")
+        raise ValueError(f"Invalid FIELD_ENCRYPTION_KEY: {e}")
 
 
 def encrypt_jwt(jwt_token: str) -> str:

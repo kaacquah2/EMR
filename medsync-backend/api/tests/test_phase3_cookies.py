@@ -259,7 +259,7 @@ class CookieAuthEndpointTests(APITestCase):
             email="cookie-login@test.gh",
             password="Password123!@#",
             hospital=hospital,
-            role="doctor",
+            role="nurse",
         )
         from django.test import RequestFactory
 
@@ -302,7 +302,8 @@ class CookieAuthEndpointTests(APITestCase):
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.assertIn('medsync_session', response.cookies)
         self.assertTrue(response.cookies['medsync_session']['httponly'])
-        latest_audit = AuditLog.objects.filter(action="LOGIN_SUCCESS").latest("timestamp")
+        # LOGIN_SUCCESS was renamed to LOGIN (the valid AuditLog.ACTIONS value).
+        latest_audit = AuditLog.objects.filter(action="LOGIN").latest("timestamp")
         self.assertEqual(latest_audit.risk_tier, 1)
         self.assertEqual(latest_audit.mfa_method, "none")
 

@@ -56,9 +56,6 @@ class Command(BaseCommand):
             if not getattr(settings, name, None):
                 raise CommandError(f"{name} must be set in production.")
 
-        if getattr(settings, "LLM_MODE", "") == "mock" and getattr(settings, "ENV", "").lower() == "production":
-            raise CommandError("LLM_MODE=mock is not permitted when ENV=production.")
-
         if "sqlite" in (settings.DATABASES.get("default", {}).get("ENGINE", "") or ""):
             raise CommandError("SQLite is not allowed for production setup.")
 

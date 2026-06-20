@@ -138,6 +138,10 @@ def invoice_list_create(request):
                 "notes": inv.notes,
                 "created_at": inv.created_at.isoformat(),
                 "paid_at": inv.paid_at.isoformat() if inv.paid_at else None,
+                "payment_method": getattr(inv, "payment_method", "cash"),
+                "paid_amount": float(inv.paid_amount) if hasattr(inv, "paid_amount") and inv.paid_amount is not None else 0.0,
+                "nhis_claim_status": getattr(inv, "nhis_claim_status", None),
+                "nhis_claim_reference": getattr(inv, "nhis_claim_reference", None),
             }
             for inv in qs
         ]
@@ -175,26 +179,121 @@ def invoice_list_create(request):
 @api_view(["POST"])
 @permission_classes([IsAuthenticated])
 def nhis_claim_submit(request):
-    """Stub for NHIS/payer claim submission. Returns placeholder claim_ref; real integration requires NHIS API."""
+    """
+    Submit an NHIS claim by patient or encounter.
+    Finds the latest issued/partial NHIS invoice for the patient and submits it
+    to the Ghana NHIA API (or mock fallback when NHIS_API_KEY is not configured).
+
+    Request body:
+      patient_id: str  (required if encounter_id omitted)
+      encounter_id: str  (optional — used to identify the patient)
+      nhis_member_id: str  (required — patient NHIS card number)
+      diagnosis_codes: list[str]  (required — ICD-10 codes, e.g. ["A09"])
+    """
+    from api.integrations.nhis_client import (
+        get_nhis_client, NHISClaimItem,
+        NHISRetryableError, NHISClaimError, NHISCircuitOpenError,
+    )
+    from decimal import Decimal
+
     if request.user.role not in ("hospital_admin", "billing_staff"):
-        return Response(
-            {"message": "Permission denied"},
-            status=status.HTTP_403_FORBIDDEN,
-        )
+        return Response({"message": "Permission denied"}, status=status.HTTP_403_FORBIDDEN)
+
     hospital = get_request_hospital(request)
     if not hospital:
         return Response({"message": "No hospital assigned"}, status=status.HTTP_400_BAD_REQUEST)
+
+    # Resolve patient from encounter_id or patient_id
     encounter_id = request.data.get("encounter_id")
     patient_id = request.data.get("patient_id")
+    nhis_member_id = (request.data.get("nhis_member_id") or "").strip()
+    diagnosis_codes = request.data.get("diagnosis_codes") or []
+
     if not encounter_id and not patient_id:
-        return Response(
-            {"message": "encounter_id or patient_id required"},
-            status=status.HTTP_400_BAD_REQUEST,
+        return Response({"message": "encounter_id or patient_id required"}, status=status.HTTP_400_BAD_REQUEST)
+    if not nhis_member_id:
+        return Response({"message": "nhis_member_id is required"}, status=status.HTTP_400_BAD_REQUEST)
+    if not isinstance(diagnosis_codes, list) or not diagnosis_codes:
+        return Response({"message": "diagnosis_codes must be a non-empty list of ICD-10 codes"}, status=status.HTTP_400_BAD_REQUEST)
+
+    # Resolve patient_id from encounter if needed
+    if encounter_id and not patient_id:
+        from records.models import Encounter
+        enc = Encounter.objects.filter(id=encounter_id, hospital=hospital).first()
+        if not enc:
+            return Response({"message": "Encounter not found"}, status=status.HTTP_404_NOT_FOUND)
+        patient_id = str(enc.patient_id)
+
+    # Find the latest NHIS invoice that hasn't been claimed yet
+    invoice = (
+        Invoice.objects.filter(
+            hospital=hospital,
+            patient_id=patient_id,
+            payment_method="nhis",
         )
-    # Placeholder: in production this would call NHIS API and return real claim reference
-    import uuid
-    claim_ref = f"NHIS-STUB-{uuid.uuid4().hex[:12].upper()}"
-    return Response(
-        {"claim_ref": claim_ref, "message": "Claim submitted (stub). Configure NHIS_API_URL for live integration."},
-        status=status.HTTP_202_ACCEPTED,
+        .exclude(nhis_claim_status__in=["submitted", "approved"])
+        .order_by("-created_at")
+        .first()
     )
+    if not invoice:
+        return Response(
+            {"message": "No unclaimed NHIS invoice found for this patient. Create an invoice with payment_method=nhis first."},
+            status=status.HTTP_404_NOT_FOUND,
+        )
+
+    nhis_client = get_nhis_client()
+
+    # Build claim items from invoice line items
+    claim_items = []
+    for item in invoice.items.all():
+        claim_items.append(NHISClaimItem(
+            service_code=getattr(item, "service_type", None) or "CONSULT",
+            description=item.description,
+            quantity=item.quantity,
+            unit_price_ghs=Decimal(str(item.unit_price)) / 100,
+        ))
+    if not claim_items:
+        claim_items.append(NHISClaimItem(
+            service_code="CONSULT",
+            description="Medical Services",
+            quantity=1,
+            unit_price_ghs=invoice.total_amount,
+        ))
+
+    try:
+        result = nhis_client.submit_claim(
+            invoice_id=str(invoice.id),
+            nhis_member_id=nhis_member_id,
+            diagnosis_codes=diagnosis_codes,
+            items=claim_items,
+        )
+
+        invoice.nhis_claim_status = "submitted"
+        invoice.nhis_claim_reference = result.claim_reference
+        if hasattr(invoice, "nhis_submitted_at"):
+            from django.utils import timezone as _tz
+            invoice.nhis_submitted_at = _tz.now()
+        invoice.save(update_fields=[
+            "nhis_claim_status", "nhis_claim_reference",
+            *(["nhis_submitted_at"] if hasattr(invoice, "nhis_submitted_at") else []),
+        ])
+
+        return Response(
+            {
+                "claim_ref": result.claim_reference,
+                "nhis_status": result.status,
+                "invoice_id": str(invoice.id),
+                "message": "NHIS claim submitted. Allow 24–48 hours for NHIA processing.",
+            },
+            status=status.HTTP_202_ACCEPTED,
+        )
+
+    except NHISCircuitOpenError:
+        return Response(
+            {"message": "NHIS API temporarily unavailable. Please retry shortly."},
+            status=status.HTTP_202_ACCEPTED,
+        )
+    except NHISRetryableError as exc:
+        return Response({"message": f"NHIS service error: {exc}. Please retry."}, status=status.HTTP_503_SERVICE_UNAVAILABLE)
+    except NHISClaimError as exc:
+        return Response({"message": f"NHIS rejected claim: {exc}"}, status=status.HTTP_400_BAD_REQUEST)

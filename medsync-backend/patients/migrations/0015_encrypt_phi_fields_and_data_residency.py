@@ -11,10 +11,21 @@ class Migration(migrations.Migration):
     ]
 
     operations = [
-        migrations.AlterField(
-            model_name='patient',
-            name='date_of_birth',
-            field=django_cryptography.fields.encrypt(models.DateField()),
+        # date→bytea requires explicit cast via text; Django's default USING clause fails
+        migrations.SeparateDatabaseAndState(
+            state_operations=[
+                migrations.AlterField(
+                    model_name='patient',
+                    name='date_of_birth',
+                    field=django_cryptography.fields.encrypt(models.DateField()),
+                ),
+            ],
+            database_operations=[
+                migrations.RunSQL(
+                    sql='ALTER TABLE "patients_patient" ALTER COLUMN "date_of_birth" TYPE bytea USING "date_of_birth"::text::bytea',
+                    reverse_sql=migrations.RunSQL.noop,
+                ),
+            ],
         ),
         migrations.AlterField(
             model_name='patient',

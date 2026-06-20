@@ -11,119 +11,44 @@ class Migration(migrations.Migration):
     ]
 
     operations = [
-        migrations.RemoveField(
-            model_name='aianalysis',
-            name='hospital',
+        migrations.DeleteModel(
+            name='DiagnosisSuggestion',
         ),
-        migrations.RemoveField(
-            model_name='aianalysis',
-            name='patient',
+        migrations.DeleteModel(
+            name='DiseaseRiskPrediction',
         ),
-        migrations.RemoveField(
-            model_name='aianalysis',
-            name='performed_by',
+        migrations.DeleteModel(
+            name='TriageAssessment',
         ),
-        migrations.AlterUniqueTogether(
-            name='aianalysiscounter',
-            unique_together=None,
+        migrations.DeleteModel(
+            name='PatientSimilarityMatch',
         ),
-        migrations.RemoveField(
-            model_name='aianalysiscounter',
-            name='hospital',
+        migrations.DeleteModel(
+            name='ReferralRecommendation',
         ),
-        migrations.RemoveField(
-            model_name='aianalysisjob',
-            name='analysis_result',
+        migrations.DeleteModel(
+            name='AIAnalysisJob',
         ),
-        migrations.RemoveField(
-            model_name='aianalysisjob',
-            name='created_by',
+        migrations.DeleteModel(
+            name='AIDeploymentApproval',
         ),
-        migrations.RemoveField(
-            model_name='aianalysisjob',
-            name='hospital',
+        migrations.DeleteModel(
+            name='AIDeploymentLog',
         ),
-        migrations.RemoveField(
-            model_name='aianalysisjob',
-            name='patient',
+        migrations.DeleteModel(
+            name='ModelVersion',
         ),
-        migrations.AlterUniqueTogether(
-            name='aideploymentapproval',
-            unique_together=None,
+        migrations.DeleteModel(
+            name='AIAnalysis',
         ),
-        migrations.RemoveField(
-            model_name='aideploymentapproval',
-            name='approved_by',
-        ),
-        migrations.RemoveField(
-            model_name='aideploymentapproval',
-            name='hospital',
-        ),
-        migrations.RemoveField(
-            model_name='aideploymentapproval',
-            name='revoked_by',
-        ),
-        migrations.RemoveField(
-            model_name='aideploymentlog',
-            name='enabled_by',
-        ),
-        migrations.RemoveField(
-            model_name='aideploymentlog',
-            name='hospital',
-        ),
-        migrations.RemoveField(
-            model_name='diagnosissuggestion',
-            name='analysis',
-        ),
-        migrations.AlterUniqueTogether(
-            name='diseaseriskprediction',
-            unique_together=None,
-        ),
-        migrations.RemoveField(
-            model_name='diseaseriskprediction',
-            name='analysis',
+        migrations.DeleteModel(
+            name='AIAnalysisCounter',
         ),
         migrations.DeleteModel(
             name='ModelMetrics',
         ),
-        migrations.RemoveField(
-            model_name='modelversion',
-            name='approved_by',
-        ),
-        migrations.RemoveField(
-            model_name='modelversion',
-            name='trained_by',
-        ),
         migrations.DeleteModel(
             name='NHIADrug',
-        ),
-        migrations.AlterUniqueTogether(
-            name='patientsimilaritymatch',
-            unique_together=None,
-        ),
-        migrations.RemoveField(
-            model_name='patientsimilaritymatch',
-            name='analysis',
-        ),
-        migrations.RemoveField(
-            model_name='patientsimilaritymatch',
-            name='similar_patient',
-        ),
-        migrations.AlterUniqueTogether(
-            name='referralrecommendation',
-            unique_together=None,
-        ),
-        migrations.RemoveField(
-            model_name='referralrecommendation',
-            name='analysis',
-        ),
-        migrations.RemoveField(
-            model_name='referralrecommendation',
-            name='recommended_hospital',
-        ),
-        migrations.RemoveField(
-            model_name='triageassessment',
-            name='analysis',
         ),
         migrations.AlterField(
             model_name='cdsalert',
@@ -144,38 +69,5 @@ class Migration(migrations.Migration):
             model_name='stockmovement',
             name='reason',
             field=models.TextField(blank=True, help_text='Reason for movement'),
-        ),
-        migrations.DeleteModel(
-            name='AIAnalysis',
-        ),
-        migrations.DeleteModel(
-            name='AIAnalysisCounter',
-        ),
-        migrations.DeleteModel(
-            name='AIAnalysisJob',
-        ),
-        migrations.DeleteModel(
-            name='AIDeploymentApproval',
-        ),
-        migrations.DeleteModel(
-            name='AIDeploymentLog',
-        ),
-        migrations.DeleteModel(
-            name='DiagnosisSuggestion',
-        ),
-        migrations.DeleteModel(
-            name='DiseaseRiskPrediction',
-        ),
-        migrations.DeleteModel(
-            name='ModelVersion',
-        ),
-        migrations.DeleteModel(
-            name='PatientSimilarityMatch',
-        ),
-        migrations.DeleteModel(
-            name='ReferralRecommendation',
-        ),
-        migrations.DeleteModel(
-            name='TriageAssessment',
         ),
     ]

@@ -1,14 +1,13 @@
 services:
   db:
     image: postgres:16-alpine
+    restart: unless-stopped
     volumes:
       - postgres_data:/var/lib/postgresql/data
-    environment:
-      - POSTGRES_DB=${POSTGRES_DB:-medsync}
-      - POSTGRES_USER=${POSTGRES_USER:-postgres}
-      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:?POSTGRES_PASSWORD must be set in .env.docker}
+    env_file:
+      - .env.docker
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-postgres}"]
+      test: ["CMD-SHELL", "pg_isready -U $$POSTGRES_USER"]
       interval: 10s
       timeout: 5s
       retries: 5
@@ -16,36 +15,36 @@ services:
   backend:
     build:
       context: ./medsync-backend
-    volumes:
-      - ./medsync-backend:/app
+    restart: unless-stopped
     env_file:
       - .env.docker
-    environment:
-      - DATABASE_URL=postgresql://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB:-medsync}
     depends_on:
       db:
         condition: service_healthy
     ports:
       - "8000:8000"
-    # WSGI server — no Redis/Celery required.
-    # The no-show cron (*/15 * * * *  python manage.py mark_no_shows) should be
-    # configured on the host or in a lightweight cron container.
-    command: gunicorn medsync_backend.wsgi --bind 0.0.0.0:8000 --workers 4 --timeout 120
+    # Runs migrations and seeds demo data on startup (development/demo mode).
+    # For production: remove seed_* commands and set ENV=production in .env.docker.
+    command: >
+      sh -c "python manage.py migrate --noinput &&
+             python manage.py createcachetable --no-color &&
+             python manage.py setup_dev &&
+             python manage.py seed_interop_demo &&
+             python manage.py seed_nhis_demo &&
+             gunicorn medsync_backend.wsgi --bind 0.0.0.0:8000 --workers 4 --timeout 120"
 
   frontend:
     build:
       context: ./medsync-frontend
-    volumes:
-      - ./medsync-frontend:/app
-      - /app/node_modules
-      - /app/.next
+    restart: unless-stopped
+    # Run in standalone production mode (node server.js) for high performance and stability.
+    # No volume mounting needed as Next.js builds the static assets during Docker build.
     environment:
-      - NEXT_PUBLIC_API_URL=${NEXT_PUBLIC_API_URL:-http://localhost:8000}
+      - NEXT_PUBLIC_API_URL=${NEXT_PUBLIC_API_URL:-http://localhost:8000/api/v1}
     depends_on:
       - backend
     ports:
       - "3000:3000"
-    command: npm run dev
 
 volumes:
   postgres_data:

@@ -767,6 +767,7 @@ def create_vitals_batch(request):
             )
 
             # Check for critical values and create alerts (real-time broadcast via Channels)
+            from api.signals_alerts import broadcast_alert_created
             if temp and float(temp) > 39:
                 alert = ClinicalAlert.objects.create(
                     patient=patient,
@@ -777,6 +778,7 @@ def create_vitals_batch(request):
                     resource_type="vitals",
                     resource_id=record.id,
                 )
+                broadcast_alert_created(alert)
             if spO2 and float(spO2) < 90:
                 alert = ClinicalAlert.objects.create(
                     patient=patient,
@@ -787,6 +789,7 @@ def create_vitals_batch(request):
                     resource_type="vitals",
                     resource_id=record.id,
                 )
+                broadcast_alert_created(alert)
             if pulse and (float(pulse) > 130 or float(pulse) < 50):
                 alert = ClinicalAlert.objects.create(
                     patient=patient,
@@ -797,6 +800,7 @@ def create_vitals_batch(request):
                     resource_type="vitals",
                     resource_id=record.id,
                 )
+                broadcast_alert_created(alert)
 
             results["created"] += 1
             results["items"].append({
@@ -1274,9 +1278,12 @@ def create_radiology_order(request):
                         "study_type": order.study_type,
                         "status": order.status,
                         "attachment_url": order.attachment_url,
+                        "findings": order.findings or "",
+                        "reported_by": order.reported_by.full_name if order.reported_by else None,
+                        "reported_at": order.reported_at.isoformat() if order.reported_at else None,
                         "created_at": order.created_at.isoformat() if order.created_at else None,
                     }
-                    for order in qs
+                    for order in qs.select_related("reported_by")
                 ]
             }
         )
@@ -1352,10 +1359,25 @@ def radiology_order_attachment(request, order_id):
     if request.data.get("status") in ("in_progress", "completed"):
         order.status = request.data.get("status")
         up.append("status")
+    findings = request.data.get("findings", "").strip()
+    if findings:
+        order.findings = findings
+        up.append("findings")
+    if order.status == "completed" and not order.reported_by:
+        order.reported_by = request.user
+        order.reported_at = timezone.now()
+        up.extend(["reported_by", "reported_at"])
     order.save(update_fields=up)
     from api.integrations import notify_pacs_result
     notify_pacs_result(order.id, order.attachment_url, order.status, order.hospital_id)
-    return Response({"id": str(order.id), "attachment_url": order.attachment_url, "status": order.status})
+    return Response({
+        "id": str(order.id),
+        "attachment_url": order.attachment_url,
+        "status": order.status,
+        "findings": order.findings,
+        "reported_by": order.reported_by.full_name if order.reported_by else None,
+        "reported_at": order.reported_at.isoformat() if order.reported_at else None,
+    })
 
 
 # PHASE 6: Doctor Clinical Workflow Enhancements

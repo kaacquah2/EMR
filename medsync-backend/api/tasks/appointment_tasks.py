@@ -5,6 +5,7 @@ These run synchronously (via execute_task_sync_or_async) or as a management
 command (python manage.py mark_no_shows) invoked by cron every 15 minutes.
 """
 import logging
+from django.db import transaction
 from django.utils import timezone
 from datetime import timedelta
 
@@ -40,19 +41,20 @@ def run_mark_no_shows():
     count = 0
     for appointment in no_show_appointments:
         try:
-            appointment.status = "no_show"
-            appointment.no_show_marked_at = timezone.now()
-            appointment.save()
+            with transaction.atomic():
+                appointment.status = "no_show"
+                appointment.no_show_marked_at = timezone.now()
+                appointment.save()
 
-            AuditLog.objects.create(
-                user=None,
-                action="NO_SHOW_AUTO_MARKED",
-                resource_type="appointment",
-                resource_id=appointment.id,
-                hospital=appointment.hospital,
-                ip_address="0.0.0.0",
-                user_agent="cron-task",
-            )
+                AuditLog.objects.create(
+                    user=None,
+                    action="NO_SHOW_AUTO_MARKED",
+                    resource_type="appointment",
+                    resource_id=appointment.id,
+                    hospital=appointment.hospital,
+                    ip_address="0.0.0.0",
+                    user_agent="cron-task",
+                )
             count += 1
             logger.info("Marked appointment %s as no-show", appointment.id)
         except Exception as e:

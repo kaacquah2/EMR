@@ -23,52 +23,105 @@ from api.models import ClinicalRule, CdsAlert
 
 logger = logging.getLogger(__name__)
 
-# Cache key for CDS rules — shared across all workers via Redis
+# Cache key for CDS rules.
+# With DatabaseCache (the production default) this key is shared across all
+# workers — invalidation via cache.delete() takes effect immediately for every
+# process.  With LocMemCache (Vercel / single-process dev) each invocation
+# is isolated so stale entries cannot accumulate past the TTL.
 _CDS_RULES_CACHE_KEY = "cds:active_rules:all"
 _CDS_RULES_CACHE_TTL = getattr(settings, "CDS_RULES_CACHE_TTL", 3600)  # 1 hour
 
 
 def invalidate_cds_rules_cache():
     """
-    Invalidate the Redis-backed CDS rules cache.
+    Invalidate the CDS rules cache.
 
     Called automatically via post_save signal on ClinicalRule so that
-    all ASGI workers pick up rule changes immediately without waiting
-    for TTL expiry.
+    all workers pick up rule changes without waiting for TTL expiry.
     """
     cache.delete(_CDS_RULES_CACHE_KEY)
-    logger.info("CDS rules cache invalidated (Redis key: %s)", _CDS_RULES_CACHE_KEY)
+    logger.info("CDS rules cache invalidated (key: %s)", _CDS_RULES_CACHE_KEY)
 
 
 class RulesEngine:
     """Evaluates clinical rules and generates alerts.
 
-    Rules are cached in Redis (shared across all workers). The cache is
-    invalidated whenever a ClinicalRule is saved (via post_save signal
-    in api/signals_cds.py). Fall back to DB on cache miss.
+    Rules are cached (shared across workers via DatabaseCache in production).
+    The cache is invalidated whenever a ClinicalRule is saved (via post_save
+    signal in api/signals_cds.py). Falls back to DB on cache miss.
     """
     
     # Load drug interaction dataset once — process-local is fine (read-only JSON)
     _drug_interactions = None
+    _drug_interactions_mtime = 0
     
     @classmethod
     def _load_drug_interactions(cls):
-        """Load drug interaction dataset from JSON."""
-        if cls._drug_interactions is not None:
+        """Load drug interaction dataset from JSON, reloading if the file changes."""
+        fixture_path = os.path.join(
+            os.path.dirname(__file__), '..', 'drug_interactions.json'
+        )
+        try:
+            mtime = os.path.getmtime(fixture_path)
+        except Exception:
+            mtime = 0
+
+        if cls._drug_interactions is not None and cls._drug_interactions_mtime == mtime:
             return cls._drug_interactions
         
         try:
-            fixture_path = os.path.join(
-                os.path.dirname(__file__), '..', 'drug_interactions.json'
-            )
             with open(fixture_path, 'r') as f:
                 data = json.load(f)
                 cls._drug_interactions = data.get('interactions', [])
+                cls._drug_interactions_mtime = mtime
         except Exception as e:
             logger.error(f"Failed to load drug interactions: {e}")
-            cls._drug_interactions = []
+            if cls._drug_interactions is None:
+                cls._drug_interactions = []
         
         return cls._drug_interactions
+
+    @classmethod
+    def _normalize_drug_name(cls, drug_name: str) -> List[str]:
+        """Normalize drug name into lowercase words, ignoring strengths and formulations."""
+        import re
+        drug_name = drug_name.lower().strip()
+        # Strip strength like "500mg", "100 mg", "5ml", "10%", etc.
+        strength_pattern = re.compile(r'\b\d+(?:\.\d+)?\s*(?:mg|g|mcg|ml|l|%|iu|units|caps?|tabs?)\b', re.IGNORECASE)
+        clean_name = strength_pattern.sub('', drug_name)
+        # Split by non-alphabetic characters and filter out short words
+        words = [w for w in re.split(r'[^a-zA-Z]+', clean_name) if len(w) > 2]
+        return words
+
+    @classmethod
+    def _match_drug_names(cls, interaction_drug: str, prescribed_drug: str) -> bool:
+        """Check if interaction_drug matches prescribed_drug using word tokenization and prefix matching."""
+        i_drug = interaction_drug.lower().strip()
+        p_drug = prescribed_drug.lower().strip()
+        
+        if i_drug == p_drug:
+            return True
+            
+        i_words = cls._normalize_drug_name(i_drug)
+        p_words = cls._normalize_drug_name(p_drug)
+        
+        if not i_words or not p_words:
+            return False
+            
+        # Class-based mappings for interaction drug checks
+        if i_drug in ('nsaids', 'nsaid'):
+            nsaids = {'ibuprofen', 'naproxen', 'indomethacin', 'ketorolac', 'aspirin', 'diclofenac', 'meloxicam'}
+            return any(w in nsaids for w in p_words) or 'nsaid' in p_words
+            
+        if 'potassium' in i_words:
+            return 'potassium' in p_words
+            
+        if 'contrast' in i_words:
+            return 'contrast' in p_words
+            
+        # Default match: all words in interaction_drug must match a word in prescribed_drug
+        # We allow prefix matching if the word has at least 4 characters
+        return all(any(iw == pw or (len(iw) >= 4 and pw.startswith(iw)) for pw in p_words) for iw in i_words)
     
     @classmethod
     def _get_active_rules(cls, rule_type: str = None) -> List[ClinicalRule]:
@@ -159,7 +212,7 @@ class RulesEngine:
     ) -> List[CdsAlert]:
         """Check for drug-drug interactions with existing prescriptions."""
         alerts = []
-        new_drug = prescription.drug_name.lower().strip()
+        new_drug = prescription.drug_name
         
         # Load interaction dataset
         interactions = cls._load_drug_interactions()
@@ -176,22 +229,16 @@ class RulesEngine:
         ).exclude(id=prescription.id)
         
         for existing_rx in existing_prescriptions:
-            existing_drug = existing_rx.drug_name.lower().strip()
+            existing_drug = existing_rx.drug_name
             
             # Check both directions of interaction
             for interaction in interactions:
-                d1 = interaction['drug1'].lower()
-                d2 = interaction['drug2'].lower()
+                d1 = interaction['drug1']
+                d2 = interaction['drug2']
                 
-                # Match interaction pairs in either direction
-                if (d1 in new_drug or new_drug in d1) and (d2 in existing_drug or existing_drug in d2):
-                    alert = cls._create_alert_from_interaction(
-                        prescription, existing_rx, interaction, encounter, 'drug_interaction'
-                    )
-                    if alert:
-                        alerts.append(alert)
-                    break
-                elif (d2 in new_drug or new_drug in d2) and (d1 in existing_drug or existing_drug in d1):
+                # Match interaction pairs in either direction using robust word matching
+                if (cls._match_drug_names(d1, new_drug) and cls._match_drug_names(d2, existing_drug)) or \
+                   (cls._match_drug_names(d2, new_drug) and cls._match_drug_names(d1, existing_drug)):
                     alert = cls._create_alert_from_interaction(
                         prescription, existing_rx, interaction, encounter, 'drug_interaction'
                     )
@@ -225,7 +272,7 @@ class RulesEngine:
             if not allergies:
                 return alerts
             
-            new_drug = prescription.drug_name.lower().strip()
+            new_drug = prescription.drug_name
             
             # Simple substring matching for allergy conflicts
             # Could be enhanced with drug family/class mappings
@@ -237,19 +284,19 @@ class RulesEngine:
             }
             
             for allergy in allergies:
-                allergy_name = str(allergy).lower() if allergy else ""
+                allergy_name = str(allergy) if allergy else ""
                 
-                # Direct match
-                if allergy_name in new_drug or new_drug in allergy_name:
+                # Direct match using robust matching
+                if cls._match_drug_names(allergy_name, new_drug):
                     rule = cls._get_or_create_rule('drug_allergy', 'critical')
                     alert = CdsAlert(
                         encounter=encounter,
                         rule=rule,
                         prescription=prescription,
                         severity='critical',
-                        message=f"⚠️ CONTRAINDICATION: Patient has documented allergy to {allergy}. Drug prescribed: {prescription.drug_name}",
+                        message=f"⚠️ CONTRAINDICATION: Patient has documented allergy to {allergy_name}. Drug prescribed: {prescription.drug_name}",
                         context_data={
-                            'allergy': str(allergy),
+                            'allergy': allergy_name,
                             'drug': prescription.drug_name,
                         }
                     )
@@ -257,25 +304,31 @@ class RulesEngine:
                     break
                 
                 # Class-based match
+                matched_class = False
                 for family, drugs in allergy_classes.items():
-                    if allergy_name in family or family in allergy_name:
+                    allergy_words = cls._normalize_drug_name(allergy_name)
+                    # Match family name to allergy words
+                    if family in allergy_words or any(family.startswith(aw) or aw.startswith(family) for aw in allergy_words):
                         for drug in drugs:
-                            if drug in new_drug or new_drug in drug:
+                            if cls._match_drug_names(drug, new_drug):
                                 rule = cls._get_or_create_rule('drug_allergy', 'critical')
                                 alert = CdsAlert(
                                     encounter=encounter,
                                     rule=rule,
                                     prescription=prescription,
                                     severity='critical',
-                                    message=f"⚠️ CONTRAINDICATION: Patient is allergic to {allergy} (class: {family}). Prescribed drug {prescription.drug_name} is in same class.",
+                                    message=f"⚠️ CONTRAINDICATION: Patient is allergic to {allergy_name} (class: {family}). Prescribed drug {prescription.drug_name} is in same class.",
                                     context_data={
-                                        'allergy': str(allergy),
+                                        'allergy': allergy_name,
                                         'drug_class': family,
                                         'drug': prescription.drug_name,
                                     }
                                 )
                                 alerts.append(alert)
+                                matched_class = True
                                 break
+                    if matched_class:
+                        break
         except Exception as e:
             logger.warning(f"Error checking allergies for patient {patient.id}: {e}")
         
@@ -401,13 +454,13 @@ class RulesEngine:
             'antibiotic_cephalosporin': ['cefixime', 'ceftriaxone', 'cefazolin', 'cephalexin'],
         }
         
-        new_drug_lower = prescription.drug_name.lower().strip()
+        new_drug = prescription.drug_name
         
         # Find drug class for new prescription
         new_drug_class = None
         for drug_class, drugs in drug_classes.items():
             for drug in drugs:
-                if drug in new_drug_lower or new_drug_lower in drug:
+                if cls._match_drug_names(drug, new_drug):
                     new_drug_class = drug_class
                     break
             if new_drug_class:
@@ -427,13 +480,13 @@ class RulesEngine:
         ).exclude(id=prescription.id)
         
         for existing_rx in existing_prescriptions:
-            existing_drug_lower = existing_rx.drug_name.lower().strip()
+            existing_drug = existing_rx.drug_name
             
             # Check if existing prescription is in same drug class
             for drug_class, drugs in drug_classes.items():
                 if drug_class == new_drug_class:
                     for drug in drugs:
-                        if drug in existing_drug_lower or existing_drug_lower in drug:
+                        if cls._match_drug_names(drug, existing_drug):
                             rule = cls._get_or_create_rule('duplicate_therapy', 'info')
                             alert = CdsAlert(
                                 encounter=encounter,

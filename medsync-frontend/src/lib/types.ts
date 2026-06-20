@@ -336,33 +336,6 @@ export interface CrossFacilityRecordsResponse {
   expires_at: string | null;
 }
 
-// ---- AI Async Analysis (Celery) ----
-
-export interface AIAnalysisJob {
-  job_id: string;
-  patient_id: string;
-  status: "pending" | "processing" | "completed" | "failed" | "cancelled";
-  progress_percent: number; // 0-99 while processing, 100 when complete
-  current_step: string;
-  celery_task_id: string;
-  created_at: string;
-  updated_at: string;
-}
-
-export interface AIAnalysis {
-  job_id: string;
-  patient_id: string;
-  analysis_type: string;
-  diagnostic_insights: string;
-  recommendations: string[];
-  risk_factors: string[];
-  created_at: string;
-}
-
-export interface AIAnalysisJobResponse extends AIAnalysisJob {
-  analysis?: AIAnalysis; // Only populated when status='completed'
-}
-
 // ---- Shift Handover (SBAR) ----
 
 export interface ShiftHandover {

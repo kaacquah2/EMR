@@ -4,3 +4,12 @@
 
 # Mark missed appointments as no-show every 15 minutes (respects 15-min grace period)
 */15 * * * * cd /app && python manage.py mark_no_shows >> /var/log/medsync/no_shows.log 2>&1
+
+# Check for expiring / expired drug stock daily at 06:00
+0 6 * * * cd /app && python manage.py check_expiring_stock >> /var/log/medsync/expiry.log 2>&1
+
+# Database backup: run every 6 hours and upload to S3.
+# Requires BACKUP_S3_BUCKET and AWS credentials to be set in the environment.
+# The local file is removed after a successful upload (--upload flag).
+# Restore: gunzip -c <file>.sql.gz | psql $DATABASE_URL
+0 */6 * * * cd /app && python manage.py dbbackup --upload >> /var/log/medsync/backup.log 2>&1

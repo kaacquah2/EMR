@@ -8,7 +8,8 @@ import type { ClinicalAlert } from "@/lib/types";
 export function useAlerts(
   status?: string,
   severity?: string,
-  hospitalId?: string | null
+  hospitalId?: string | null,
+  accessToken?: string | null
 ) {
   const api = useApi();
   const [alerts, setAlerts] = useState<ClinicalAlert[]>([]);
@@ -36,29 +37,35 @@ export function useAlerts(
     fetch();
   }, [fetch]);
 
-  // Real-time: subscribe to WebSocket for this hospital; on message refetch alerts.
+  // Real-time: subscribe to WebSocket; on any hospital event, refetch alerts.
   useEffect(() => {
-    if (!hospitalId || typeof window === "undefined") return;
+    if (!hospitalId || !accessToken || typeof window === "undefined") return;
     const wsBase = getWebSocketBase();
-    const wsUrl = `${wsBase}/ws/alerts/${hospitalId}/`;
+    const wsUrl = `${wsBase}/ws/alerts/${hospitalId}/?token=${encodeURIComponent(accessToken)}`;
     let ws: WebSocket | null = null;
     let reconnectTimeout: ReturnType<typeof setTimeout>;
+    let delay = 5_000;
 
     const connect = () => {
       try {
         ws = new WebSocket(wsUrl);
+        ws.onopen = () => { delay = 5_000; };
         ws.onmessage = () => {
           fetchRef.current?.();
         };
-        ws.onclose = () => {
+        ws.onclose = (e) => {
           ws = null;
-          reconnectTimeout = setTimeout(connect, 5000);
+          if (e.code !== 4003 && e.code !== 4001) {
+            reconnectTimeout = setTimeout(connect, delay);
+            delay = Math.min(delay * 2, 60_000);
+          }
         };
         ws.onerror = () => {
           ws?.close();
         };
       } catch {
-        reconnectTimeout = setTimeout(connect, 5000);
+        reconnectTimeout = setTimeout(connect, delay);
+        delay = Math.min(delay * 2, 60_000);
       }
     };
     connect();
@@ -66,7 +73,7 @@ export function useAlerts(
       clearTimeout(reconnectTimeout);
       ws?.close();
     };
-  }, [hospitalId]);
+  }, [hospitalId, accessToken]);
 
   return { alerts, loading, fetch };
 }

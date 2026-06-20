@@ -601,7 +601,7 @@ def test_auditlog_signature_uses_utf8_bytes_for_non_ascii_key():
             hospital=hospital,
         )
 
-    data = f"0{user.id}LOGINUserabc123"
+    data = f"0{user.id}LOGINUserabc123{entry.extra_data.get('_nonce', '')}"
     expected = hmac.new(
         "påsswørd".encode("utf-8"),
         data.encode("utf-8"),
@@ -633,22 +633,6 @@ def test_auditlog_action_choices_include_current_runtime_actions():
         "ACCOUNT_LOCKED",
         "USER_DEACTIVATED",
         "ARCHIVE_HOSPITAL",
-        "AI_APPROVAL_GRANT",
-        "AI_APPROVAL_REVOKE",
-        "AI_FEATURE_BLOCKED",
-        "AI_ANALYSIS_FAILED",
-        "AI_ANALYSIS_START_ASYNC",
-        "AI_RISK_PREDICTION",
-        "AI_CDS",
-        "AI_TRIAGE",
-        "AI_SIMILARITY_SEARCH",
-        "AI_REFERRAL_RECOMMENDATION",
-        "AI_HISTORY_VIEW",
-        "AI_ANTIBIOTIC_GUIDANCE",
-        "AI_DEPLOYMENT_ENABLED",
-        "AI_DEPLOYMENT_DISABLED",
-        "AI_DRIFT_WARNING",
-        "AI_DRIFT_CRITICAL",
         "FAILED_OBJECT_ACCESS",
         "MFA_FAILED",
         "RATE_LIMIT_HIT",

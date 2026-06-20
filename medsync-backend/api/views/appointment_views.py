@@ -1,5 +1,8 @@
+import logging
 from datetime import timedelta
 from django.db import transaction
+
+logger = logging.getLogger(__name__)
 from django.utils import timezone
 from django.utils.dateparse import parse_datetime, parse_date
 from rest_framework import status
@@ -1055,7 +1058,7 @@ def create_walk_in(request):
             from core.models import User
             doctor = User.objects.get(id=doctor_id, hospital=hospital, role='doctor', account_status='active')
         except Exception as e:
-            print("ERROR FETCHING DOCTOR:", e)
+            logger.error("Error fetching doctor %s: %s", doctor_id, e)
             return Response({'message': 'Doctor not found'}, status=status.HTTP_404_NOT_FOUND)
     
     # Get current queue position for walk-ins today

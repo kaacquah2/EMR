@@ -1,6 +1,20 @@
 """
-Hospital-scoped data access helpers.
-Super_admin with no hospital sees all; others restricted to request.user.hospital.
+Hospital-scoped queryset helpers — the single tenancy gateway for MedSync.
+
+These functions are the *only* authoritative source of multi-tenant scoping.
+All views must use the appropriate helper (``get_patient_queryset``,
+``get_encounter_queryset``, ``get_medical_record_queryset``, etc.) rather than
+calling ``.filter(hospital=...)`` inline, so that the super-admin / view-as
+matrix is applied consistently.
+
+Super-admin scoping matrix (enforced in ``_scope_hospital``):
+  role == super_admin AND no own hospital AND no view-as  →  unfiltered
+  role == super_admin AND X-View-As-Hospital header       →  scoped to the granted hospital
+  role == super_admin WITH own hospital                   →  treated as a normal user
+  any other role                                          →  own hospital, else .none()
+
+Note: ``api/tenancy.py`` (TenantManager) was removed — it was wired into one
+model and had zero call sites.  These helpers are the canonical approach.
 """
 
 # Audit log: never store PHI or raw tokens in resource_id. Use only opaque IDs (e.g. UUIDs).
@@ -312,14 +326,15 @@ def can_access_cross_facility(
     if not facility:
         return False, None
 
-    # DATA RESIDENCY ENFORCEMENT: Check if patient is locked to a specific country
+    # DATA RESIDENCY ENFORCEMENT (NDPA 2012 § 36 / Ghana Data Protection Act)
+    # Hospital.country is a real CharField (default "GH") added in migration 0042.
     if gp.data_residency_locked:
-        requesting_country = getattr(facility, 'country', None)
+        requesting_country = getattr(facility, "country", "GH")
         if requesting_country != gp.data_residency_country:
             AuditLog.log_action(
                 user=user,
-                action='DATA_RESIDENCY_DENIED',
-                resource_type='GlobalPatient',
+                action="DATA_RESIDENCY_DENIED",
+                resource_type="GlobalPatient",
                 resource_id=str(gp.id),
             )
             return False, None

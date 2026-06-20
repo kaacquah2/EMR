@@ -16,8 +16,8 @@ class Migration(migrations.Migration):
 
     dependencies = [
         ('core', '0029_hospital_archive_reason_hospital_archived_at_and_more'),
-        ('patients', '0001_blueprint_alerts_encounters'),
-        ('records', '0019_encounter_updated_at_and_more'),
+        ('patients', '0001_squashed_0013_invoiceitem_appointment_updated_at_and_more'),
+        ('records', '0001_squashed_0019_encounter_updated_at_and_more'),
         ('core', '0028_add_ai_deployment_log'),
         ('core', '0003_blueprint_alerts_encounters'),
         migrations.swappable_dependency(settings.AUTH_USER_MODEL),
@@ -58,7 +58,7 @@ class Migration(migrations.Migration):
                 ('risk_category', models.CharField(choices=[('low', 'Low Risk (0-20%)'), ('medium', 'Medium Risk (20-50%)'), ('high', 'High Risk (50-80%)'), ('critical', 'Critical Risk (80%+)')], max_length=20)),
                 ('confidence', models.FloatField(help_text='0-1 confidence')),
                 ('contributing_factors', models.JSONField(blank=True, default=list, help_text='List of factors that contributed to this prediction')),
-                ('recommendations', django.contrib.postgres.fields.ArrayField(base_field=models.TextField(), blank=True, default=list, help_text='Clinical recommendations for this disease', size=None)),
+                ('recommendations', models.JSONField(blank=True, default=list, help_text='Clinical recommendations for this disease')),
                 ('created_at', models.DateTimeField(auto_now_add=True)),
                 ('analysis', models.ForeignKey(on_delete=django.db.models.deletion.CASCADE, related_name='disease_predictions', to='api.aianalysis')),
             ],
@@ -174,94 +174,46 @@ class Migration(migrations.Migration):
         ),
         migrations.AddIndex(
             model_name='aianalysis',
-            index=models.Index(fields=['patient', '-created_at'], name='ai_analysis_patient_created_idx'),
+            index=models.Index(fields=['patient', '-created_at'], name='ai_analysis_patient_34fc39_idx'),
         ),
         migrations.AddIndex(
             model_name='aianalysis',
-            index=models.Index(fields=['hospital', '-created_at'], name='ai_analysis_hospital_created_idx'),
+            index=models.Index(fields=['hospital', '-created_at'], name='ai_analysis_hospita_dc093a_idx'),
         ),
         migrations.AddIndex(
             model_name='aianalysis',
-            index=models.Index(fields=['analysis_type', '-created_at'], name='ai_analysis_type_created_idx'),
+            index=models.Index(fields=['analysis_type', '-created_at'], name='ai_analysis_analysi_c6dd09_idx'),
         ),
         migrations.AddIndex(
             model_name='diseaseriskprediction',
-            index=models.Index(fields=['analysis', '-risk_score'], name='disease_risk_analysis_score_idx'),
+            index=models.Index(fields=['analysis', '-risk_score'], name='disease_ris_analysi_c5e6cf_idx'),
         ),
         migrations.AddIndex(
             model_name='diagnosissuggestion',
-            index=models.Index(fields=['analysis', 'rank'], name='diagnosis_analysis_rank_idx'),
+            index=models.Index(fields=['analysis', 'rank'], name='diagnosis_s_analysi_f07169_idx'),
         ),
         migrations.AddIndex(
             model_name='patientsimilaritymatch',
-            index=models.Index(fields=['analysis', 'rank'], name='similarity_analysis_rank_idx'),
+            index=models.Index(fields=['analysis', 'rank'], name='patient_sim_analysi_e000ea_idx'),
         ),
         migrations.AddIndex(
             model_name='patientsimilaritymatch',
-            index=models.Index(fields=['similar_patient'], name='similarity_similar_patient_idx'),
+            index=models.Index(fields=['similar_patient'], name='patient_sim_similar_6b1381_idx'),
         ),
         migrations.AddIndex(
             model_name='referralrecommendation',
-            index=models.Index(fields=['analysis', 'rank'], name='referral_analysis_rank_idx'),
+            index=models.Index(fields=['analysis', 'rank'], name='referral_re_analysi_c3461d_idx'),
         ),
         migrations.AddIndex(
             model_name='referralrecommendation',
-            index=models.Index(fields=['recommended_hospital'], name='referral_hospital_idx'),
+            index=models.Index(fields=['recommended_hospital'], name='referral_re_recomme_d2602c_idx'),
         ),
         migrations.AddIndex(
             model_name='aianalysiscounter',
-            index=models.Index(fields=['hospital', '-date'], name='ai_counter_hospital_date_idx'),
+            index=models.Index(fields=['hospital', '-date'], name='ai_analysis_hospita_54347b_idx'),
         ),
-        migrations.RenameIndex(
-            model_name='aianalysis',
-            new_name='ai_analysis_patient_34fc39_idx',
-            old_name='ai_analysis_patient_created_idx',
-        ),
-        migrations.RenameIndex(
-            model_name='aianalysis',
-            new_name='ai_analysis_hospita_dc093a_idx',
-            old_name='ai_analysis_hospital_created_idx',
-        ),
-        migrations.RenameIndex(
-            model_name='aianalysis',
-            new_name='ai_analysis_analysi_c6dd09_idx',
-            old_name='ai_analysis_type_created_idx',
-        ),
-        migrations.RenameIndex(
-            model_name='aianalysiscounter',
-            new_name='ai_analysis_hospita_54347b_idx',
-            old_name='ai_counter_hospital_date_idx',
-        ),
-        migrations.RenameIndex(
-            model_name='diagnosissuggestion',
-            new_name='diagnosis_s_analysi_f07169_idx',
-            old_name='diagnosis_analysis_rank_idx',
-        ),
-        migrations.RenameIndex(
-            model_name='diseaseriskprediction',
-            new_name='disease_ris_analysi_c5e6cf_idx',
-            old_name='disease_risk_analysis_score_idx',
-        ),
-        migrations.RenameIndex(
-            model_name='patientsimilaritymatch',
-            new_name='patient_sim_analysi_e000ea_idx',
-            old_name='similarity_analysis_rank_idx',
-        ),
-        migrations.RenameIndex(
-            model_name='patientsimilaritymatch',
-            new_name='patient_sim_similar_6b1381_idx',
-            old_name='similarity_similar_patient_idx',
-        ),
-        migrations.RenameIndex(
-            model_name='referralrecommendation',
-            new_name='referral_re_analysi_c3461d_idx',
-            old_name='referral_analysis_rank_idx',
-        ),
-        migrations.RenameIndex(
-            model_name='referralrecommendation',
-            new_name='referral_re_recomme_d2602c_idx',
-            old_name='referral_hospital_idx',
-        ),
+        # RenameIndex operations removed — indexes now created with final names above
+        # (squash fix for fresh-database / Docker compatibility).
         migrations.CreateModel(
             name='AIAnalysisJob',
             fields=[
@@ -283,7 +235,7 @@ class Migration(migrations.Migration):
             options={
                 'db_table': 'api_ai_analysis_job',
                 'ordering': ['-created_at'],
-                'indexes': [models.Index(fields=['patient', '-created_at'], name='api_ai_patient_created_idx'), models.Index(fields=['hospital', '-created_at'], name='api_ai_hospital_created_idx'), models.Index(fields=['status', '-created_at'], name='api_ai_status_created_idx'), models.Index(fields=['celery_task_id'], name='api_ai_celery_task_idx')],
+                'indexes': [models.Index(fields=['patient', '-created_at'], name='api_ai_anal_patient_7ea8d8_idx'), models.Index(fields=['hospital', '-created_at'], name='api_ai_anal_hospita_b7daf5_idx'), models.Index(fields=['status', '-created_at'], name='api_ai_anal_status_4a9ce4_idx'), models.Index(fields=['celery_task_id'], name='api_ai_anal_celery__95e559_idx')],
             },
         ),
         migrations.CreateModel(
@@ -372,26 +324,7 @@ class Migration(migrations.Migration):
                 'ordering': ['-created_at'],
             },
         ),
-        migrations.RenameIndex(
-            model_name='aianalysisjob',
-            new_name='api_ai_anal_patient_7ea8d8_idx',
-            old_name='api_ai_patient_created_idx',
-        ),
-        migrations.RenameIndex(
-            model_name='aianalysisjob',
-            new_name='api_ai_anal_hospita_b7daf5_idx',
-            old_name='api_ai_hospital_created_idx',
-        ),
-        migrations.RenameIndex(
-            model_name='aianalysisjob',
-            new_name='api_ai_anal_status_4a9ce4_idx',
-            old_name='api_ai_status_created_idx',
-        ),
-        migrations.RenameIndex(
-            model_name='aianalysisjob',
-            new_name='api_ai_anal_celery__95e559_idx',
-            old_name='api_ai_celery_task_idx',
-        ),
+
         migrations.AlterField(
             model_name='aianalysis',
             name='additional_context',
@@ -430,7 +363,7 @@ class Migration(migrations.Migration):
         migrations.AlterField(
             model_name='diseaseriskprediction',
             name='recommendations',
-            field=django.contrib.postgres.fields.ArrayField(base_field=models.TextField(), blank=True, default=list, help_text='Clinical recommendations for this disease', size=None),
+            field=models.JSONField(blank=True, default=list, help_text='Clinical recommendations for this disease'),
         ),
         migrations.AlterField(
             model_name='patientsimilaritymatch',

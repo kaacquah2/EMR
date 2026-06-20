@@ -1128,7 +1128,7 @@ class InvoiceCreateSerializer(serializers.ModelSerializer):
         # Calculate total amount in cents
         total_amount_cents = sum(item["quantity"] * item["unit_price"] for item in items_data)
         validated_data["amount_cents"] = total_amount_cents
-        validated_data["status"] = "pending"
+        validated_data["status"] = "issued"
 
         with transaction.atomic():
             invoice = Invoice.objects.create(**validated_data)

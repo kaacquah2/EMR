@@ -1,8 +1,12 @@
+import logging
+
 from rest_framework import status
 from rest_framework.decorators import api_view, permission_classes
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from django.db.models import Q
+
+logger = logging.getLogger(__name__)
 
 from core.models import Hospital
 from interop.models import GlobalPatient, FacilityPatient, SharedRecordAccess, Consent, Referral, BreakGlassLog
@@ -312,8 +316,10 @@ def cross_facility_records(request, global_patient_id):
         requesting_hospital = get_request_hospital(request)
         is_super_admin = request.user.role == "super_admin"
 
-        # Determine country of the requesting facility
-        facility_country = getattr(requesting_hospital, "country_code", "GH") if requesting_hospital else "GH"
+        # Hospital.country is a real CharField (default "GH") — migration 0042.
+        # Previously read a non-existent attribute (country_code) which always
+        # defaulted to "GH", making the residency check a no-op.
+        facility_country = getattr(requesting_hospital, "country", "GH") if requesting_hospital else "GH"
 
         if facility_country != gp.data_residency_country and not is_super_admin:
             # Log the denied access attempt
@@ -343,7 +349,7 @@ def cross_facility_records(request, global_patient_id):
                 status=status.HTTP_403_FORBIDDEN,
             )
 
-        # Super admin override — log it prominently
+        # Super-admin override — log it prominently for compliance audit
         if is_super_admin and facility_country != gp.data_residency_country:
             audit_log(
                 request.user,
@@ -418,12 +424,60 @@ def cross_facility_records(request, global_patient_id):
             "expires_at": expires_at,
         })
 
-    records = (
+    # -----------------------------------------------------------------------
+    # Granular consent enforcement (NDPA 2012 — data minimisation principle)
+    # -----------------------------------------------------------------------
+    # Retrieve the active consent for this facility so we can apply any
+    # per-record or category exclusions the patient has set.
+    from django.utils import timezone as _tz
+    from django.db.models import Q as _Q
+    active_consent = (
+        Consent.objects.filter(
+            global_patient=gp,
+            granted_to_facility=get_request_hospital(request),
+            is_active=True,
+        )
+        .filter(_Q(expires_at__isnull=True) | _Q(expires_at__gt=_tz.now()))
+        .prefetch_related("excluded_scopes")
+        .order_by("-created_at")
+        .first()
+    )
+
+    records_qs = (
         MedicalRecord.objects.filter(patient_id__in=patient_ids)
         .select_related("patient", "hospital", "diagnosis", "prescription", "vital", "labresult")
-        .order_by("-created_at")[:200]
+        .order_by("-created_at")
     )
+
+    if active_consent:
+        # 1) Per-record allow-list: if the patient specified exact record IDs
+        #    to share, restrict to those only.
+        consented_ids = active_consent.consented_record_ids
+        if consented_ids:
+            records_qs = records_qs.filter(id__in=consented_ids)
+
+        # 2) Excluded clinical categories (e.g. HIV, MentalHealth).
+        #    MedicalRecord has a `category` field (or falls back to record_type).
+        excluded_categories = list(
+            active_consent.excluded_scopes.values_list("name", flat=True)
+        )
+        if excluded_categories:
+            # Filter out records whose category matches any excluded scope name.
+            # `category` on MedicalRecord is a CharField; fall back to record_type.
+            category_field = "category" if hasattr(MedicalRecord, "category") else "record_type"
+            records_qs = records_qs.exclude(**{f"{category_field}__in": excluded_categories})
+
+    records = records_qs[:200]
     records_data = MedicalRecordSerializer(records, many=True).data
+
+    # Build a list of active exclusions to surface in the response so the UI
+    # can display "Some categories excluded by patient" rather than confusion.
+    excluded_labels = []
+    if active_consent:
+        excluded_labels = list(
+            active_consent.excluded_scopes.values_list("name", flat=True)
+        )
+
     return Response({
         "demographics": demographics,
         "scope": scope,
@@ -434,6 +488,7 @@ def cross_facility_records(request, global_patient_id):
         "records": records_data,
         "read_only": True,
         "expires_at": expires_at,
+        "excluded_categories": excluded_labels,
     })
 
 

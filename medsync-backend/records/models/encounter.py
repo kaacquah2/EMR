@@ -89,8 +89,22 @@ class RadiologyOrder(models.Model):
     )
     study_type = models.CharField(max_length=200)
     attachment_url = models.URLField(max_length=500, blank=True, null=True)
+    findings = models.TextField(
+        blank=True,
+        default="",
+        help_text="Radiologist narrative findings / report text.",
+    )
     status = models.CharField(max_length=20, choices=STATUS, default="ordered")
     created_by = models.ForeignKey(User, on_delete=models.PROTECT)
+    reported_by = models.ForeignKey(
+        User,
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name="radiology_reports",
+        help_text="Technician who finalized the report.",
+    )
+    reported_at = models.DateTimeField(null=True, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:

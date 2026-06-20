@@ -9,7 +9,7 @@ export function cn(...inputs: ClassValue[]) {
 }
 
 /**
- * Formats a date string into a localized readable format.
+ * Formats a date string into a localized readable format using Africa/Accra timezone.
  */
 export function formatDate(date: string | Date): string {
   const d = typeof date === "string" ? new Date(date) : date
@@ -17,6 +17,36 @@ export function formatDate(date: string | Date): string {
     day: "numeric",
     month: "short",
     year: "numeric",
+    timeZone: "Africa/Accra",
+  })
+}
+
+/**
+ * Formats a date and time string into a localized readable format using Africa/Accra timezone.
+ */
+export function formatDateTime(date: string | Date): string {
+  const d = typeof date === "string" ? new Date(date) : date
+  return d.toLocaleString("en-GH", {
+    day: "numeric",
+    month: "short",
+    year: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit",
+    timeZone: "Africa/Accra",
+  })
+}
+
+/**
+ * Formats a time string into a localized readable format using Africa/Accra timezone.
+ */
+export function formatTime(date: string | Date): string {
+  const d = typeof date === "string" ? new Date(date) : date
+  return d.toLocaleTimeString("en-GH", {
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit",
+    timeZone: "Africa/Accra",
   })
 }
 

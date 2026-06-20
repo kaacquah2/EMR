@@ -55,48 +55,48 @@ _FHIR_ALLOWED_ROLES = (
 
 def _can_access_patient_fhir(request, patient):
     """
-    Check if user can access patient via FHIR.
-    Enforces hospital scoping and cross-facility consent rules.
+    Check if user can access patient via FHIR endpoints.
+
+    Uses the same canonical authorization logic as the interop REST path
+    (can_access_cross_facility in api/utils.py) so consent semantics are
+    identical across both access routes.  Previously this function had its
+    own divergent implementation (e.g. PENDING referrals granted FULL_RECORD
+    access, which the main path does not do — a security inconsistency).
     """
     if request.user.role not in _FHIR_ALLOWED_ROLES:
         return False, "Role not authorized for FHIR access"
-    
-    # Same hospital = automatic access
-    if patient.registered_at == request.user.hospital or request.user.role == "super_admin":
+
+    # Same-facility access: no cross-facility checks required.
+    if patient.registered_at_id == getattr(request.user, "hospital_id", None):
         return True, None
-    
-    # Cross-facility: check consent or referral
-    if request.user.role in ["doctor", "nurse", "hospital_admin"]:
-        # Check if there's valid consent
-        valid_consent = Consent.objects.filter(
-            global_patient__facility_profiles__patient=patient,
-            granted_to_facility=request.user.hospital,
-            is_active=True,
-            withdrawn_at__isnull=True,
-        ).exclude(
-            expires_at__lt=timezone.now()
-        ).first()
-        
-        if valid_consent:
-            return True, valid_consent.scope  # Return scope (SUMMARY or FULL_RECORD)
-        
-        # Check if there's a referral
-        from interop.models import GlobalPatient
-        try:
-            gp = GlobalPatient.objects.get(facility_profiles__patient=patient)
-            referral = Referral.objects.filter(
-                global_patient=gp,
-                to_facility=request.user.hospital,
-                status__in=['PENDING', 'ACCEPTED']
-            ).first()
-            if referral:
-                return True, "FULL_RECORD"
-        except GlobalPatient.DoesNotExist:
-            pass
-        
-        return False, "No consent or referral for cross-facility access"
-    
-    return False, "Access denied"
+
+    # Super-admin with no facility = unrestricted read.
+    if request.user.role == "super_admin" and not request.user.hospital_id:
+        return True, None
+
+    # Cross-facility: resolve to a GlobalPatient and delegate to the single
+    # authoritative consent/referral/break-glass check.
+    from interop.models import GlobalPatient as _GP
+    from api.utils import can_access_cross_facility
+
+    try:
+        gp = _GP.objects.get(facility_profiles__patient=patient)
+    except _GP.DoesNotExist:
+        # Patient not in the central MPI — cannot be shared cross-facility.
+        return False, "Patient is not registered in the Global Patient Index"
+    except _GP.MultipleObjectsReturned:
+        # Should not happen, but be safe.
+        gp = _GP.objects.filter(facility_profiles__patient=patient).first()
+
+    allowed, scope = can_access_cross_facility(
+        request.user,
+        str(gp.id),
+        allow_break_glass=True,
+        effective_hospital=getattr(request, "_effective_hospital", None) or request.user.hospital,
+    )
+    if not allowed:
+        return False, "No consent, accepted referral, or break-glass access for this patient"
+    return True, scope
 
 
 def _build_everything_bundle(request, patient):
@@ -844,6 +844,15 @@ def fhir_medication_request_list(request):
     return Response(bundle, status=status.HTTP_200_OK)
 
 
+@api_view(["GET", "POST"])
+@permission_classes([IsAuthenticated])
+def fhir_medication_request_list_create(request):
+    """GET /fhir/MedicationRequest (list) or POST /fhir/MedicationRequest (create)."""
+    if request.method == "POST":
+        return fhir_medication_request_create(request)
+    return fhir_medication_request_list(request)
+
+
 @api_view(['GET'])
 @permission_classes([IsAuthenticated])
 def fhir_observation_list(request):
@@ -895,6 +904,15 @@ def fhir_observation_list(request):
     }
     
     return Response(bundle, status=status.HTTP_200_OK)
+
+
+@api_view(["GET", "POST"])
+@permission_classes([IsAuthenticated])
+def fhir_observation_list_create(request):
+    """GET /fhir/Observation (list) or POST /fhir/Observation (create)."""
+    if request.method == "POST":
+        return fhir_observation_create(request)
+    return fhir_observation_list(request)
 
 
 _FHIR_WRITE_ROLES = ("doctor", "hospital_admin", "super_admin")

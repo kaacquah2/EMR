@@ -28,6 +28,9 @@ interface RadiologyOrder {
   study_type: string;
   status: "ordered" | "in_progress" | "completed";
   attachment_url: string | null;
+  findings: string;
+  reported_by: string | null;
+  reported_at: string | null;
   created_at: string | null;
 }
 
@@ -47,6 +50,7 @@ export function RadiologyDashboard() {
   // Modal/Action State
   const [selectedOrder, setSelectedOrder] = useState<RadiologyOrder | null>(null);
   const [attachmentUrl, setAttachmentUrl] = useState("");
+  const [findings, setFindings] = useState("");
   const [submittingAction, setSubmittingAction] = useState(false);
   const [isModalOpen, setIsModalOpen] = useState(false);
 
@@ -125,12 +129,14 @@ export function RadiologyDashboard() {
       setSubmittingAction(true);
       await api.post(`/records/radiology-order/${selectedOrder.order_id}/attachment`, {
         status: "completed",
-        attachment_url: attachmentUrl.trim()
+        attachment_url: attachmentUrl.trim(),
+        findings: findings.trim(),
       });
-      toast.success(`Completed study and uploaded scan for ${selectedOrder.patient_name}`);
+      toast.success(`Completed study and saved report for ${selectedOrder.patient_name}`);
       setIsModalOpen(false);
       setSelectedOrder(null);
       setAttachmentUrl("");
+      setFindings("");
       void fetchOrders(true);
     } catch (err) {
       console.error("Failed to complete study:", err);
@@ -144,6 +150,7 @@ export function RadiologyDashboard() {
   const openCompleteModal = (order: RadiologyOrder) => {
     setSelectedOrder(order);
     setAttachmentUrl(order.attachment_url || "");
+    setFindings(order.findings || "");
     setIsModalOpen(true);
   };
 
@@ -304,6 +311,7 @@ export function RadiologyDashboard() {
                     <th className="px-6 py-4 text-left">Study Type</th>
                     <th className="px-6 py-4 text-left">Ordered Date</th>
                     <th className="px-6 py-4 text-left">Status</th>
+                    <th className="px-6 py-4 text-left">Findings</th>
                     <th className="px-6 py-4 text-left">Result Link</th>
                     <th className="px-6 py-4 text-right">Actions</th>
                   </tr>
@@ -323,16 +331,33 @@ export function RadiologyDashboard() {
                       <td className="px-6 py-4 whitespace-nowrap">
                         {getStatusBadge(o.status)}
                       </td>
+                      <td className="px-6 py-4 max-w-[200px]">
+                        {o.findings ? (
+                          <span className="text-slate-700 dark:text-slate-300 text-xs line-clamp-2" title={o.findings}>
+                            {o.findings.slice(0, 80)}{o.findings.length > 80 ? "…" : ""}
+                          </span>
+                        ) : (
+                          <span className="text-slate-400 text-xs italic">No findings</span>
+                        )}
+                        {o.reported_by && (
+                          <p className="text-xs text-slate-400 mt-0.5">by {o.reported_by}</p>
+                        )}
+                      </td>
                       <td className="px-6 py-4 whitespace-nowrap">
                         {o.attachment_url ? (
-                          <a
-                            href={o.attachment_url}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="inline-flex items-center gap-1 text-[#6366F1] font-semibold hover:underline"
-                          >
-                            View PACS Scan <ExternalLink className="h-3 w-3" />
-                          </a>
+                          // Only allow http: and https: to prevent javascript: / data: URIs.
+                          /^https?:\/\//i.test(o.attachment_url) ? (
+                            <a
+                              href={o.attachment_url}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="inline-flex items-center gap-1 text-[#6366F1] font-semibold hover:underline"
+                            >
+                              View PACS Scan <ExternalLink className="h-3 w-3" />
+                            </a>
+                          ) : (
+                            <span className="text-slate-400 text-xs italic">Invalid scan URL</span>
+                          )
                         ) : (
                           <span className="text-slate-400 text-xs italic">No scan linked</span>
                         )}
@@ -393,7 +418,7 @@ export function RadiologyDashboard() {
             <form onSubmit={handleCompleteSubmit} className="space-y-4">
               <div>
                 <label className="block text-xs font-bold uppercase tracking-wider text-slate-500 mb-1">
-                  PACS/Attachment URL
+                  PACS/Attachment URL <span className="text-rose-500">*</span>
                 </label>
                 <Input
                   type="url"
@@ -404,6 +429,22 @@ export function RadiologyDashboard() {
                   required
                   autoFocus
                 />
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold uppercase tracking-wider text-slate-500 mb-1">
+                  Radiologist Findings / Report Narrative
+                </label>
+                <textarea
+                  placeholder="Describe imaging findings, impression, and recommendations..."
+                  value={findings}
+                  onChange={(e) => setFindings(e.target.value)}
+                  rows={5}
+                  className="w-full rounded-md border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-950 px-3 py-2 text-sm text-slate-900 dark:text-slate-100 resize-y focus:outline-none focus:ring-2 focus:ring-[#6366F1]"
+                />
+                <p className="mt-1 text-xs text-slate-400">
+                  Document your clinical interpretation. This becomes part of the patient record.
+                </p>
               </div>
 
               <div className="flex justify-end gap-2 pt-2 border-t border-slate-100 dark:border-slate-800">
@@ -425,7 +466,7 @@ export function RadiologyDashboard() {
                   className="bg-emerald-600 hover:bg-emerald-700 text-white"
                   disabled={submittingAction}
                 >
-                  {submittingAction ? "Saving..." : "Save scan & complete"}
+                  {submittingAction ? "Saving..." : "Save report & complete"}
                 </Button>
               </div>
             </form>

@@ -20,17 +20,13 @@ class Migration(migrations.Migration):
         ('core', '0007_invoice_billing'),
         ('core', '0023_add_version_field'),
         ('core', '0005_workflow_department_lab_unit'),
-        ('patients', '0005_invoice_billing'),
         ('core', '0025_announcement'),
         ('core', '0022_add_hospital_ai_enabled'),
         ('core', '0019_user_last_role_reviewed_at'),
         migrations.swappable_dependency(settings.AUTH_USER_MODEL),
-        ('patients', '0010_add_walkin_fields'),
-        ('patients', '0008_encrypt_phi_fields'),
         ('core', '0001_initial'),
-        ('patients', '0001_blueprint_alerts_encounters'),
         ('core', '0010_superadminhospitalaccess'),
-        ('patients', '0009_add_version_field'),
+        ('patients', '0001_squashed_0013_invoiceitem_appointment_updated_at_and_more'),
     ]
 
     operations = [
@@ -64,7 +60,7 @@ class Migration(migrations.Migration):
             fields=[
                 ('id', models.UUIDField(default=uuid.uuid4, editable=False, primary_key=True, serialize=False)),
                 ('test_name', models.CharField(max_length=200)),
-                ('result_value', models.TextField(blank=True, null=True)),
+                ('result_value', django_cryptography.fields.encrypt(models.TextField(blank=True, null=True))),
                 ('reference_range', models.CharField(blank=True, max_length=100, null=True)),
                 ('result_date', models.DateTimeField(auto_now_add=True)),
                 ('status', models.CharField(choices=[('pending', 'Pending'), ('resulted', 'Resulted'), ('verified', 'Verified')], default='pending', max_length=20)),
@@ -86,10 +82,10 @@ class Migration(migrations.Migration):
             fields=[
                 ('id', models.UUIDField(default=uuid.uuid4, editable=False, primary_key=True, serialize=False)),
                 ('icd10_code', models.CharField(max_length=10)),
-                ('icd10_description', models.CharField(max_length=300)),
+                ('icd10_description', django_cryptography.fields.encrypt(models.CharField(max_length=300))),
                 ('severity', models.CharField(choices=[('mild', 'Mild'), ('moderate', 'Moderate'), ('severe', 'Severe'), ('critical', 'Critical')], max_length=20)),
                 ('onset_date', models.DateField(blank=True, null=True)),
-                ('notes', models.TextField(blank=True, null=True)),
+                ('notes', django_cryptography.fields.encrypt(models.TextField(blank=True, null=True))),
                 ('is_chronic', models.BooleanField(default=False)),
                 ('record', models.OneToOneField(on_delete=django.db.models.deletion.CASCADE, to='records.medicalrecord')),
             ],
@@ -98,7 +94,7 @@ class Migration(migrations.Migration):
             name='NursingNote',
             fields=[
                 ('id', models.UUIDField(default=uuid.uuid4, editable=False, primary_key=True, serialize=False)),
-                ('content', models.TextField()),
+                ('content', django_cryptography.fields.encrypt(models.TextField())),
                 ('record', models.OneToOneField(on_delete=django.db.models.deletion.CASCADE, to='records.medicalrecord')),
             ],
         ),
@@ -122,15 +118,15 @@ class Migration(migrations.Migration):
             name='Vital',
             fields=[
                 ('id', models.UUIDField(default=uuid.uuid4, editable=False, primary_key=True, serialize=False)),
-                ('temperature_c', models.DecimalField(blank=True, decimal_places=1, max_digits=4, null=True)),
-                ('pulse_bpm', models.IntegerField(blank=True, null=True)),
-                ('resp_rate', models.IntegerField(blank=True, null=True)),
-                ('bp_systolic', models.IntegerField(blank=True, null=True)),
-                ('bp_diastolic', models.IntegerField(blank=True, null=True)),
-                ('spo2_percent', models.DecimalField(blank=True, decimal_places=1, max_digits=4, null=True)),
-                ('weight_kg', models.DecimalField(blank=True, decimal_places=1, max_digits=5, null=True)),
-                ('height_cm', models.DecimalField(blank=True, decimal_places=1, max_digits=5, null=True)),
-                ('bmi', models.DecimalField(blank=True, decimal_places=1, max_digits=4, null=True)),
+                ('temperature_c', django_cryptography.fields.encrypt(models.DecimalField(blank=True, decimal_places=1, max_digits=4, null=True))),
+                ('pulse_bpm', django_cryptography.fields.encrypt(models.IntegerField(blank=True, null=True))),
+                ('resp_rate', django_cryptography.fields.encrypt(models.IntegerField(blank=True, null=True))),
+                ('bp_systolic', django_cryptography.fields.encrypt(models.IntegerField(blank=True, null=True))),
+                ('bp_diastolic', django_cryptography.fields.encrypt(models.IntegerField(blank=True, null=True))),
+                ('spo2_percent', django_cryptography.fields.encrypt(models.DecimalField(blank=True, decimal_places=1, max_digits=4, null=True))),
+                ('weight_kg', django_cryptography.fields.encrypt(models.DecimalField(blank=True, decimal_places=1, max_digits=5, null=True))),
+                ('height_cm', django_cryptography.fields.encrypt(models.DecimalField(blank=True, decimal_places=1, max_digits=5, null=True))),
+                ('bmi', django_cryptography.fields.encrypt(models.DecimalField(blank=True, decimal_places=1, max_digits=4, null=True))),
                 ('record', models.OneToOneField(on_delete=django.db.models.deletion.CASCADE, to='records.medicalrecord')),
                 ('recorded_by', models.ForeignKey(on_delete=django.db.models.deletion.PROTECT, to=settings.AUTH_USER_MODEL)),
             ],
@@ -169,18 +165,18 @@ class Migration(migrations.Migration):
                 ('id', models.UUIDField(default=uuid.uuid4, editable=False, primary_key=True, serialize=False)),
                 ('encounter_type', models.CharField(choices=[('outpatient', 'Outpatient'), ('inpatient', 'Inpatient'), ('emergency', 'Emergency'), ('follow_up', 'Follow-up'), ('consultation', 'Consultation'), ('other', 'Other')], default='outpatient', max_length=20)),
                 ('encounter_date', models.DateTimeField(auto_now_add=True)),
-                ('notes', models.TextField(blank=True, null=True)),
+                ('notes', django_cryptography.fields.encrypt(models.TextField(blank=True, null=True))),
                 ('created_by', models.ForeignKey(on_delete=django.db.models.deletion.PROTECT, to=settings.AUTH_USER_MODEL)),
                 ('hospital', models.ForeignKey(on_delete=django.db.models.deletion.PROTECT, to='core.hospital')),
                 ('patient', models.ForeignKey(on_delete=django.db.models.deletion.CASCADE, to='patients.patient')),
                 ('assigned_department', models.ForeignKey(blank=True, null=True, on_delete=django.db.models.deletion.SET_NULL, related_name='encounters', to='core.department')),
                 ('assigned_doctor', models.ForeignKey(blank=True, null=True, on_delete=django.db.models.deletion.SET_NULL, related_name='assigned_encounters', to=settings.AUTH_USER_MODEL)),
                 ('status', models.CharField(choices=[('waiting', 'Waiting'), ('in_consultation', 'In Consultation'), ('completed', 'Completed')], default='waiting', max_length=20)),
-                ('assessment_plan', models.TextField(blank=True, null=True)),
-                ('chief_complaint', models.TextField(blank=True, null=True)),
-                ('discharge_summary', models.TextField(blank=True, null=True)),
-                ('examination_findings', models.TextField(blank=True, null=True)),
-                ('hpi', models.TextField(blank=True, null=True, verbose_name='History of presenting illness')),
+                ('assessment_plan', django_cryptography.fields.encrypt(models.TextField(blank=True, null=True))),
+                ('chief_complaint', django_cryptography.fields.encrypt(models.TextField(blank=True, null=True))),
+                ('discharge_summary', django_cryptography.fields.encrypt(models.TextField(blank=True, null=True))),
+                ('examination_findings', django_cryptography.fields.encrypt(models.TextField(blank=True, null=True))),
+                ('hpi', django_cryptography.fields.encrypt(models.TextField(blank=True, null=True, verbose_name='History of presenting illness'))),
                 ('visit_status', models.CharField(blank=True, choices=[('registered', 'Registered'), ('waiting_triage', 'Waiting for Triage'), ('waiting_doctor', 'Waiting for Doctor'), ('in_consultation', 'In Consultation'), ('sent_to_lab', 'Sent to Lab'), ('admitted', 'Admitted'), ('discharged', 'Discharged')], default='registered', max_length=30)),
             ],
             options={
@@ -307,7 +303,7 @@ class Migration(migrations.Migration):
             ],
             options={
                 'db_table': 'records_encounter_draft',
-                'indexes': [models.Index(fields=['patient', 'hospital'], name='records_enc_patient_hospital_idx'), models.Index(fields=['created_by', 'last_saved_at'], name='records_enc_user_saved_idx')],
+                'indexes': [models.Index(fields=['patient', 'hospital'], name='records_enc_patient_c3178a_idx'), models.Index(fields=['created_by', 'last_saved_at'], name='records_enc_created_888c7f_idx')],
             },
         ),
         migrations.AddField(
@@ -347,7 +343,7 @@ class Migration(migrations.Migration):
         ),
         migrations.AddIndex(
             model_name='shifthandover',
-            index=models.Index(fields=['incoming_nurse', 'incoming_acknowledged_at'], name='records_shifthandover_incoming_ack_idx'),
+            index=models.Index(fields=['incoming_nurse', 'incoming_acknowledged_at'], name='records_shi_incomin_adef31_idx'),
         ),
         migrations.CreateModel(
             name='EncounterTemplate',
@@ -378,21 +374,8 @@ class Migration(migrations.Migration):
             name='shifthandover',
             options={'ordering': ['-submitted_at']},
         ),
-        migrations.RenameIndex(
-            model_name='encounterdraft',
-            new_name='records_enc_patient_c3178a_idx',
-            old_name='records_enc_patient_hospital_idx',
-        ),
-        migrations.RenameIndex(
-            model_name='encounterdraft',
-            new_name='records_enc_created_888c7f_idx',
-            old_name='records_enc_user_saved_idx',
-        ),
-        migrations.RenameIndex(
-            model_name='shifthandover',
-            new_name='records_shi_incomin_adef31_idx',
-            old_name='records_shifthandover_incoming_ack_idx',
-        ),
+        # RenameIndex operations removed — indexes now created with final names
+        # in CreateModel/AddIndex above (squash fix for fresh-database compatibility).
         migrations.AlterField(
             model_name='nursingnote',
             name='outgoing_signed_at',
@@ -767,101 +750,6 @@ class Migration(migrations.Migration):
             model_name='encounter',
             name='updated_at',
             field=models.DateTimeField(auto_now=True),
-        ),
-        migrations.AlterField(
-            model_name='diagnosis',
-            name='icd10_description',
-            field=django_cryptography.fields.encrypt(models.CharField(max_length=300)),
-        ),
-        migrations.AlterField(
-            model_name='diagnosis',
-            name='notes',
-            field=django_cryptography.fields.encrypt(models.TextField(blank=True, null=True)),
-        ),
-        migrations.AlterField(
-            model_name='encounter',
-            name='assessment_plan',
-            field=django_cryptography.fields.encrypt(models.TextField(blank=True, null=True)),
-        ),
-        migrations.AlterField(
-            model_name='encounter',
-            name='chief_complaint',
-            field=django_cryptography.fields.encrypt(models.TextField(blank=True, null=True)),
-        ),
-        migrations.AlterField(
-            model_name='encounter',
-            name='discharge_summary',
-            field=django_cryptography.fields.encrypt(models.TextField(blank=True, null=True)),
-        ),
-        migrations.AlterField(
-            model_name='encounter',
-            name='examination_findings',
-            field=django_cryptography.fields.encrypt(models.TextField(blank=True, null=True)),
-        ),
-        migrations.AlterField(
-            model_name='encounter',
-            name='hpi',
-            field=django_cryptography.fields.encrypt(models.TextField(blank=True, null=True, verbose_name='History of presenting illness')),
-        ),
-        migrations.AlterField(
-            model_name='encounter',
-            name='notes',
-            field=django_cryptography.fields.encrypt(models.TextField(blank=True, null=True)),
-        ),
-        migrations.AlterField(
-            model_name='labresult',
-            name='result_value',
-            field=django_cryptography.fields.encrypt(models.TextField(blank=True, null=True)),
-        ),
-        migrations.AlterField(
-            model_name='nursingnote',
-            name='content',
-            field=django_cryptography.fields.encrypt(models.TextField()),
-        ),
-        migrations.AlterField(
-            model_name='vital',
-            name='bmi',
-            field=django_cryptography.fields.encrypt(models.DecimalField(blank=True, decimal_places=1, max_digits=4, null=True)),
-        ),
-        migrations.AlterField(
-            model_name='vital',
-            name='bp_diastolic',
-            field=django_cryptography.fields.encrypt(models.IntegerField(blank=True, null=True)),
-        ),
-        migrations.AlterField(
-            model_name='vital',
-            name='bp_systolic',
-            field=django_cryptography.fields.encrypt(models.IntegerField(blank=True, null=True)),
-        ),
-        migrations.AlterField(
-            model_name='vital',
-            name='height_cm',
-            field=django_cryptography.fields.encrypt(models.DecimalField(blank=True, decimal_places=1, max_digits=5, null=True)),
-        ),
-        migrations.AlterField(
-            model_name='vital',
-            name='pulse_bpm',
-            field=django_cryptography.fields.encrypt(models.IntegerField(blank=True, null=True)),
-        ),
-        migrations.AlterField(
-            model_name='vital',
-            name='resp_rate',
-            field=django_cryptography.fields.encrypt(models.IntegerField(blank=True, null=True)),
-        ),
-        migrations.AlterField(
-            model_name='vital',
-            name='spo2_percent',
-            field=django_cryptography.fields.encrypt(models.DecimalField(blank=True, decimal_places=1, max_digits=4, null=True)),
-        ),
-        migrations.AlterField(
-            model_name='vital',
-            name='temperature_c',
-            field=django_cryptography.fields.encrypt(models.DecimalField(blank=True, decimal_places=1, max_digits=4, null=True)),
-        ),
-        migrations.AlterField(
-            model_name='vital',
-            name='weight_kg',
-            field=django_cryptography.fields.encrypt(models.DecimalField(blank=True, decimal_places=1, max_digits=5, null=True)),
         ),
         migrations.AddIndex(
             model_name='diagnosis',

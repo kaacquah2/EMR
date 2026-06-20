@@ -49,7 +49,6 @@ class Hospital(models.Model):
         default="HEALTH_CENTRE",
         help_text="Ghana referral hierarchy level"
     )
-    ai_enabled = models.BooleanField(default=True, help_text="Enable/disable AI features for this hospital")
     onboarded_at = models.DateTimeField(auto_now_add=True)
     onboarded_by = models.ForeignKey(
         "User", null=True, blank=True, on_delete=models.SET_NULL, related_name="+"
@@ -63,6 +62,18 @@ class Hospital(models.Model):
     )
     archive_reason = models.CharField(max_length=500, blank=True, help_text="Reason for archival")
     
+    # Data residency — ISO 3166-1 alpha-2 country code for this facility.
+    # Used by data-residency enforcement in can_access_cross_facility() and
+    # cross_facility_records() to ensure cross-border access is only allowed
+    # when the facility's country matches the patient's data_residency_country.
+    # Defaults to "GH" (Ghana) — consistent with MedSync's Ghana-first scope
+    # and GlobalPatient.data_residency_country default.
+    country = models.CharField(
+        max_length=2,
+        default="GH",
+        help_text="ISO 3166-1 alpha-2 country code for this facility (e.g. 'GH' for Ghana). Used for NDPA data-residency enforcement.",
+    )
+
     # PHASE 2: Device Trust & Adaptive MFA
     # List of CIDR ranges (e.g., ["192.168.1.0/24", "10.0.0.0/8"]) for hospital's network
     ip_subnets = models.JSONField(default=list, blank=True, help_text="List of CIDR ranges for hospital network (e.g., ['192.168.1.0/24'])")
@@ -213,7 +224,7 @@ class User(AbstractBaseUser, PermissionsMixin):
         ("locked", "Locked"),
     ]
 
-    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)  # type: ignore
     hospital = models.ForeignKey(Hospital, on_delete=models.CASCADE, null=True, blank=True)
     email = models.EmailField(unique=True)
     role = models.CharField(max_length=20, choices=ROLES)
@@ -290,14 +301,13 @@ class User(AbstractBaseUser, PermissionsMixin):
         from django.db import transaction
         
         with transaction.atomic():
-            # Mark account as inactive
+            # Set all fields before saving — single save to avoid writing
+            # incomplete state (e.g., account_status="inactive" but MFA still enabled).
             self.account_status = "inactive"
-            self.save()
-            
-            # Invalidate MFA
             self.is_mfa_enabled = False
             self.totp_secret = None
             self.mfa_backup_codes = None
+            self.save()
             
             # Clear all passkeys
             UserPasskey.objects.filter(user=self).delete()
@@ -326,38 +336,9 @@ class User(AbstractBaseUser, PermissionsMixin):
                 hospital=self.hospital,
                 extra_data={'reason': reason}
             )
-            
-            self.save()
 
 
 
-class UserPushSubscription(models.Model):
-    """
-    Web Push notification subscription for a user.
-    Stores VAPID subscription data from the browser.
-    """
-    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
-    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='push_subscriptions')
-    
-    # VAPID subscription data
-    endpoint = models.URLField(max_length=500, unique=True)
-    p256dh = models.CharField(max_length=100, help_text="Client public key")
-    auth = models.CharField(max_length=50, help_text="Auth secret")
-    
-    # Metadata
-    user_agent = models.CharField(max_length=255, blank=True)
-    is_active = models.BooleanField(default=True)
-    created_at = models.DateTimeField(auto_now_add=True)
-    updated_at = models.DateTimeField(auto_now=True)
-    
-    class Meta:
-        db_table = 'user_push_subscription'
-        indexes = [
-            models.Index(fields=['user', 'is_active']),
-        ]
-    
-    def __str__(self):
-        return f"Push subscription for {self.user.email}"
 
 
 class TrustedDevice(models.Model):
@@ -387,6 +368,7 @@ class TrustedDevice(models.Model):
     # Metadata
     user_agent = models.TextField(blank=True, help_text="User-Agent header from device")
     ip_address = models.GenericIPAddressField(null=True, blank=True, help_text="Last known IP from this device")
+    pin_hash = models.CharField(max_length=128, blank=True, null=True, help_text="Bcrypt hash of 4-digit PIN + user_id_salt")
     created_at = models.DateTimeField(auto_now_add=True)
     
     class Meta:
@@ -550,25 +532,10 @@ class AuditLog(models.Model):
         ("FAILED_OBJECT_ACCESS", "Object Access Denied"),
         ("SUSPICIOUS_ACTIVITY", "Suspicious Activity Detected"),
         ("ERROR", "Application Error"),
-        ("AI_ANALYSIS", "AI Analysis"),
-        ("AI_ANALYSIS_FAILED", "AI Analysis Failed"),
-        ("AI_ANALYSIS_START_ASYNC", "AI Analysis Start Async"),
-        ("AI_FEATURE_BLOCKED", "AI Feature Blocked"),
-        ("AI_SUGGESTION_IGNORED", "AI Suggestion Ignored"),
-        ("AI_RISK_PREDICTION", "AI Risk Prediction"),
-        ("AI_CDS", "AI CDS"),
-        ("AI_TRIAGE", "AI Triage"),
-        ("AI_SIMILARITY_SEARCH", "AI Similarity Search"),
-        ("AI_REFERRAL_RECOMMENDATION", "AI Referral Recommendation"),
-        ("AI_HISTORY_VIEW", "AI History View"),
-        ("AI_ANTIBIOTIC_GUIDANCE", "AI Antibiotic Guidance"),
-        ("AI_APPROVAL_GRANT", "AI Approval Grant"),
-        ("AI_APPROVAL_REVOKE", "AI Approval Revoke"),
-        ("AI_DEPLOYMENT_ENABLED", "AI Deployment Enabled"),
-        ("AI_DEPLOYMENT_DISABLED", "AI Deployment Disabled"),
-        ("AI_DRIFT_WARNING", "AI Drift Warning"),
-        ("AI_DRIFT_CRITICAL", "AI Drift Critical"),
         ("DATA_RESIDENCY_DENIED", "Data Residency Access Denied"),
+        # MFA / backup-code events
+        ("BACKUP_CODE_CONSUMED", "Backup Code Consumed"),
+        ("MFA_ATTEMPTS_EXCEEDED", "MFA Attempts Exceeded"),
     ]
     user = models.ForeignKey(User, on_delete=models.CASCADE)
     action = models.CharField(max_length=50, choices=ACTIONS)
@@ -606,13 +573,29 @@ class AuditLog(models.Model):
 
     def save(self, *args, **kwargs):
         if not self.pk:
+            # Order by (timestamp DESC, id DESC) so that two entries created at
+            # the same second are consistently ordered — id (auto-increment BigInt)
+            # is always unique and monotonically increasing within a database session,
+            # giving us a stable tiebreaker that the verifier can replicate with
+            # (timestamp ASC, id ASC).
             prev = (
                 AuditLog.objects.filter(user=self.user)
-                .order_by("-timestamp")
+                .order_by("-timestamp", "-id")
                 .first()
             )
             prev_hash = prev.chain_hash if prev else "0"
-            data = f"{prev_hash}{self.user_id}{self.action}{self.resource_type or ''}{self.resource_id or ''}"
+            # Include a UUID nonce to prevent chain_hash collisions when
+            # concurrent requests create audit entries with identical fields
+            # (same prev_hash, user, action, resource).  Without the nonce,
+            # the unique constraint on chain_hash causes IntegrityError.
+            nonce = uuid.uuid4().hex
+            data = f"{prev_hash}{self.user_id}{self.action}{self.resource_type or ''}{self.resource_id or ''}{nonce}"
+
+            # Store the nonce in extra_data to allow the chain to be verified later
+            if self.extra_data is None:
+                self.extra_data = {}
+            if isinstance(self.extra_data, dict):
+                self.extra_data["_nonce"] = nonce
 
             # Tamper-evident chain hash
             self.chain_hash = hashlib.sha256(data.encode()).hexdigest()
@@ -953,8 +936,6 @@ class TaskSubmission(models.Model):
     """
     TASK_TYPES = [
         ("export_pdf", "PDF Export"),
-        ("ai_analysis", "AI Analysis"),
-        ("risk_prediction", "Risk Prediction"),
         ("mark_no_shows", "Mark No Shows"),
         ("other", "Other"),
     ]

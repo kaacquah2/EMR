@@ -444,6 +444,7 @@ def encounter_draft_handler(request, pk, encounter_id=None):
             {"message": "Draft deleted successfully"},
             status=status.HTTP_204_NO_CONTENT,
         )
+    return Response(status=status.HTTP_405_METHOD_NOT_ALLOWED)
 
 
 @api_view(['GET', 'POST'])
@@ -522,6 +523,7 @@ def encounter_template_list(request):
             'id': str(template.id),
             'message': 'Template created successfully',
         }, status=status.HTTP_201_CREATED)
+    return Response(status=status.HTTP_405_METHOD_NOT_ALLOWED)
 
 
 @api_view(['GET', 'PUT', 'DELETE'])
@@ -593,6 +595,7 @@ def encounter_template_detail(request, template_id):
         audit_log(request.user, 'DELETE', 'EncounterTemplate', str(template.id), hospital, request)
         
         return Response({'message': 'Template deleted'})
+    return Response(status=status.HTTP_405_METHOD_NOT_ALLOWED)
 
 
 @api_view(['POST'])

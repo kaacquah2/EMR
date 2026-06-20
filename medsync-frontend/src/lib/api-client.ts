@@ -33,7 +33,16 @@ type RequestSharedOpts = Pick<
   "getToken" | "onRefresh" | "onActivity" | "getViewAsHeader"
 >;
 
-async function request<T>(path: string, options: RequestOptions = {}): Promise<T> {
+/**
+ * Internal base function that handles auth headers, timeout/abort signal
+ * management, 401-retry, and error wrapping.  Returns the raw Response
+ * so callers can choose how to parse the body (.json() vs .blob()).
+ */
+async function _rawRequest(
+  path: string,
+  options: RequestOptions = {},
+  retrySelf: (path: string, opts: RequestOptions) => Promise<Response>,
+): Promise<Response> {
   const { getToken, onRefresh, onActivity, getViewAsHeader, retryCount = 0, timeoutMs = DEFAULT_TIMEOUT_MS, signal: callerSignal, ...init } = options;
   const sharedOpts: RequestSharedOpts = { getToken, onRefresh, onActivity, getViewAsHeader };
   const token = getToken?.() ?? null;
@@ -44,6 +53,10 @@ async function request<T>(path: string, options: RequestOptions = {}): Promise<T
     ...(isFormData ? {} : { "Content-Type": "application/json" }),
     ...(init.headers as Record<string, string>),
   };
+  if (typeof window !== "undefined") {
+    (headers as Record<string, string>)["X-Screen-Resolution"] = `${window.screen.width}x${window.screen.height}`;
+    (headers as Record<string, string>)["X-Timezone"] = Intl.DateTimeFormat().resolvedOptions().timeZone;
+  }
   // Avoid sending protected requests without a token during initial auth hydration.
   // Backend will correctly 403, but frontend should treat this as unauthenticated (401)
   // and avoid spamming permission-denied logs / confusing UX.
@@ -76,10 +89,12 @@ async function request<T>(path: string, options: RequestOptions = {}): Promise<T
       if (callerSignal.aborted) {
         controller.abort();
       } else {
+        // Use { once: true } so the listener is automatically removed after
+        // firing, preventing event-listener leaks on long-lived signals.
         callerSignal.addEventListener("abort", () => {
           if (abortCause === null) abortCause = "caller";
           controller.abort();
-        });
+        }, { once: true });
       }
     }
   }
@@ -88,7 +103,7 @@ async function request<T>(path: string, options: RequestOptions = {}): Promise<T
     if (res.status === 401 && onRefresh && getToken && retryCount === 0) {
       const refreshed = await onRefresh();
       if (refreshed) {
-        return request<T>(path, {
+        return retrySelf(path, {
           ...sharedOpts,
           ...init,
           signal: callerSignal,
@@ -108,8 +123,7 @@ async function request<T>(path: string, options: RequestOptions = {}): Promise<T
       throw e;
     }
     onActivity?.();
-    if (res.status === 204) return undefined as T;
-    return res.json();
+    return res;
   } catch (e) {
     if (e instanceof Error && e.name === "AbortError") {
       if (abortCause === "caller") {
@@ -119,7 +133,7 @@ async function request<T>(path: string, options: RequestOptions = {}): Promise<T
       // Transient network hiccups are common during local dev startup.
       // Retry idempotent GET once on timeout only (not caller cancellation).
       if (method === "GET" && retryCount === 0 && abortCause === "timeout") {
-        return request<T>(path, {
+        return retrySelf(path, {
           ...sharedOpts,
           ...init,
           signal: callerSignal,
@@ -152,117 +166,16 @@ async function request<T>(path: string, options: RequestOptions = {}): Promise<T
   }
 }
 
+async function request<T>(path: string, options: RequestOptions = {}): Promise<T> {
+  const res = await _rawRequest(path, options, (p, o) => _rawRequest(p, o, (p2, o2) => _rawRequest(p2, o2, () => { throw new Error("Max retries exceeded"); })));
+  if (res.status === 204) return undefined as T;
+  return res.json();
+}
+
 /** Request for Blob responses (used for file downloads, PDF exports, etc). */
 async function requestBlob(path: string, options: RequestOptions = {}): Promise<Blob> {
-  const { getToken, onRefresh, onActivity, getViewAsHeader, retryCount = 0, timeoutMs = DEFAULT_TIMEOUT_MS, signal: callerSignal, ...init } = options;
-  const sharedOpts: RequestSharedOpts = { getToken, onRefresh, onActivity, getViewAsHeader };
-  const token = getToken?.() ?? null;
-  const viewAsId = getViewAsHeader?.() ?? null;
-  const url = `${API_BASE}${path.startsWith("/") ? path : `/${path}`}`;
-  const headers: HeadersInit = {
-    ...(init.headers as Record<string, string>),
-  };
-  if (!token && !isPublicApiPath(path)) {
-    const e = new Error("Not authenticated") as Error & { detail?: Record<string, unknown>; statusCode?: number };
-    e.detail = { error: "NOT_AUTHENTICATED", message: "Access token is missing" };
-    (e as Error & { statusCode: number }).statusCode = 401;
-    throw e;
-  }
-  if (token) {
-    (headers as Record<string, string>)["Authorization"] = `Bearer ${token}`;
-  }
-  if (viewAsId) {
-    (headers as Record<string, string>)["X-View-As-Hospital"] = viewAsId;
-  }
-  let signal: AbortSignal | undefined = callerSignal ?? undefined;
-  let timeoutId: ReturnType<typeof setTimeout> | undefined;
-  let abortCause: "timeout" | "caller" | null = callerSignal?.aborted ? "caller" : null;
-  if (timeoutMs > 0 || callerSignal) {
-    const controller = new AbortController();
-    signal = controller.signal;
-    if (timeoutMs > 0) {
-      timeoutId = setTimeout(() => {
-        if (abortCause === null) abortCause = "timeout";
-        controller.abort();
-      }, timeoutMs);
-    }
-    if (callerSignal) {
-      if (callerSignal.aborted) {
-        controller.abort();
-      } else {
-        callerSignal.addEventListener("abort", () => {
-          if (abortCause === null) abortCause = "caller";
-          controller.abort();
-        });
-      }
-    }
-  }
-  try {
-    const res = await fetch(url, { ...init, headers, signal });
-    if (res.status === 401 && onRefresh && getToken && retryCount === 0) {
-      const refreshed = await onRefresh();
-      if (refreshed) {
-        return requestBlob(path, {
-          ...sharedOpts,
-          ...init,
-          signal: callerSignal,
-          timeoutMs,
-          retryCount: 1,
-        });
-      }
-    }
-    if (!res.ok) {
-      const err: ApiError & Record<string, unknown> = await res
-        .json()
-        .catch(() => ({
-          error: "UNKNOWN",
-          message: res.statusText,
-        }));
-      const e = new Error(err.message || res.statusText) as Error & { detail?: Record<string, unknown>; statusCode?: number };
-      e.detail = err;
-      (e as Error & { statusCode: number }).statusCode = res.status;
-      throw e;
-    }
-    onActivity?.();
-    return res.blob();
-  } catch (e) {
-    if (e instanceof Error && e.name === "AbortError") {
-      if (abortCause === "caller") {
-        throw e;
-      }
-      const method = (init.method || "GET").toUpperCase();
-      if (method === "GET" && retryCount === 0 && abortCause === "timeout") {
-        return requestBlob(path, {
-          ...sharedOpts,
-          ...init,
-          signal: callerSignal,
-          timeoutMs,
-          retryCount: 1,
-        });
-      }
-      const timeoutErr = new Error("Request timed out or was aborted") as Error & {
-        detail?: Record<string, unknown>;
-        statusCode?: number;
-      };
-      timeoutErr.detail = {
-        error: "TIMEOUT_OR_ABORT",
-        message: e.message,
-        path,
-        method,
-        timeoutMs,
-        abortCause: abortCause ?? "unknown",
-      };
-      timeoutErr.statusCode = 408;
-      if (typeof window !== "undefined") window.dispatchEvent(new Event("medsync:apierror"));
-      throw timeoutErr;
-    }
-    if (typeof window !== "undefined" && e instanceof TypeError && e.message === "Failed to fetch") {
-      window.dispatchEvent(new Event("medsync:apierror"));
-    }
-    throw e;
-  } finally {
-    if (timeoutId) clearTimeout(timeoutId);
-  }
+  const res = await _rawRequest(path, options, (p, o) => _rawRequest(p, o, (p2, o2) => _rawRequest(p2, o2, () => { throw new Error("Max retries exceeded"); })));
+  return res.blob();
 }
 
 /** Optional per-request options (e.g. AbortSignal for cancelation, timeout override). */

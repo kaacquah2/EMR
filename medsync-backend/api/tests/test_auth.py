@@ -171,8 +171,10 @@ def test_login_email_mfa_channel_and_verify(api_client, hospital):
         full_name="Email MFA",
         hospital=hospital,
     )
+    # No totp_secret: doctor without TOTP configured falls back to email OTP.
+    # (Users with totp_secret set now get the faster authenticator channel.)
     user.is_mfa_enabled = True
-    user.totp_secret = "JBSWY3DPEHPK3PXP"
+    user.totp_secret = ""
     user.save()
     mail.outbox.clear()
 
@@ -197,6 +199,79 @@ def test_login_email_mfa_channel_and_verify(api_client, hospital):
     )
     assert r2.status_code == 200
     assert r2.json().get("access_token")
+
+
+@pytest.mark.django_db
+@override_settings(
+    EMAIL_BACKEND="django.core.mail.backends.locmem.EmailBackend",
+    DEV_PERMISSION_BYPASS_EMAILS=[],
+)
+def test_login_totp_configured_uses_authenticator_channel(api_client, hospital):
+    """Doctor/admin roles with TOTP configured get the authenticator channel.
+    Clinical floor roles (billing_staff, nurse, etc.) always get email OTP
+    regardless of TOTP configuration — they work in patient areas where phones
+    may be banned and gloves make phone screens impractical."""
+    import pyotp
+    from django.core import mail as test_mail
+
+    pwd = _get_test_password()
+    secret = "JBSWY3DPEHPK3PXP"
+
+    # Doctor with TOTP — should get authenticator channel
+    doctor = User.objects.create_user(
+        email="doctortotp@test.com",
+        password=pwd,
+        role="doctor",
+        full_name="Doctor TOTP",
+        hospital=hospital,
+    )
+    doctor.is_mfa_enabled = True
+    doctor.totp_secret = secret
+    doctor.save()
+    test_mail.outbox.clear()
+
+    r1 = api_client.post(
+        "/api/v1/auth/login",
+        {"email": doctor.email, "password": pwd},
+        format="json",
+    )
+    assert r1.status_code == 200
+    body = r1.json()
+    assert body.get("mfa_channel") == "authenticator", f"Doctor with TOTP should get authenticator: {body}"
+    assert len(test_mail.outbox) == 0, "No email for doctor with TOTP"
+
+    totp = pyotp.TOTP(secret)
+    r2 = api_client.post(
+        "/api/v1/auth/mfa-verify",
+        {"mfa_token": body["mfa_token"], "code": totp.now()},
+        format="json",
+    )
+    assert r2.status_code == 200
+    assert r2.json().get("access_token")
+
+    # Billing staff with TOTP configured still gets EMAIL OTP —
+    # clinical floor / desk roles use email as universal fallback.
+    billing = User.objects.create_user(
+        email="billingtotp@test.com",
+        password=pwd,
+        role="billing_staff",
+        full_name="Billing TOTP",
+        hospital=hospital,
+    )
+    billing.is_mfa_enabled = True
+    billing.totp_secret = secret
+    billing.save()
+    test_mail.outbox.clear()
+
+    r3 = api_client.post(
+        "/api/v1/auth/login",
+        {"email": billing.email, "password": pwd},
+        format="json",
+    )
+    assert r3.status_code == 200
+    body3 = r3.json()
+    assert body3.get("mfa_channel") == "email", f"billing_staff should always get email OTP: {body3}"
+    assert len(test_mail.outbox) == 1, "Email OTP should be sent for billing_staff"
 
 
 @pytest.mark.django_db
@@ -275,14 +350,15 @@ def test_login_non_dev_user_with_totp_secret_uses_email_otp(api_client, hospital
     assert r1.status_code == 200
     body = r1.json()
     assert body.get("mfa_token")
-    assert body.get("mfa_channel") == "email"  # Non-dev users get email OTP channel
-    assert len(mail.outbox) == 1  # Email OTP was sent
+    # Any user with totp_secret + is_mfa_enabled now gets the authenticator channel
+    # (faster, offline, no email dependency — works for all roles)
+    assert body.get("mfa_channel") == "authenticator", body
+    assert len(mail.outbox) == 0  # No email sent when TOTP is configured
 
-    # Step 2: Verify with the email OTP code
-    m = re.search(r"code is:\s*(\d{6})", mail.outbox[0].body)
-    assert m, mail.outbox[0].body
-    otp = m.group(1)
-    
+    # Step 2: Verify with TOTP code from authenticator app
+    import pyotp as _pyotp
+    otp = _pyotp.TOTP(secret).now()
+
     r2 = api_client.post(
         "/api/v1/auth/mfa-verify",
         {"mfa_token": body["mfa_token"], "code": otp},
@@ -299,5 +375,53 @@ class TestHealth:
         assert res.status_code == 200
         assert res.json().get("status") == "ok"
         assert res.json().get("database") == "ok"
+
+
+@pytest.mark.django_db
+class TestUserDeactivate:
+    def test_user_deactivate_resets_mfa_and_blacklists_tokens(self, hospital):
+        # Create user with MFA enabled
+        user = User.objects.create_user(
+            email="deac@test.com",
+            password="testpass123!",
+            role="doctor",
+            full_name="Deac User",
+            hospital=hospital,
+        )
+        user.is_mfa_enabled = True
+        user.totp_secret = "JBSWY3DPEHPK3PXP"
+        user.save()
+
+        # Create outstanding token
+        from rest_framework_simplejwt.token_blacklist.models import OutstandingToken, BlacklistedToken
+        outstanding_token = OutstandingToken.objects.create(
+            user=user,
+            jti="some-jti-uuid",
+            token="dummy-refresh-token",
+            created_at=timezone.now(),
+            expires_at=timezone.now() + timezone.timedelta(days=1),
+        )
+
+        # Create MFA session
+        MFASession.objects.create(
+            user=user,
+            token="mfa-token-deac",
+            expires_at=timezone.now() + timezone.timedelta(minutes=5),
+            ip_address="127.0.0.1",
+            user_agent="pytest",
+        )
+
+        # Deactivate user
+        user.deactivate()
+
+        # Refresh from DB
+        user.refresh_from_db()
+
+        # Assertions
+        assert user.account_status == "inactive"
+        assert user.totp_secret is None
+        assert not user.is_mfa_enabled
+        assert not MFASession.objects.filter(user=user).exists()
+        assert BlacklistedToken.objects.filter(token=outstanding_token).exists()
 
 

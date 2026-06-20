@@ -606,7 +606,17 @@ def force_password_reset(request, user_id):
         status="pending",
     )
 
-    # ==================== CRITICAL FIX #3: Notify hospital admin of super admin override ====================
+    # Push real-time security event to hospital admin WebSocket group
+    from api.signals_alerts import broadcast_password_override
+    broadcast_password_override(str(hospital.id), {
+        "event": "super_admin_password_override",
+        "target_user_email": target_user.email,
+        "target_user_name": target_user.full_name,
+        "initiated_by": request.user.full_name,
+        "hospital_name": hospital.name,
+        "reason": request.data.get("reason", "Super admin override"),
+    })
+
     # Send notification email to hospital admin
     hospital_admins = User.objects.filter(
         hospital=hospital,

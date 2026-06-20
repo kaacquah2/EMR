@@ -3,7 +3,6 @@ import { useState } from "react";
 import useSWR from "swr";
 import { useApi } from "./use-api";
 import { useAuth } from "@/lib/auth-context";
-import { useHospitalWS } from "./use-hospital-ws";
 
 export interface LabOrderItem {
   id: string;
@@ -62,22 +61,17 @@ export interface LabResultsResponse {
 export function useLabOrders(tab: "all" | "pending" | "in_progress" | "resulted_today" | "verified") {
   const api = useApi();
   const { user } = useAuth();
-  
+
   const { data, error, isLoading, mutate } = useSWR<{ data: LabOrdersResponse }>(
     [`/lab/orders`, tab],
     ([url]) => api.get<{ data: LabOrdersResponse }>(`${url}?tab=${tab}&ordering=urgency_rank,created_at`),
     {
       revalidateOnFocus: true,
       dedupingInterval: 30000,
+      // Poll every 30 s so the worklist stays fresh without WebSocket support.
+      refreshInterval: 30000,
     }
   );
-
-  // Listen for real-time lab updates
-  useHospitalWS(user?.hospital_id, (event) => {
-    if (event.type === "lab_event") {
-      mutate();
-    }
-  });
 
   return { 
     orders: data?.data?.data || [], 
@@ -108,18 +102,13 @@ export function useLabResults(filters?: { status?: string[]; date_from?: string;
     {
       revalidateOnFocus: true,
       dedupingInterval: 30000,
+      // Poll every 30 s — replaces the removed WebSocket subscription.
+      refreshInterval: 30000,
     }
   );
 
-  // Listen for real-time lab updates
-  useHospitalWS(user?.hospital_id, (event) => {
-    if (event.type === "lab_event") {
-      mutate();
-    }
-  });
-
-  return { 
-    results: data?.data?.data || [], 
+  return {
+    results: data?.data?.data || [],
     total: data?.data?.count || 0, 
     loading: isLoading, 
     error: error?.message || null, 
