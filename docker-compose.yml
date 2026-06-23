@@ -1,6 +1,7 @@
 services:
   db:
     image: postgres:16-alpine
+    restart: unless-stopped
     volumes:
       - postgres_data:/var/lib/postgresql/data
     environment:
@@ -16,8 +17,7 @@ services:
   backend:
     build:
       context: ./medsync-backend
-    volumes:
-      - ./medsync-backend:/app
+    restart: unless-stopped
     env_file:
       - .env.docker
     environment:
@@ -27,25 +27,27 @@ services:
         condition: service_healthy
     ports:
       - "8000:8000"
-    # WSGI server — no Redis/Celery required.
+    # Run migrations and warm cache table before starting WSGI server.
     # The no-show cron (*/15 * * * *  python manage.py mark_no_shows) should be
     # configured on the host or in a lightweight cron container.
-    command: gunicorn medsync_backend.wsgi --bind 0.0.0.0:8000 --workers 4 --timeout 120
+    command: >
+      sh -c "python manage.py migrate --noinput &&
+             python manage.py createcachetable --verbosity 0 &&
+             gunicorn medsync_backend.wsgi --bind 0.0.0.0:8000 --workers 4 --timeout 120"
 
   frontend:
     build:
       context: ./medsync-frontend
-    volumes:
-      - ./medsync-frontend:/app
-      - /app/node_modules
-      - /app/.next
+      args:
+        - NEXT_PUBLIC_API_URL=${NEXT_PUBLIC_API_URL:-http://localhost:8000/api/v1}
+    restart: unless-stopped
     environment:
-      - NEXT_PUBLIC_API_URL=${NEXT_PUBLIC_API_URL:-http://localhost:8000}
+      - NODE_ENV=production
+      - NEXT_PUBLIC_API_URL=${NEXT_PUBLIC_API_URL:-http://localhost:8000/api/v1}
     depends_on:
       - backend
     ports:
       - "3000:3000"
-    command: npm run dev
 
 volumes:
   postgres_data:

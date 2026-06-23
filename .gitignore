@@ -5,6 +5,7 @@
 .env.*
 !.env.example
 !.env.docker
+!.env.docker.example
 *.sqlite3
 .venv/
 venv/

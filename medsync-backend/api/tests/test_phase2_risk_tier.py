@@ -9,6 +9,7 @@ Tests for:
 """
 
 import pytest
+from unittest.mock import patch
 from django.utils import timezone
 from django.test import TestCase, RequestFactory
 from datetime import timedelta
@@ -83,8 +84,10 @@ class TestRiskTierComputation:
             expires_at=timezone.now() + timedelta(days=30)
         )
         
-        result = compute_login_risk_tier(self.user, request)
-        
+        # Patch business-hours check so the test is time-of-day independent
+        with patch("api.auth_utils.is_within_business_hours", return_value=True):
+            result = compute_login_risk_tier(self.user, request)
+
         assert result['risk_tier'] == 1
         assert 'device' in result['factors']
         assert 'ip' in result['factors']

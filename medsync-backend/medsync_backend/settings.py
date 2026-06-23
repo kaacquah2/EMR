@@ -246,57 +246,11 @@ PERMISSION_FAIL_CLOSED_UNKNOWN_ENDPOINTS = config(
     cast=bool,
 )
 
-# Log warnings if fail-closed is enabled but coverage may be incomplete
-# This check validates at startup if enabled
-_RBAC_COVERAGE_WARNING_ENABLED = (
-    PERMISSION_FAIL_CLOSED_UNKNOWN_ENDPOINTS and not DEBUG
-)
-
-def _validate_rbac_coverage_at_startup():
-    """
-    Validate RBAC coverage when fail-closed mode is enabled in production.
-    Warns if coverage is < 100% (detected via test_rbac_coverage assertions).
-    """
-    if not _RBAC_COVERAGE_WARNING_ENABLED:
-        return
-    
-    # Only run check in production (not DEBUG)
-    # This prevents startup slowdown in development
-    try:
-        import logging
-        logger = logging.getLogger("medsync.rbac")
-        
-        # Import and run the coverage test
-        from api.tests.test_rbac_coverage import TestRBACCoverageForward
-
-        test = TestRBACCoverageForward()
-        test.test_all_registered_urls_have_permission_entry()
-        
-        logger.info("✅ RBAC coverage 100% validated - fail-closed mode active")
-    except AssertionError as e:
-        import logging
-        logger = logging.getLogger("medsync.rbac")
-        logger.error(
-            f"⚠️  FAIL-CLOSED MODE ENABLED BUT COVERAGE < 100%\n"
-            f"   Error: {e}\n"
-            f"   New endpoints in api/urls.py are missing from shared/permissions.py\n"
-            f"   These endpoints will return 403 Permission Denied until added to PERMISSION_MATRIX.\n"
-            f"   To debug: Set PERMISSION_FAIL_CLOSED_UNKNOWN_ENDPOINTS=False and redeploy."
-        )
-        if not DEBUG:
-            raise RuntimeError(
-                "Production deployment blocked: RBAC coverage incomplete. "
-                "See logs for details. Set PERMISSION_FAIL_CLOSED_UNKNOWN_ENDPOINTS=False to debug."
-            ) from e
-    except Exception as e:
-        # Fail safely: don't crash startup due to test infrastructure issues
-        import logging
-        logger = logging.getLogger("medsync.rbac")
-        logger.warning(f"Could not validate RBAC coverage at startup: {e}")
-
-# Run validation check if fail-closed mode enabled
-if _RBAC_COVERAGE_WARNING_ENABLED:
-    _validate_rbac_coverage_at_startup()
+# RBAC coverage is validated in CI via:
+#   pytest api/tests/test_rbac_coverage.py
+#   python manage.py check_rbac_coverage
+# The fail-closed middleware (shared.permissions.PermissionEnforcementMiddleware)
+# enforces PERMISSION_FAIL_CLOSED_UNKNOWN_ENDPOINTS at request time.
 
 # Field-level encryption key for PHI columns (separate from DB encryption/TDE).
 # In production, always set FIELD_ENCRYPTION_KEY from secrets manager.
@@ -747,3 +701,26 @@ LOGGING = {
         "medsync.rbac": {"handlers": ["console"], "level": "INFO", "propagate": False},
     },
 }
+
+# ============================================================================
+# SENTRY (optional error tracking — set SENTRY_DSN to enable)
+# ============================================================================
+# HIPAA: send_default_pii=False ensures no user PII is sent to Sentry.
+_SENTRY_DSN = _str_config("SENTRY_DSN")
+if _SENTRY_DSN:
+    import sentry_sdk
+    from sentry_sdk.integrations.django import DjangoIntegration
+    from sentry_sdk.integrations.logging import LoggingIntegration
+    import logging as _logging
+
+    sentry_sdk.init(
+        dsn=_SENTRY_DSN,
+        integrations=[
+            DjangoIntegration(transaction_style="url"),
+            LoggingIntegration(level=_logging.INFO, event_level=_logging.ERROR),
+        ],
+        traces_sample_rate=config("SENTRY_TRACES_SAMPLE_RATE", default=0.1, cast=float),
+        send_default_pii=False,
+        environment=ENV,
+        release=config("SENTRY_RELEASE", default=""),
+    )
