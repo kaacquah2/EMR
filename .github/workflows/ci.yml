@@ -58,6 +58,7 @@ jobs:
 
   migration-linter:
     runs-on: ubuntu-latest
+    needs: [security-check]
     defaults:
       run:
         working-directory: medsync-backend
@@ -137,9 +138,21 @@ jobs:
       - name: Docker Compose Test
         run: |
           docker compose up -d --build
-          sleep 45
+          echo "Waiting for backend to be ready..."
+          for i in $(seq 1 30); do
+            if curl -sf http://localhost:8000/api/v1/health; then
+              echo "Backend ready after $((i * 3))s"
+              break
+            fi
+            if [ "$i" -eq 30 ]; then
+              echo "::error::Backend did not become ready within 90s"
+              docker compose logs
+              docker compose down
+              exit 1
+            fi
+            sleep 3
+          done
           docker compose ps
-          curl -f http://localhost:8000/api/v1/health || exit 1
           docker compose down
 
   pre-deploy:
@@ -167,8 +180,8 @@ jobs:
       - name: Production setup (migrations + validation)
         run: |
           if [ -z "$DATABASE_URL" ]; then
-            echo "DATABASE_URL secret not set — skipping production migrate (configure for deploy branches)."
-            exit 0
+            echo "::error::DATABASE_URL secret is not configured. Production migrations cannot be skipped on a deploy branch."
+            exit 1
           fi
           python manage.py setup_production --skip-collectstatic
 

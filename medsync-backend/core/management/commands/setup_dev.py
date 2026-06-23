@@ -74,95 +74,43 @@ class Command(BaseCommand):
             ))
             return
 
-        # Deterministic local dev credentials (6 accounts per spec)
-        # NOTE: MFA TOTP secrets remain random per database; re-run prints current secrets.
-        DEV_ACCOUNTS = [
-            ("admin@medsync.gh", "super_admin", "Super Admin", "Admin123!@#", None, None, None),
-            ("doctor@medsync.gh", "doctor", "Dr. Test Doctor", "Doctor123!", None, None, None),
-            ("doctor2@medsync.gh", "doctor", "Dr. Test Doctor 2", "Doctor234!", None, None, None),
-            ("hospital_admin@medsync.gh", "hospital_admin", "Hospital Admin", "HospitalAdmin123!", None, None, None),
-            ("nurse@medsync.gh", "nurse", "Nurse Test", "Nurse123!@#", None, None, None),
-            ("receptionist@medsync.gh", "receptionist", "Receptionist Test", "Receptionist123!@#", None, None, None),
-            ("lab_technician@medsync.gh", "lab_technician", "Lab Tech Test", "LabTech123!@#", None, None, None),
-        ]
+        # Only the super admin account is created in dev setup.
+        SUPER_ADMIN_EMAIL = "admin@medsync.gh"
+        SUPER_ADMIN_PASSWORD = "Admin123!@#"
 
-        ward = Ward.objects.filter(hospital=hospital).first()
-        dept, _ = Department.objects.get_or_create(
-            hospital=hospital, name="OPD", defaults={"is_active": True}
+        self.stdout.write(self.style.SUCCESS("[OK] Dev Users (1)"))
+        u, created = User.objects.get_or_create(
+            email=SUPER_ADMIN_EMAIL,
+            defaults={
+                "role": "super_admin",
+                "full_name": "Super Admin",
+                "account_status": "active",
+                "hospital": None,
+            },
         )
-        lab_unit, _ = LabUnit.objects.get_or_create(
-            hospital=hospital, name="Lab", defaults={"is_active": True}
-        )
-        # Attach ward/department/lab_unit to the appropriate accounts
-        enriched = []
-        for email, role, full_name, password, _w, _d, _lu in DEV_ACCOUNTS:
-            w = ward if role == "nurse" else None
-            d = dept if role == "nurse" else None
-            lu = lab_unit if role == "lab_technician" else None
-            enriched.append((email, role, full_name, password, w, d, lu))
+        if not getattr(u, "is_superuser", False) or not getattr(u, "is_staff", False):
+            u.is_superuser = True
+            u.is_staff = True
+        u.set_password(SUPER_ADMIN_PASSWORD)
+        if not u.totp_secret:
+            u.totp_secret = _generate_totp_secret()
+        u.is_mfa_enabled = True
+        u.account_status = "active"
+        u.hospital = None
+        u.role = "super_admin"
+        u.save()
 
-        self.stdout.write(self.style.SUCCESS("[OK] Dev Users (6)"))
-        for email, role, full_name, password, w, d, lu in enriched:
-            if role == "super_admin":
-                u, created = User.objects.get_or_create(
-                    email=email,
-                    defaults={
-                        "role": "super_admin",
-                        "full_name": full_name,
-                        "account_status": "active",
-                        "hospital": None,
-                    },
-                )
-                # Ensure superuser flags and password are deterministic
-                if not getattr(u, "is_superuser", False) or not getattr(u, "is_staff", False):
-                    u.is_superuser = True
-                    u.is_staff = True
-                u.set_password(password)
-                if not u.totp_secret:
-                    u.totp_secret = _generate_totp_secret()
-                u.is_mfa_enabled = True
-                u.account_status = "active"
-                u.hospital = None
-                u.role = "super_admin"
-                u.save()
+        # Grant super admin access to all hospitals (dev convenience)
+        for h in Hospital.objects.filter(is_active=True):
+            SuperAdminHospitalAccess.objects.get_or_create(
+                super_admin=u,
+                hospital=h,
+                defaults={"granted_by": None},
+            )
 
-                # Grant super admin access to all hospitals (dev convenience)
-                for h in Hospital.objects.filter(is_active=True):
-                    SuperAdminHospitalAccess.objects.get_or_create(
-                        super_admin=u,
-                        hospital=h,
-                        defaults={"granted_by": None},
-                    )
-            else:
-                u, _created = User.objects.get_or_create(
-                    email=email,
-                    defaults={
-                        "hospital": hospital,
-                        "role": role,
-                        "full_name": full_name,
-                        "account_status": "active",
-                        "ward": w,
-                        "department_link": d,
-                        "lab_unit": lu,
-                    },
-                )
-                # Keep dev users deterministic even if they already exist
-                u.hospital = hospital
-                u.role = role
-                u.full_name = full_name
-                u.account_status = "active"
-                u.ward = w
-                u.department_link = d
-                u.lab_unit = lu
-                u.set_password(password)
-                if not u.totp_secret:
-                    u.totp_secret = _generate_totp_secret()
-                u.is_mfa_enabled = True
-                u.save()
-
-            self.stdout.write(f"     {role}: {email}")
-            self.stdout.write(f"        Password: {password}")
-            self.stdout.write(f"        TOTP Secret: {u.totp_secret}")
+        self.stdout.write(f"     super_admin: {SUPER_ADMIN_EMAIL}")
+        self.stdout.write(f"        Password: {SUPER_ADMIN_PASSWORD}")
+        self.stdout.write(f"        TOTP Secret: {u.totp_secret}")
 
         self.stdout.write("")
         self.stdout.write(self.style.SUCCESS("[OK] Setup complete!"))
