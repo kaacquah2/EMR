@@ -122,7 +122,7 @@ export function PriorityTasksPanel({
                         router.push(`/patients/${task.patient_id}/vitals/new`);
                       } else {
                         router.push(
-                          `/worklist/dispense?patient=${task.patient_id}`
+                          `/worklist?patient=${task.patient_id}`
                         );
                       }
                     }}

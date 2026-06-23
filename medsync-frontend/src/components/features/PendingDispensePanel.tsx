@@ -52,7 +52,7 @@ export function PendingDispensePanel({
           size="sm"
           variant="ghost"
           className="text-xs text-blue-600 hover:text-blue-700"
-          onClick={() => window.location.href = "/worklist/dispense"}
+          onClick={() => window.location.href = "/worklist"}
         >
           View all →
         </Button>

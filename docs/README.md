@@ -14,7 +14,7 @@ Welcome to the MedSync documentation! This is your central hub for all system in
 | **DevOps/Infrastructure** | 45 min | [DEPLOYMENT.md](DEPLOYMENT.md) |
 | **Security/Compliance** | 30 min | [Security/SECURITY_AUDIT_SUMMARY.md](Security/SECURITY_AUDIT_SUMMARY.md) |
 | **Clinical Leaders** | 1 hour | [ARCHITECTURE.md](ARCHITECTURE.md) → Overview section |
-| **AI/ML Engineers** | 30 min | [AI_ML/AI_ML_STATUS_REPORT.md](AI_ML/AI_ML_STATUS_REPORT.md) |
+| **AI/LLM Integration** | 5 min | [INDEX.md](INDEX.md#ai--discharge-summary) |
 | **Quick Reference** | ⏱️ | [QUICK_START.md](QUICK_START.md) |
 | **Looking for something?** | 🔍 | [INDEX.md](INDEX.md) |
 
@@ -31,7 +31,7 @@ Welcome to the MedSync documentation! This is your central hub for all system in
 ### 3. **By Category** (Recommended for Browsing)
 - [Deployment/](Deployment/) — How to deploy
 - [Security/](Security/) — Authentication, compliance, audits
-- [AI_ML/](AI_ML/) — AI/ML features
+- [INDEX.md#ai](INDEX.md#ai--discharge-summary) — AI / LLM discharge summary
 - [Features/](Features/) — User permissions and workflows
 - [Architecture/](Architecture/) — System design
 - [Quality/](Quality/) — Documentation and audit reports
@@ -69,8 +69,8 @@ Welcome to the MedSync documentation! This is your central hub for all system in
 **API documentation?**
 → [API_REFERENCE.md](API_REFERENCE.md)
 
-**AI/ML status?**
-→ [AI_ML/AI_ML_STATUS_REPORT.md](AI_ML/AI_ML_STATUS_REPORT.md)
+**AI discharge summary?**
+→ [INDEX.md](INDEX.md#ai--discharge-summary)
 
 **Backup and recovery?**
 → [BACKUP_STRATEGY.md](BACKUP_STRATEGY.md)
@@ -106,11 +106,6 @@ docs/
 │   ├── MFA_MANDATORY_REQUIREMENT_CORRECTION.md
 │   └── ... (5 more)
 │
-├── AI_ML/ (4 files)
-│   ├── AI_ML_STATUS_REPORT.md
-│   ├── AI_ML_CLINICAL_DEPLOYMENT_ROADMAP.md
-│   └── ... (2 more)
-│
 ├── Features/ (6 files)
 │   ├── ROLE_BASED_USERS_PERMISSIONS_BY_MODULE.md
 │   ├── QUICK_REFERENCE_STATE_MACHINES.md
@@ -127,13 +122,13 @@ docs/
 
 ### 🔴 Critical
 - **MFA is MANDATORY** for all clinical staff — [Security/MFA_MANDATORY_REQUIREMENT_CORRECTION.md](Security/MFA_MANDATORY_REQUIREMENT_CORRECTION.md)
-- **AI models in development** — Not ready for clinical use yet — [AI_ML/AI_ML_CLINICAL_DEPLOYMENT_ROADMAP.md](AI_ML/AI_ML_CLINICAL_DEPLOYMENT_ROADMAP.md)
+- **AI discharge summary requires LLM_MODE=bedrock** — see [INDEX.md](INDEX.md#ai--discharge-summary); mock mode is blocked in production
 - **Complete Tier 1 checklist** before any real patient data — [GO_NO_GO_CHECKLIST.md](GO_NO_GO_CHECKLIST.md)
 
 ### 🟡 Important
 - **Database region:** Use Africa/Cape Town for Ghana deployment — [Deployment/NEON_REGION_SELECTION_FIX.md](Deployment/NEON_REGION_SELECTION_FIX.md)
 - **JWT algorithm:** HS256 (explicitly configured, secure) — [Security/JWT_ALGORITHM_SECURITY_FIX.md](Security/JWT_ALGORITHM_SECURITY_FIX.md)
-- **Documentation updated:** April 2026 (includes all Phase 2-8 features)
+- **Documentation updated:** June 2026
 
 ---
 

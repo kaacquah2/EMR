@@ -124,6 +124,8 @@ export interface Vital {
   weight_kg?: number;
   height_cm?: number;
   bmi?: number;
+  news2_score?: number | null;
+  news2_risk_level?: "low" | "medium" | "high" | null;
   created_at: string;
 }
 
@@ -336,33 +338,6 @@ export interface CrossFacilityRecordsResponse {
   expires_at: string | null;
 }
 
-// ---- AI Async Analysis (Celery) ----
-
-export interface AIAnalysisJob {
-  job_id: string;
-  patient_id: string;
-  status: "pending" | "processing" | "completed" | "failed" | "cancelled";
-  progress_percent: number; // 0-99 while processing, 100 when complete
-  current_step: string;
-  celery_task_id: string;
-  created_at: string;
-  updated_at: string;
-}
-
-export interface AIAnalysis {
-  job_id: string;
-  patient_id: string;
-  analysis_type: string;
-  diagnostic_insights: string;
-  recommendations: string[];
-  risk_factors: string[];
-  created_at: string;
-}
-
-export interface AIAnalysisJobResponse extends AIAnalysisJob {
-  analysis?: AIAnalysis; // Only populated when status='completed'
-}
-
 // ---- Shift Handover (SBAR) ----
 
 export interface ShiftHandover {
@@ -546,38 +521,6 @@ export type TimelineEvent =
   | TimelineVitalEvent
   | TimelinePrescriptionEvent
   | TimelineAlertEvent;
-
-/** Simplified event card for display in timeline UI */
-export interface TimelineEventCard {
-  eventId: string;
-  eventType: TimelineEventType;
-  date: string;
-  summary: string;
-  provider?: string;
-  severity?: "low" | "medium" | "high" | "critical" | "normal" | "abnormal";
-  /** Metadata for styling and interaction */
-  metadata?: Record<string, unknown>;
-}
-
-/** Timeline data response from API or state */
-export interface TimelineData {
-  events: TimelineEvent[];
-  loading: boolean;
-  error: string | null;
-}
-
-/** Timeline filter state: which event types to show/hide */
-export interface TimelineFilters {
-  encounter: boolean;
-  admission: boolean;
-  lab_result: boolean;
-  vital: boolean;
-  prescription: boolean;
-  alert: boolean;
-}
-
-/** Timeline zoom level for date range filtering */
-export type TimelineZoom = "all" | "1y" | "6m" | "3m" | "30d";
 
 export interface MedicationSchedule {
   id: string;

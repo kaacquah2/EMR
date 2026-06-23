@@ -28,7 +28,6 @@ class Command(BaseCommand):
     def handle(self, *args, **options):
         self._validate_production_settings()
         self._check_database()
-        self._check_redis()
 
         if options["check_only"]:
             self.stdout.write(self.style.SUCCESS("Production checks passed (check-only mode)."))
@@ -70,15 +69,3 @@ class Command(BaseCommand):
         except Exception as exc:
             raise CommandError(f"Database connectivity failed: {exc}") from exc
 
-    def _check_redis(self):
-        url = (getattr(settings, "REDIS_URL", "") or "").strip()
-        if not url:
-            self.stdout.write(self.style.WARNING("REDIS_URL not set — Channels/CDS may be degraded."))
-            return
-        try:
-            import redis
-
-            client = redis.Redis.from_url(url, socket_connect_timeout=3, socket_timeout=3)
-            client.ping()
-        except Exception as exc:
-            raise CommandError(f"Redis connectivity failed: {exc}") from exc

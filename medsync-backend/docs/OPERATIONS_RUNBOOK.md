@@ -2,8 +2,11 @@
 
 **Purpose:** Quick troubleshooting guide for on-call operations and support teams.
 
-**Version:** 1.0  
-**Last Updated:** 2025
+**Version:** 1.0 | **Last Updated:** June 2026
+**Stack:** Django gunicorn WSGI — **no Redis, Celery, or Daphne in production**
+
+> ⚠️ Sections referencing `redis-cli`, Celery workers/beat, or `REDIS_URL` are stale.
+> The current deployment uses only gunicorn + Neon PostgreSQL. See [`DEPLOY_RUNBOOK.md`](../../docs/DEPLOY_RUNBOOK.md) for current ops.
 
 ---
 

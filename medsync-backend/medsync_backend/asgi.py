@@ -1,8 +1,7 @@
 """
 ASGI config for medsync_backend.
 
-Channels/WebSockets have been removed; this is a standard Django ASGI application
-suitable for Uvicorn or Daphne. For production we use gunicorn WSGI (wsgi.py).
+Standard Django ASGI application. Production uses gunicorn WSGI (wsgi.py).
 """
 import os
 import sys

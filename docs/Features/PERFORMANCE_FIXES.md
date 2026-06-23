@@ -245,7 +245,7 @@ Total: 3 queries
 - **Cache key**: `ai_status_payload`
 - **TTL**: 30 seconds
 - **Invalidation**: Automatic (status rarely changes)
-- **Storage**: Django's configured cache (Redis in production, DB in dev)
+- **Storage**: Django's configured cache (LocMemCache in dev/test)
 
 **Behavior:**
 - **First request**: 8-9 seconds (file I/O + DB query)

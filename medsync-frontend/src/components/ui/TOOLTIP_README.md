@@ -406,7 +406,7 @@ Tooltip inherits dark mode from `<html>` element.
 
 ### Example Test Component
 
-See `tooltip-demo.tsx` for a complete example component with all trigger modes and positioning options.
+See the usage examples in the sections above for all trigger modes and positioning options.
 
 ## Browser Support
 
@@ -447,8 +447,7 @@ medsync-frontend/
 ├── src/
 │   └── components/
 │       └── ui/
-│           ├── Tooltip.tsx (Main component - 390 lines)
-│           └── tooltip-demo.tsx (Example usage - 200 lines)
+│           └── Tooltip.tsx (Main component)
 ```
 
 ## API Reference

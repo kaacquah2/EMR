@@ -11,6 +11,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Textarea } from "@/components/ui/textarea";
+import { useApi } from "@/hooks/use-api";
 import type { Encounter } from "@/lib/types";
 
 const DISCHARGE_TEMPLATE = `Diagnosis:
@@ -35,13 +36,35 @@ export function DischargeSummaryForm({
   onSave,
   onSuccess,
 }: DischargeSummaryFormProps) {
+  const api = useApi();
   const [selectedEncounterId, setSelectedEncounterId] = useState<string>("");
   const [summary, setSummary] = useState("");
   const [loading, setLoading] = useState(false);
+  const [aiLoading, setAiLoading] = useState(false);
   const [error, setError] = useState("");
 
   const handleUseTemplate = () => {
     setSummary((prev) => (prev ? prev + "\n\n" + DISCHARGE_TEMPLATE : DISCHARGE_TEMPLATE));
+  };
+
+  const handleGenerateWithAI = async () => {
+    if (!selectedEncounterId) {
+      setError("Select an encounter first.");
+      return;
+    }
+    setError("");
+    setAiLoading(true);
+    try {
+      const res = await api.post<{ data: Record<string, unknown>; formatted_text: string }>(
+        `/encounters/${selectedEncounterId}/generate-discharge-summary`,
+        {}
+      );
+      setSummary(res.formatted_text || "");
+    } catch {
+      setError("AI generation failed. You can write the summary manually.");
+    } finally {
+      setAiLoading(false);
+    }
   };
 
   const handleSave = async () => {
@@ -101,28 +124,53 @@ export function DischargeSummaryForm({
                 ))}
               </select>
             </div>
+
             <div>
               <div className="flex items-center justify-between mb-1">
                 <label className="block text-sm font-medium text-slate-900 dark:text-slate-100">Summary</label>
-                <Button type="button" variant="ghost" size="sm" onClick={handleUseTemplate}>
-                  Use template
-                </Button>
+                <div className="flex gap-2">
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    onClick={handleUseTemplate}
+                    disabled={aiLoading}
+                  >
+                    Use template
+                  </Button>
+                  <Button
+                    type="button"
+                    size="sm"
+                    onClick={handleGenerateWithAI}
+                    disabled={!selectedEncounterId || aiLoading}
+                    className="bg-[#0B8A96] hover:bg-[#0A7A85] text-white"
+                  >
+                    {aiLoading ? "Generating..." : "Generate with AI"}
+                  </Button>
+                </div>
               </div>
               <Textarea
                 value={summary}
                 onChange={(e) => setSummary(e.target.value)}
-                rows={12}
-                placeholder="Enter discharge summary..."
+                rows={14}
+                placeholder="Enter discharge summary or click 'Generate with AI'..."
                 showCount
                 maxLength={4000}
               />
+              {aiLoading && (
+                <p className="mt-1 text-xs text-[#0B8A96]">
+                  Generating summary from patient data...
+                </p>
+              )}
             </div>
+
             {error && <p className="text-sm text-[#DC2626]">{error}</p>}
+
             <div className="flex gap-2 justify-end">
               <Button variant="secondary" onClick={() => handleOpenChange(false)}>
                 Cancel
               </Button>
-              <Button onClick={handleSave} disabled={loading}>
+              <Button onClick={handleSave} disabled={loading || aiLoading}>
                 {loading ? "Saving..." : "Save"}
               </Button>
             </div>

@@ -43,19 +43,18 @@ Security audit checklist in ~30 minutes:
 Understand system capabilities in ~45 minutes:
 1. Read [ARCHITECTURE.md](ARCHITECTURE.md) — Overview (15 min)
 2. Review [Features/ROLE_BASED_USERS_PERMISSIONS_BY_MODULE.md](Features/ROLE_BASED_USERS_PERMISSIONS_BY_MODULE.md) — User access (15 min)
-3. Check [AI_ML/AI_ML_CLINICAL_DEPLOYMENT_ROADMAP.md](AI_ML/AI_ML_CLINICAL_DEPLOYMENT_ROADMAP.md) — AI timeline (15 min)
+3. See [INDEX.md](INDEX.md#ai--discharge-summary) for the LLM discharge summary feature
 
-**Time:** 45 min | **Outcome:** System understanding + user management knowledge
+**Time:** 30 min | **Outcome:** System understanding + user management knowledge
 
 ---
 
-### 🤖 **AI / ML Engineers**
-AI module status in ~30 minutes:
-1. Read [AI_ML/AI_ML_STATUS_REPORT.md](AI_ML/AI_ML_STATUS_REPORT.md) (10 min) — Current status
-2. Review [AI_ML/AI_ML_PRODUCTION_READINESS_CORRECTION.md](AI_ML/AI_ML_PRODUCTION_READINESS_CORRECTION.md) (5 min) — Readiness status
-3. Check [AI_ML/AI_ML_CLINICAL_DEPLOYMENT_ROADMAP.md](AI_ML/AI_ML_CLINICAL_DEPLOYMENT_ROADMAP.md) (15 min) — Deployment plan
+### 🤖 **AI Integration**
+Current AI is LLM-powered discharge summaries (5 min):
+1. Read [INDEX.md](INDEX.md#ai--discharge-summary) — Configuration and mock/prod behavior
+2. Set `LLM_MODE=bedrock` + AWS credentials for real inference
 
-**Time:** 30 min | **Outcome:** AI status and timeline understood
+**Time:** 5 min | **Outcome:** AI configuration understood
 
 ---
 
@@ -66,7 +65,7 @@ AI module status in ~30 minutes:
 ### By Category
 - **[Deployment/](Deployment/)** — How to deploy (4 files)
 - **[Security/](Security/)** — Security & compliance (8 files)
-- **[AI_ML/](AI_ML/)** — AI/ML features (4 files)
+- **[INDEX.md#ai](INDEX.md#ai--discharge-summary)** — AI/LLM discharge summary
 - **[Features/](Features/)** — User permissions & features (6 files)
 - **[Architecture/](Architecture/)** — System design (1 file)
 - **[Quality/](Quality/)** — Documentation quality (2 files)
@@ -77,7 +76,7 @@ AI module status in ~30 minutes:
 
 ### 🔴 **DO NOT SKIP**
 - **MFA is MANDATORY** for all clinical staff — [Security/MFA_MANDATORY_REQUIREMENT_CORRECTION.md](Security/MFA_MANDATORY_REQUIREMENT_CORRECTION.md)
-- **AI models are in development** — Not ready for clinical use yet — [AI_ML/AI_ML_CLINICAL_DEPLOYMENT_ROADMAP.md](AI_ML/AI_ML_CLINICAL_DEPLOYMENT_ROADMAP.md)
+- **AI discharge summaries require configuration** — Set `LLM_MODE=bedrock` + AWS creds; mock mode blocked in production
 - **Complete Tier 1 before real PHI** — [GO_NO_GO_CHECKLIST.md](GO_NO_GO_CHECKLIST.md)
 
 ### 🟡 **Important Notes**

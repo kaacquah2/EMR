@@ -20,55 +20,8 @@ class MockLLMClient:
         return "Mock response: LLM_MODE=mock is active. Switch to bedrock for real responses."
 
     def invoke_json(self, prompt: str, system: str = None, **kwargs) -> dict:
-        """
-        Return realistic fake data matching clinical schemas.
-        """
-        # Lowercase for easier matching
+        """Return realistic fake data matching clinical schemas."""
         prompt_lower = prompt.lower()
-        
-        if "differential" in prompt_lower:
-            return {
-                "differentials": [
-                    {
-                        "rank": 1,
-                        "diagnosis": "Community-acquired pneumonia",
-                        "icd10_code": "J18.9",
-                        "probability": "high",
-                        "supporting_factors": [
-                            "Fever > 38.5°C",
-                            "Productive cough",
-                            "Elevated respiratory rate"
-                        ],
-                        "suggested_investigations": [
-                            "Chest X-ray",
-                            "Full blood count",
-                            "Blood cultures x2"
-                        ],
-                        "red_flags": ["SpO2 < 92%", "Confusion"]
-                    },
-                    {
-                        "rank": 2,
-                        "diagnosis": "Pulmonary tuberculosis",
-                        "icd10_code": "A15.0",
-                        "probability": "medium",
-                        "supporting_factors": [
-                            "Endemic region",
-                            "Weight loss history"
-                        ],
-                        "suggested_investigations": [
-                            "Sputum AFB x3",
-                            "Mantoux test",
-                            "GeneXpert"
-                        ],
-                        "red_flags": ["Haemoptysis", "Night sweats > 2 weeks"]
-                    }
-                ],
-                "overall_assessment": "Mock: Likely lower respiratory tract infection.",
-                "suggested_next_steps": [
-                    "Obtain chest X-ray urgently",
-                    "Start empirical antibiotics if septic"
-                ]
-            }
 
         if "discharge" in prompt_lower:
             return {

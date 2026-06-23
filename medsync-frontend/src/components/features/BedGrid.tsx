@@ -199,7 +199,7 @@ function BedCard({ bed, onDropPatient }: BedCardProps) {
               variant="ghost"
               className="flex-1 text-xs"
               onClick={() =>
-                router.push(`/worklist/dispense?patient=${bed.patient_id}`)
+                router.push(`/worklist?patient=${bed.patient_id}`)
               }
             >
               Dispense

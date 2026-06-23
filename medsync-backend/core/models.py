@@ -331,35 +331,6 @@ class User(AbstractBaseUser, PermissionsMixin):
 
 
 
-class UserPushSubscription(models.Model):
-    """
-    Web Push notification subscription for a user.
-    Stores VAPID subscription data from the browser.
-    """
-    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
-    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='push_subscriptions')
-    
-    # VAPID subscription data
-    endpoint = models.URLField(max_length=500, unique=True)
-    p256dh = models.CharField(max_length=100, help_text="Client public key")
-    auth = models.CharField(max_length=50, help_text="Auth secret")
-    
-    # Metadata
-    user_agent = models.CharField(max_length=255, blank=True)
-    is_active = models.BooleanField(default=True)
-    created_at = models.DateTimeField(auto_now_add=True)
-    updated_at = models.DateTimeField(auto_now=True)
-    
-    class Meta:
-        db_table = 'user_push_subscription'
-        indexes = [
-            models.Index(fields=['user', 'is_active']),
-        ]
-    
-    def __str__(self):
-        return f"Push subscription for {self.user.email}"
-
-
 class TrustedDevice(models.Model):
     """
     PHASE 2: Device Trust Model for adaptive MFA.
@@ -944,50 +915,6 @@ class BackupCodeRateLimit(models.Model):
         rate_limit.refresh_from_db()
         remaining = max_attempts - rate_limit.attempt_count
         return True, remaining
-
-
-class TaskSubmission(models.Model):
-    """
-    Tracks Celery task submissions to enable permission checks and audit logging.
-    Allows users to view only their own task status and results.
-    """
-    TASK_TYPES = [
-        ("export_pdf", "PDF Export"),
-        ("ai_analysis", "AI Analysis"),
-        ("risk_prediction", "Risk Prediction"),
-        ("mark_no_shows", "Mark No Shows"),
-        ("other", "Other"),
-    ]
-    
-    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
-    celery_task_id = models.CharField(max_length=128, unique=True, db_index=True)
-    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name="task_submissions")
-    hospital = models.ForeignKey(Hospital, on_delete=models.CASCADE, null=True, blank=True)
-    task_type = models.CharField(max_length=20, choices=TASK_TYPES, default="other")
-    
-    # Task context
-    resource_type = models.CharField(max_length=50, blank=True, null=True)  # e.g. "patient", "encounter"
-    resource_id = models.CharField(max_length=100, blank=True, null=True)  # UUID of the resource
-    
-    # Lifecycle
-    submitted_at = models.DateTimeField(auto_now_add=True, db_index=True)
-    expires_at = models.DateTimeField(db_index=True)  # When task result expires (1 hour by default)
-    
-    # Metadata
-    ip_address = models.GenericIPAddressField(null=True, blank=True)
-    user_agent = models.TextField(blank=True, null=True)
-    
-    class Meta:
-        indexes = [
-            models.Index(fields=["user", "-submitted_at"]),
-            models.Index(fields=["hospital", "-submitted_at"]),
-            models.Index(fields=["task_type", "-submitted_at"]),
-            models.Index(fields=["-expires_at"]),  # For cleanup queries
-        ]
-        ordering = ["-submitted_at"]
-    
-    def __str__(self):
-        return f"{self.task_type} - {self.user.email} - {self.celery_task_id}"
 
 
 class Announcement(models.Model):

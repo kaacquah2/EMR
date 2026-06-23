@@ -1,8 +1,7 @@
 # MedSync EMR: Architecture Documentation
 
-**Status:** ~70% Production-Ready | **Version:** 1.0.0 | **Last Updated:** 2026-04-19
-
-> **Note:** The deployment section of this document (Heroku/Railway diagrams, Redis Cache, Celery Workers) reflects the April 2026 architecture. The current stack uses **gunicorn WSGI** with no Celery or Redis. See [`DEPLOY_RUNBOOK.md`](DEPLOY_RUNBOOK.md) for the current deployment reference.
+**Stack:** Django (gunicorn WSGI) + Next.js + Neon PostgreSQL — no Celery, Redis, or Daphne
+**Version:** 1.0.0 | **Last Updated:** June 2026
 
 ## Table of Contents
 
@@ -180,7 +179,7 @@
   - Super admins: MFA REQUIRED
   - Exception: Local development only with `DEV_BYPASS_MFA=True` environment variable
   - Implementation enforces: `if not user.is_mfa_enabled: return 403 Forbidden`
-- **Token Blacklist:** Redis for fast revocation checks; DB for audit trail
+- **Token Blacklist:** Stored in database; invalidated on logout
 - **WebAuthn/Passkey:** Optional passwordless authentication (replaces password, but MFA still required)
 
 ---
@@ -817,7 +816,7 @@ PATCH  /admin/wards/<id>/       # Update ward (capacity, chief)
 # Health & System
 GET    /health                  # System health (no auth required)
 GET    /health/db               # Database connectivity
-GET    /health/cache            # Redis connectivity
+GET    /health/db               # Database connectivity (alias)
 
 # FHIR (Read-Only, Cross-Hospital)
 GET    /fhir/Patient/<id>       # FHIR Patient resource
@@ -862,7 +861,7 @@ class IsHospitalScoped(permissions.BasePermission):
 # Per IP (API clients)
 1000 requests / hour per IP
 
-# Enforcement: DRF throttling + Redis backend
+# Enforcement: DRF throttling (DB-backed)
 # On limit exceeded: 429 Too Many Requests
 ```
 
@@ -1315,13 +1314,12 @@ export function RoleBasedNav() {
                                                |
                         ┌──────────────────────┴──────┐
                         |                             |
-                  [Neon PostgreSQL]       [Redis Cache]
-                  (Managed DB)            (Sessions, Rate Limit)
-                  (SSL required)          (Upstash Managed)
-                        |                      |
-                  ┌─────┴─────┐           ┌────┴────┐
-                  │           │           │         │
-              [Main DB] [Replica] [Session] [Rate Limit]
+                  [Neon PostgreSQL]
+                  (Managed DB, SSL required)
+                        |
+                  ┌─────┴─────┐
+                  │           │
+              [Main DB] [Replica]
               (Read/Write) (Read-only)
 ```
 
@@ -1354,18 +1352,13 @@ Backend Deployment:
   - Entrypoint: gunicorn medsync_backend.wsgi:application --port $PORT
   - Env vars: DEBUG=False, SECRET_KEY, DATABASE_URL (Neon), etc.
   - Dyno type: standard (auto-scale 2-10 instances based on load)
-  - Workers: Celery + Redis for background tasks
+  - Background tasks run synchronously (no Celery/Redis required)
 
 Database:
   - Neon PostgreSQL (managed)
   - Automatic daily backups
   - HA failover enabled
   - Point-in-time recovery (14 days)
-
-Cache & Tasks:
-  - Upstash Redis (managed)
-  - Session store + rate limit tokens
-  - Celery broker for background jobs
 
 Frontend Deployment:
   - Separate Vercel project linked to GitHub
@@ -1393,11 +1386,6 @@ Database (Neon):
   - Backup retention: 30 days
   - PITR: 7 days (for compliance restore)
   - Monitoring: Query performance, connections
-
-Cache (Upstash):
-  - Replicated Redis (HA)
-  - Eviction policy: allkeys-lru (rate limit tokens)
-  - Monitoring: Hit rate, latency
 
 Frontend (Vercel):
   - Global CDN (auto-deploy from main branch)
@@ -1451,7 +1439,7 @@ GitHub Push → GitHub Actions
 - **Stateless servers:** Each instance has no local state; can be killed/added freely
 - **Load balancer:** Railway/Vercel automatically distributes requests
 - **Database:** PostgreSQL (Neon) handles connection pooling and replication
-- **Cache:** Redis (Upstash) replicated across AZs for session and rate limit state
+- **No cache tier:** Rate-limit state is DB-backed via DRF throttling; no Redis required
 
 **Frontend (Next.js):**
 
@@ -1487,11 +1475,9 @@ Layer 1: CDN (Vercel) — Static assets
 Layer 2: Browser Cache
   └─ REST API responses: Cache-Control: private, max-age=300 (5 min)
 
-Layer 3: Redis (Application Cache)
-  ├─ Hospital list: 1 hour
-  ├─ User permissions: 10 minutes (invalidated on role change)
-  ├─ Patient summary (non-PHI): 5 minutes
-  └─ Rate limit tokens: 1 hour (sliding window)
+Layer 3: Django cache (DB-backed, LocMemCache in tests)
+  ├─ CDS rules: cached per-request
+  └─ Rate limit tokens: DRF throttling, DB-backed
 ```
 
 ### Bottleneck Analysis & Mitigation
@@ -1500,8 +1486,7 @@ Layer 3: Redis (Application Cache)
 |-----------|---------|-----------|
 | DB CPU | Slow queries | Add indexes, query optimization, read replicas |
 | DB Connections | "too many connections" | Connection pooling, reduce query duration |
-| Redis Memory | Eviction | Monitor hit rate, increase cache tier, adjust TTL |
-| API Response Time | p95 > 2s | Caching, async processing (Celery), CDN |
+| API Response Time | p95 > 2s | Query optimization, CDN, eager DB loading |
 | Frontend Load Time | > 3s | Code splitting, lazy loading, image optimization |
 
 ---

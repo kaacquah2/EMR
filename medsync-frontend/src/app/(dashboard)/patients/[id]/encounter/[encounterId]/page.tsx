@@ -23,6 +23,23 @@ type EncounterData = {
   notes?: string | null;
 };
 
+function News2Badge({ score }: { score: number | null | undefined }) {
+  if (score == null) return null;
+  const risk = score >= 7 ? "high" : score >= 5 ? "medium" : "low";
+  const colours = {
+    high: "bg-[#FEE2E2] text-[#B91C1C] border-[#FCA5A5]",
+    medium: "bg-[#FEF3C7] text-[#B45309] border-[#FCD34D]",
+    low: "bg-[#D1FAE5] text-[#065F46] border-[#6EE7B7]",
+  };
+  const labels = { high: "High risk", medium: "Medium risk", low: "Low risk" };
+  return (
+    <div className={`inline-flex items-center gap-2 rounded-lg border px-3 py-2 text-sm font-medium ${colours[risk]}`}>
+      <span className="font-mono text-base font-bold">{score}</span>
+      <span>NEWS2 · {labels[risk]}</span>
+    </div>
+  );
+}
+
 type Point = number | null;
 
 function Sparkline({ data }: { data: Point[] }) {
@@ -244,10 +261,13 @@ export default function EncounterDetailPage() {
       <Card>
         <CardHeader><CardTitle>Objective</CardTitle></CardHeader>
         <CardContent className="space-y-3">
-          <div className="grid gap-3 md:grid-cols-3 text-sm">
-            <div><p>BP</p><Sparkline data={last5Vitals.bp} /></div>
-            <div><p>Pulse</p><Sparkline data={last5Vitals.pulse} /></div>
-            <div><p>Temp</p><Sparkline data={last5Vitals.temp} /></div>
+          <div className="flex flex-wrap items-start justify-between gap-3">
+            <div className="grid gap-3 grid-cols-3 text-sm">
+              <div><p>BP</p><Sparkline data={last5Vitals.bp} /></div>
+              <div><p>Pulse</p><Sparkline data={last5Vitals.pulse} /></div>
+              <div><p>Temp</p><Sparkline data={last5Vitals.temp} /></div>
+            </div>
+            <News2Badge score={vitals[0]?.news2_score} />
           </div>
           <textarea className="w-full rounded border border-slate-300 dark:border-slate-700 px-3 py-2" rows={4} placeholder="Examination findings" value={encounter.examination_findings || ""} onChange={(e) => setEncounterField("examination_findings", e.target.value)} />
         </CardContent>

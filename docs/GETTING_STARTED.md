@@ -33,7 +33,7 @@ MedSync is a **centralized, multi-hospital Electronic Medical Records system** f
 → Browse **[docs/INDEX.md](INDEX.md)** or search the relevant category:
 - [Deployment/](Deployment/) — How to deploy
 - [Security/](Security/) — Authentication & compliance
-- [AI_ML/](AI_ML/) — Analytics features
+- [INDEX.md](INDEX.md#ai--discharge-summary) — AI / Discharge Summary LLM
 - [Features/](Features/) — User permissions & workflows
 
 ### 🐛 Something is broken
@@ -60,7 +60,6 @@ docs/
 │
 ├── Deployment/ (4 deployment guides)
 ├── Security/ (8 security docs)
-├── AI_ML/ (4 AI/ML docs)
 ├── Features/ (6 feature docs)
 ├── Architecture/ (1 design doc)
 └── Quality/ (2 quality audit docs)
@@ -157,21 +156,13 @@ docs/
 
 ---
 
-### 🤖 **AI / ML Engineer**
+### 🤖 **AI / Discharge Summary**
 
-**Time:** 30 minutes
+**Time:** 10 minutes
 
-1. **AI Status** (10 min)
-   - Read `docs/AI_ML/AI_ML_STATUS_REPORT.md`
-   - Current state: infrastructure ready, models in development
-
-2. **Deployment Readiness** (5 min)
-   - Read `docs/AI_ML/AI_ML_PRODUCTION_READINESS_CORRECTION.md`
-   - Understand infrastructure vs clinical readiness
-
-3. **Clinical Deployment Plan** (15 min)
-   - Read `docs/AI_ML/AI_ML_CLINICAL_DEPLOYMENT_ROADMAP.md`
-   - 4-phase plan, 9+ months to clinical readiness
+1. **Current AI feature** — LLM discharge summary only (the old `api/ai/` module has been removed)
+2. **Configuration** — Set `LLM_MODE=bedrock` + AWS credentials; see `docs/INDEX.md` AI section
+3. **In development** — Set `LLM_MODE=mock` with `DEBUG=True` for free local testing
 
 ---
 

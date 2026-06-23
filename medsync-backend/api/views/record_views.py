@@ -2302,20 +2302,4 @@ def compile_and_submit_dhims2(request):
     )
 
 
-@api_view(['GET'])
-@permission_classes([IsAuthenticated])
-def list_dhims2_reports(request):
-    if request.user.role not in ("hospital_admin", "super_admin"):
-        return Response({"message": "Permission denied"}, status=status.HTTP_403_FORBIDDEN)
-        
-    hospital = get_request_hospital(request)
-    if not hospital:
-        return Response({"message": "No hospital assigned"}, status=status.HTTP_400_BAD_REQUEST)
-        
-    from records.models import DHIMS2Report
-    from api.serializers import DHIMS2ReportSerializer
-    qs = DHIMS2Report.objects.filter(hospital=hospital).order_by('-month')
-    return Response(DHIMS2ReportSerializer(qs, many=True).data)
-
-
 

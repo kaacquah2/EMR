@@ -469,7 +469,7 @@ export function Sidebar() {
                     {nurseBadges.vitals_overdue_count}
                   </span>
                 );
-              } else if (item.href === "/worklist/dispense" && nurseBadges.pending_dispense_count > 0) {
+              } else if (item.href === "/worklist" && nurseBadges.pending_dispense_count > 0) {
                 itemBadge = (
                   <span className="ml-auto rounded-full bg-[#EF9F27]/90 px-2 py-0.5 text-[11px] font-semibold text-[#0C1F3D]">
                     {nurseBadges.pending_dispense_count}

@@ -30,8 +30,8 @@ export default function PharmacyPage() {
         <a href="/pharmacy/inventory" className="block rounded-lg border border-slate-200 dark:border-slate-800 px-4 py-3 font-medium text-[#0B8A96] hover:bg-slate-50 dark:hover:bg-slate-900">
           → Pharmacy Inventory
         </a>
-        <a href="/worklist/dispense" className="block rounded-lg border border-slate-200 dark:border-slate-800 px-4 py-3 font-medium text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-900">
-          → Nurse Dispense Worklist
+        <a href="/worklist/handover" className="block rounded-lg border border-slate-200 dark:border-slate-800 px-4 py-3 font-medium text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-900">
+          → Nurse Worklist &amp; Handover
         </a>
       </div>
     </div>

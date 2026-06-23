@@ -1650,14 +1650,7 @@ As a super admin, you have full system access across all hospitals. You'll use M
      - Connection pool: 15/20 (good, not maxed)
      - Query latency (p95): 78ms (target < 300ms)
      - Disk usage: 450GB / 500GB (90%, getting full!)
-   - **Redis Cache:** ✅ Healthy
-     - Hit rate: 88% (target > 80%)
-     - Memory: 1.2GB / 4GB (fine)
-     - Evictions: Low
-   - **AI Model:** ✅ Healthy
-     - Requests queue: 8 (manageable)
-     - Avg response time: 1.2s (target 1-2s)
-     - Model version: v2.1 (current)
+   - **AI (Discharge Summary):** Enabled when `LLM_MODE=bedrock` is configured
    - **Background Jobs:** ✅ Healthy
      - Pending: 12 (target < 50)
      - Failed (24h): 0 (target < 5)

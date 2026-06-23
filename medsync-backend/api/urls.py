@@ -27,11 +27,11 @@ from api.views import (
     batch_operations_views,
     mar_views,
     emergency_views,
-    vitals_monitoring_views,
     cds_views,
     step_up_views,
     pharmacy_views,
     pharmacy_stock_views,
+    ai_views,
 )
 
 urlpatterns = [
@@ -331,6 +331,9 @@ urlpatterns = [
     path("emergency/queue", emergency_views.ed_queue_realtime),
     path("emergency/room/<uuid:appointment_id>", emergency_views.assign_ed_room),
     
+    # AI: Discharge summary generation
+    path("encounters/<uuid:encounter_id>/generate-discharge-summary", ai_views.generate_encounter_discharge_summary),
+
      # PHASE 10: Clinical Decision Support (CDS) Rules Engine
     path("encounters/<uuid:encounter_id>/cds-alerts", cds_views.encounter_cds_alerts),
     path("cds-alerts/<uuid:alert_id>", cds_views.cds_alert_detail),

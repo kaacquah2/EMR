@@ -1,10 +1,11 @@
 # MedSync EMR Production Deployment Runbook
 
-**Last Updated:** April 2026  
-**Status:** Production-Ready  
+**Last Updated:** June 2026
+**Status:** Production-Ready
 **Platform Support:** Vercel (UI), Railway (API), Neon (Database)
+**Stack:** Django gunicorn WSGI + Next.js — **no Celery, Redis, or Daphne required**
 
-> ⚠️ **CRITICAL:** This runbook was updated April 2026 to document WebAuthn/passkey endpoints, AI module infrastructure, push notifications (VAPID), Celery async tasks, and all Phase 2-5 features. Verify all environment variables before deployment.
+> ⚠️ **Note:** Sections referencing Celery workers, Redis broker, Celery Beat, or VAPID push notifications are **stale** — those subsystems have been removed. The canonical quick-reference is [`DEPLOY_RUNBOOK.md`](DEPLOY_RUNBOOK.md). Background tasks now run synchronously.
 
 ---
 
@@ -100,7 +101,6 @@ User (Browser)
     ↓
 [PostgreSQL on Neon]
 
-Async Tasks: Celery → Redis (optional)
 Email: SendGrid/SMTP
 ```
 
@@ -476,26 +476,9 @@ VAPID_PRIVATE_KEY=<private-key-from-web-push>
 VAPID_CLAIM_EMAIL=mailto:admin@medsync.app
 ```
 
-#### Async Task Queue (Celery) — NEW IN 2026
+#### AI — Discharge Summary LLM
 
-> **REQUIRED FOR:** Background jobs (no-show marking, AI model training, report generation, appointment reminders)
-
-Requires Redis broker:
-
-```
-CELERY_BROKER_URL=redis://:password@redis.railway.app:port/0
-CELERY_RESULT_BACKEND=redis://:password@redis.railway.app:port/0
-```
-
-Local development (no Redis needed):
-```
-CELERY_BROKER_URL=redis://127.0.0.1:6379/0
-CELERY_RESULT_BACKEND=redis://127.0.0.1:6379/0
-```
-
-#### AI Module (ML Models & Governance) — NEW IN 2026
-
-> **CRITICAL:** AI infrastructure is production-ready for testing/UX. Models are placeholder (development-stage). See `AI_ML_PRODUCTION_READINESS_CORRECTION.md` for clinical deployment requirements.
+> The old `api/ai/` multi-agent module has been removed. The only active AI feature is LLM-powered discharge summary generation. Set `LLM_MODE=bedrock` to enable it in production.
 
 ```
 # AI Feature Toggle (disable if not in use)
@@ -1182,11 +1165,10 @@ psql -d medsync_prod -c "SELECT COUNT(*) FROM core_auditlog WHERE created_at > N
 **Cause:** AI models not loaded or VAPID keys missing
 
 **Solution:**
-1. Verify `DISABLE_AI_FEATURES=False` (if True, AI endpoints disabled)
-2. Check AI model files exist: `ls medsync-backend/api/ai/models/`
-3. Verify `MEDSYNC_AI_MODELS_DIR` points to correct path
-4. Check logs: `grep "Error loading model" <logs>` or Railway logs
-5. AI is in development-stage; placeholder models are normal. For clinical deployment, see `AI_ML_PRODUCTION_READINESS_CORRECTION.md`
+1. Verify `LLM_MODE=bedrock` is set and AWS credentials are configured
+2. Verify `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`, and `AWS_REGION` are set
+3. Check logs for `BedrockInvocationError` or `AccessDeniedException`
+4. Note: `LLM_MODE=mock` is blocked in production (`DEBUG=False`) — endpoint returns HTTP 503
 
 ### Push Notifications Not Sending — NEW IN 2026
 
@@ -1390,19 +1372,15 @@ psql -d medsync_prod -c "SELECT COUNT(*) FROM core_auditlog WHERE created_at > N
 ## Next Steps After Deployment — UPDATED APRIL 2026
 
 1. **Run Full Post-Deployment Validation** (see [Post-Deployment Validation](#post-deployment-validation))
-   - Verify health checks for core features, WebAuthn, AI, push notifications, and Celery
-   
-2. **Verify New Features Working:**
-   - ✅ WebAuthn/passkey registration and authentication
-   - ✅ AI module endpoints responding (models are placeholder; clinical deployment roadmap in `AI_ML_PRODUCTION_READINESS_CORRECTION.md`)
-   - ✅ Push notifications VAPID keys configured
-   - ✅ Celery tasks executing (especially no-show marking every 15 minutes)
+   - Verify health checks for core features and WebAuthn
 
-3. **Configure AI for Your Environment** (CRITICAL):
-   - Read: `AI_ML_PRODUCTION_READINESS_CORRECTION.md`
-   - Current status: **Infrastructure production-ready, models development-stage**
-   - Clinical use requires: 9+ months data collection, model training, validation, regulatory review
-   - Do NOT deploy placeholder models to clinical workflows without this work
+2. **Verify Features Working:**
+   - ✅ WebAuthn/passkey registration and authentication
+   - ✅ Discharge summary AI (if `LLM_MODE=bedrock` is configured — see INDEX.md AI section)
+
+3. **Configure AI for Your Environment:**
+   - Set `LLM_MODE=bedrock` + AWS credentials to enable real LLM discharge summaries
+   - Without this, the endpoint returns HTTP 503 in production (prevents mock data in patient records)
 
 4. **Announce Deployment:** Notify hospital administrators
    - Include note about AI infrastructure being ready for testing/UX only
@@ -1422,16 +1400,14 @@ psql -d medsync_prod -c "SELECT COUNT(*) FROM core_auditlog WHERE created_at > N
 
 7. **Document Lessons Learned:** Record any issues encountered
 
-8. **Plan for AI Clinical Deployment** (when ready):
-   - Follow 4-phase roadmap in `AI_ML_CLINICAL_DEPLOYMENT_ROADMAP.md`
-   - Budget 9+ months for data collection, model training, validation
-   - Plan regulatory/compliance review before clinical use
+8. **Configure AI discharge summaries** (when ready):
+   - Set `LLM_MODE=bedrock` and configure AWS credentials
+   - See `docs/INDEX.md` — AI / Discharge Summary section
 
 ### Resources & Documentation
 
 - **Deployment Guide:** This file (DEPLOYMENT.md)
-- **AI Production Readiness:** `docs/AI_ML_PRODUCTION_READINESS_CORRECTION.md`
-- **AI Clinical Deployment Roadmap:** `docs/AI_ML_CLINICAL_DEPLOYMENT_ROADMAP.md`
+- **AI (Discharge Summary):** See `docs/INDEX.md` — AI / Discharge Summary section
 - **MFA Requirements:** `docs/MFA_MANDATORY_REQUIREMENT_CORRECTION.md`
 - **JWT Security:** `docs/JWT_ALGORITHM_SECURITY_FIX.md`
 - **WebAuthn/Passkey:** `docs/ARCHITECTURE.md` (Section: Authentication Layer)

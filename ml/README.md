@@ -122,7 +122,7 @@ The generated data is designed to showcase MedSync features:
 
 1. **Patient Search & Registration** - Browse 150+ realistic patient records
 2. **Encounter Management** - View and create new encounters with vitals/diagnoses
-3. **Clinical Decision Support** - AI analysis on patient records
+3. **Discharge Summary AI** - LLM-powered discharge summaries (requires `LLM_MODE=bedrock`)
 4. **Cross-Facility Features** - Demonstrate HIE with multiple hospitals
 5. **Role-Based Access** - Doctor, Nurse, Lab Tech views
 6. **Audit Logging** - All actions tracked

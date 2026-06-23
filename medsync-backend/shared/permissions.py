@@ -1042,6 +1042,9 @@ PERMISSION_MATRIX = {
         "hospital_admin": ["POST"],
         "super_admin": ["POST"],
     },
+    "encounters/<uuid:encounter_id>/generate-discharge-summary": {
+        "doctor": ["POST"],
+    },
     "encounters/<uuid:encounter_id>/cds-alerts": {
         "doctor": ["GET"],
         "nurse": ["GET"],
@@ -1243,23 +1246,6 @@ def get_client_ip(request) -> str:
     if x_forwarded_for:
         return x_forwarded_for.split(",")[0].strip()
     return request.META.get("REMOTE_ADDR", "unknown")
-class RequiresRole(BasePermission):
-    """
-    DRF Permission class for role-based access control.
-    Usage:
-        @require_role("doctor", "super_admin")
-        def my_view(request):
-            ...
-    """
-    def __init__(self, *allowed_roles):
-        self.allowed_roles = allowed_roles
-    def has_permission(self, request, view):
-        if not request.user or not request.user.is_authenticated:
-            return False
-        role = getattr(request.user, "role", None)
-        if role not in self.allowed_roles:
-            return False
-        return True
 class PermissionEnforcementMiddleware:
     """
     Django middleware for centralized permission validation and logging.
@@ -1401,16 +1387,12 @@ def require_role(*roles):
             return view_func(request, *args, **kwargs)
         return wrapped_view
     return decorator
-# Backward-compatible alias for integrations/tests that still reference PERMISSION_MAP.
-PERMISSION_MAP = PERMISSION_MATRIX
 __all__ = [
     "ALERT_RESOLVE_ROLES",
     "PERMISSION_MATRIX",
-    "PERMISSION_MAP",
     "PermissionValidator",
     "is_uuid",
     "get_client_ip",
-    "RequiresRole",
     "PermissionEnforcementMiddleware",
     "require_role",
 ]
