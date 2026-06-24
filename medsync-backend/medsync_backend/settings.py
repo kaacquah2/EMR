@@ -12,10 +12,6 @@ def _str_config(key: str, default: str = "") -> str:
 
 BASE_DIR = Path(__file__).resolve().parent.parent
 
-# Vercel sets VERCEL=1 during build and at runtime. Settings are imported during `vercel build`
-# before Neon/Secrets may be wired; relax only enough for that import and collectstatic.
-_VERCEL = os.environ.get("VERCEL") == "1"
-
 # Default False so production is safe if env is unset. Set DEBUG=True for local dev only.
 DEBUG = config("DEBUG", default=False, cast=bool)
 ENV = config("ENV", default="development")
@@ -67,9 +63,6 @@ ALLOWED_HOSTS = [
     for h in _str_config("ALLOWED_HOSTS", "localhost,127.0.0.1,testserver").split(",")
     if h.strip()
 ]
-if _VERCEL:
-    # Vercel deployment hostnames (*.vercel.app); override via ALLOWED_HOSTS if using a custom domain.
-    ALLOWED_HOSTS = list({*ALLOWED_HOSTS, ".vercel.app"})
 # Railway injects RAILWAY_PROJECT_ID (and often RAILWAY_PUBLIC_DOMAIN) on deploy. Without a matching
 # host, requests to *.up.railway.app return HTTP 400 (DisallowedHost) before any view runs.
 if os.environ.get("RAILWAY_PROJECT_ID") or os.environ.get("RAILWAY_PUBLIC_DOMAIN"):
@@ -109,6 +102,7 @@ if DEBUG and _has_pkg("debug_toolbar"):
 
 MIDDLEWARE = [
     "django.middleware.security.SecurityMiddleware",
+    "whitenoise.middleware.WhiteNoiseMiddleware",  # serves staticfiles in prod (admin CSS, DRF UI)
     "corsheaders.middleware.CorsMiddleware",
     "django.middleware.gzip.GZipMiddleware",
     "django.contrib.sessions.middleware.SessionMiddleware",
@@ -137,67 +131,52 @@ if DEBUG and _has_pkg("debug_toolbar"):
 ROOT_URLCONF = "medsync_backend.urls"
 WSGI_APPLICATION = "medsync_backend.wsgi.application"
 
-# Database: Postgres (Neon) required for production (pgcrypto, RLS, concurrent writes).
-# SQLite used only when DEBUG=True and DATABASE_URL is unset (local dev only).
+# Database: PostgreSQL (Neon/Railway) is required everywhere except the test suite.
+# Local development must use a real Postgres DATABASE_URL (e.g. via docker compose db service).
+# SQLite is permitted ONLY in pytest (MEDSYNC_TEST_SQLITE=1, set automatically by conftest.py).
+_TEST_SQLITE = config("MEDSYNC_TEST_SQLITE", default=False, cast=bool)
+
 if _db_url := _str_config("DATABASE_URL"):
     _db_config = dj_database_url.parse(_db_url)
-    if _db_config.get("ENGINE") == "django.db.backends.postgresql":
+    _db_engine = _db_config.get("ENGINE", "")
+    if "sqlite" in _db_engine and not _TEST_SQLITE:
+        from django.core.exceptions import ImproperlyConfigured
+        raise ImproperlyConfigured(
+            "DATABASE_URL resolves to SQLite which is not permitted outside the test suite. "
+            "Set a PostgreSQL DATABASE_URL (e.g. from Neon or Railway)."
+        )
+    if _db_engine == "django.db.backends.postgresql":
         _db_config.setdefault("OPTIONS", {})["sslmode"] = "require"
-        _db_config["ENGINE"] = "api.db"
-    _db_config.setdefault("CONN_MAX_AGE", 600)
+        _db_config["ENGINE"] = "api.db"           # custom retry wrapper
+        _db_config["CONN_MAX_AGE"] = 600          # persistent connections
+        _db_config["CONN_HEALTH_CHECKS"] = True   # drop stale pooled connections (Django 4.1+)
     DATABASES = {"default": _db_config}
-elif DEBUG:
-    DATABASES = {
-        "default": {
-            "ENGINE": "django.db.backends.sqlite3",
-            "NAME": BASE_DIR / "db.sqlite3",
-        }
-    }
-elif _VERCEL:
-    import warnings
-
+elif _TEST_SQLITE:
+    # pytest only — conftest.py sets MEDSYNC_TEST_SQLITE=1 and clears DATABASE_URL
     DATABASES = {
         "default": {
             "ENGINE": "django.db.backends.sqlite3",
             "NAME": ":memory:",
         }
     }
-    warnings.warn(
-        "DATABASE_URL unset on Vercel; using in-memory SQLite for build/bootstrap only. "
-        "Set DATABASE_URL (e.g. Neon) for a real deployment.",
-        RuntimeWarning,
-        stacklevel=2,
-    )
 else:
     from django.core.exceptions import ImproperlyConfigured
-
     raise ImproperlyConfigured(
-        "DATABASE_URL is required in production. SQLite does not support pgcrypto, RLS, "
-        "or safe concurrent writes. Use Neon (PostgreSQL) and set DATABASE_URL."
+        "DATABASE_URL is required. Local development uses the docker-compose 'db' service "
+        "(PostgreSQL 16). SQLite is not supported — set DATABASE_URL and remove DEBUG=True "
+        "from your .env, or run `docker compose up db` and set "
+        "DATABASE_URL=postgresql://postgres:<password>@localhost:5432/medsync."
     )
-# Cache: Redis preferred (survives cold starts, shared across workers).
-# Vercel: falls back to locmem if REDIS_URL is unset — MFA sessions will be lost on cold starts.
-# Set REDIS_URL (e.g. Upstash Redis free tier) to eliminate that risk.
+# Cache: Redis preferred (survives restarts, shared across Gunicorn workers).
+# Set REDIS_URL in Railway environment variables for production.
+# Falls back to database-backed cache (run `manage.py createcachetable` once on deploy).
+# The test suite overrides CACHES to locmem in conftest.py, so tests are unaffected.
 _REDIS_URL = _str_config("REDIS_URL")
 if _REDIS_URL:
     CACHES = {
         "default": {
             "BACKEND": "django.core.cache.backends.redis.RedisCache",
             "LOCATION": _REDIS_URL,
-        }
-    }
-elif _VERCEL:
-    import warnings
-    warnings.warn(
-        "REDIS_URL is not set on Vercel. Using in-memory cache: MFA sessions will be lost on "
-        "cold starts. Set REDIS_URL (e.g. Upstash) for production-safe MFA.",
-        RuntimeWarning,
-        stacklevel=2,
-    )
-    CACHES = {
-        "default": {
-            "BACKEND": "django.core.cache.backends.locmem.LocMemCache",
-            "LOCATION": "vercel-locmem",
         }
     }
 else:
@@ -438,11 +417,7 @@ WEBAUTHN_ORIGIN = _WEBAUTHN_ORIGIN
 WEBAUTHN_ENABLED = config("WEBAUTHN_ENABLED", default=True, cast=bool)
 WEBAUTHN_CHALLENGE_TTL = 300  # 5 minutes
 
-_cors_default = (
-    "https://configure-cors-in-vercel.invalid"
-    if _VERCEL
-    else "http://localhost:3000,http://127.0.0.1:3000"
-)
+_cors_default = "http://localhost:3000,http://127.0.0.1:3000"
 CORS_ALLOWED_ORIGINS = [
     o.strip()
     for o in _str_config("CORS_ALLOWED_ORIGINS", _cors_default).split(",")
@@ -496,9 +471,19 @@ TIME_ZONE = "UTC"
 USE_I18N = True
 USE_TZ = True
 STATIC_URL = "static/"
+STATIC_ROOT = BASE_DIR / "staticfiles"          # populated by collectstatic at Docker build time
 MEDIA_URL = "media/"
 MEDIA_ROOT = BASE_DIR / "media"
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
+
+# WhiteNoise: serve compressed, fingerprinted static files directly from Gunicorn.
+# CompressedManifestStaticFilesStorage hashes filenames and pre-compresses with gzip + brotli.
+STORAGES = {
+    "default": {"BACKEND": "django.core.files.storage.FileSystemStorage"},
+    "staticfiles": {
+        "BACKEND": "whitenoise.storage.CompressedManifestStaticFilesStorage"
+    },
+}
 
 # Email (console backend for dev). Production (Railway, etc.): set SMTP env vars — see .env.example.
 _email_backend_requested = _str_config(

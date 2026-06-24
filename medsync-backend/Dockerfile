@@ -35,9 +35,12 @@ RUN pip install --no-cache /wheels/*
 
 COPY . .
 
-# Collect static assets at build time (WhiteNoise serves them in production)
-RUN DEBUG=True SECRET_KEY=build-collectstatic-only \
-    DATABASE_URL=sqlite:////tmp/build.db \
+# Collect static assets at build time (WhiteNoise serves them in production).
+# collectstatic does not connect to the database, so the DATABASE_URL is a dummy
+# Postgres URL — it satisfies the settings parser without opening a real connection.
+# MEDSYNC_TEST_SQLITE is NOT set here, so any accidental sqlite:// URL would fail-fast.
+RUN SECRET_KEY=build-collectstatic-only \
+    DATABASE_URL=postgresql://build:build@127.0.0.1:5432/build \
     FIELD_ENCRYPTION_KEY=build-time-encryption-key-32-chars-min \
     AUDIT_LOG_SIGNING_KEY=build-time-audit-signing-key-min \
     python manage.py collectstatic --noinput
