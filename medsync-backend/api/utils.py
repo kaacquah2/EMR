@@ -177,6 +177,7 @@ def get_patient_queryset(user, effective_hospital=None):
 
         pending_patient_ids = LabOrder.objects.filter(
             lab_unit=user.lab_unit,
+            record__hospital=user.hospital,
             result_submitted=False,
         ).values_list("record__patient_id", flat=True)
 

@@ -5,7 +5,7 @@ from rest_framework.decorators import api_view, permission_classes, throttle_cla
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from django.http import HttpResponse
-from django.db.models import Q
+from django.db.models import Q, Prefetch
 from reportlab.lib.pagesizes import letter
 from reportlab.lib.units import inch
 from reportlab.pdfgen import canvas as pdf_canvas
@@ -72,9 +72,11 @@ def patient_search(request):
     # Ensure consistent ordering for cursor pagination
     qs = qs.order_by("-created_at", "-id")
 
-    # N+1 Fix: prefetch allergies for PatientSerializer
+    # Prefetch only active allergies — filters in SQL, not Python, and avoids a per-row query.
     if user.role not in settings.NON_CLINICAL_PII_MASK_ROLES:
-        qs = qs.prefetch_related("allergy_set")
+        qs = qs.prefetch_related(
+            Prefetch("allergy_set", queryset=Allergy.objects.filter(is_active=True))
+        )
 
     items, next_cursor, has_more = paginate_queryset(qs, request, use_cursor=True)
     
@@ -167,7 +169,9 @@ def patient_create(request):
 @api_view(["GET", "PATCH"])
 @permission_classes([IsAuthenticated])
 def patient_detail(request, pk):
-    qs = get_patient_queryset(request.user, get_effective_hospital(request))
+    qs = get_patient_queryset(request.user, get_effective_hospital(request)).select_related(
+        "registered_at", "facility_profile__global_patient"
+    )
     if request.user.role not in settings.NON_CLINICAL_PII_MASK_ROLES:
         qs = qs.prefetch_related("allergy_set")
     
@@ -195,6 +199,14 @@ def patient_detail(request, pk):
                 status=status.HTTP_403_FORBIDDEN,
             )
         data = request.data
+        if "ghana_health_id" in data and data["ghana_health_id"]:
+            new_ghid = str(data["ghana_health_id"]).strip()
+            if Patient.objects.filter(ghana_health_id=new_ghid).exclude(id=patient.id).exists():
+                return Response(
+                    {"message": "A patient with this Ghana Health ID already exists."},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+            patient.ghana_health_id = new_ghid
         if "full_name" in data and data["full_name"] is not None:
             patient.full_name = (data["full_name"] or "").strip()
         if "date_of_birth" in data and data["date_of_birth"] is not None:
@@ -213,6 +225,7 @@ def patient_detail(request, pk):
             patient.blood_group = data["blood_group"]
         patient.save(
             update_fields=[
+                "ghana_health_id",
                 "full_name",
                 "date_of_birth",
                 "gender",
@@ -220,7 +233,8 @@ def patient_detail(request, pk):
                 "national_id",
                 "nhis_number",
                 "passport_number",
-                "blood_group"])
+                "blood_group",
+            ])
     return Response({"data": PatientSerializer(patient).data})
 
 

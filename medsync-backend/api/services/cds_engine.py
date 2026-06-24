@@ -11,6 +11,7 @@ Checks for:
 
 import json
 import os
+import re
 import logging
 from typing import List, Optional, Dict, Any
 from django.utils import timezone
@@ -150,6 +151,16 @@ class RulesEngine:
         # Could add: comorbidity checks, age-appropriate diagnosis validation, etc.
         return []
     
+    @staticmethod
+    def _drug_name_matches(interaction_term: str, prescribed_drug: str) -> bool:
+        """
+        Return True when interaction_term matches prescribed_drug at word boundaries.
+        Uses word-boundary regex to prevent false positives from substring overlap
+        (e.g. "aspirin" must not match "aspirine" or any unrelated prefix/suffix).
+        """
+        pattern = r'\b' + re.escape(interaction_term.lower()) + r'\b'
+        return bool(re.search(pattern, prescribed_drug.lower()))
+
     @classmethod
     def _check_drug_interactions(
         cls,
@@ -160,45 +171,39 @@ class RulesEngine:
         """Check for drug-drug interactions with existing prescriptions."""
         alerts = []
         new_drug = prescription.drug_name.lower().strip()
-        
+
         # Load interaction dataset
         interactions = cls._load_drug_interactions()
-        
+
         # Get active prescriptions for this patient from encounters in last 30 days
-        from django.db.models import Prefetch
         from django.utils.timezone import now, timedelta
-        
+
         last_30_days = now() - timedelta(days=30)
         existing_prescriptions = Prescription.objects.filter(
             patient=patient,
             created_at__gte=last_30_days,
             dispense_status__in=['pending', 'dispensed']
         ).exclude(id=prescription.id)
-        
+
         for existing_rx in existing_prescriptions:
             existing_drug = existing_rx.drug_name.lower().strip()
-            
-            # Check both directions of interaction
+
+            # Check both directions of interaction using word-boundary matching
             for interaction in interactions:
                 d1 = interaction['drug1'].lower()
                 d2 = interaction['drug2'].lower()
-                
-                # Match interaction pairs in either direction
-                if (d1 in new_drug or new_drug in d1) and (d2 in existing_drug or existing_drug in d2):
+
+                forward = cls._drug_name_matches(d1, new_drug) and cls._drug_name_matches(d2, existing_drug)
+                reverse = cls._drug_name_matches(d2, new_drug) and cls._drug_name_matches(d1, existing_drug)
+
+                if forward or reverse:
                     alert = cls._create_alert_from_interaction(
                         prescription, existing_rx, interaction, encounter, 'drug_interaction'
                     )
                     if alert:
                         alerts.append(alert)
                     break
-                elif (d2 in new_drug or new_drug in d2) and (d1 in existing_drug or existing_drug in d1):
-                    alert = cls._create_alert_from_interaction(
-                        prescription, existing_rx, interaction, encounter, 'drug_interaction'
-                    )
-                    if alert:
-                        alerts.append(alert)
-                    break
-        
+
         return alerts
     
     @classmethod
@@ -239,8 +244,8 @@ class RulesEngine:
             for allergy in allergies:
                 allergy_name = str(allergy).lower() if allergy else ""
                 
-                # Direct match
-                if allergy_name in new_drug or new_drug in allergy_name:
+                # Direct match (word-boundary to avoid false positives)
+                if cls._drug_name_matches(allergy_name, new_drug) or cls._drug_name_matches(new_drug, allergy_name):
                     rule = cls._get_or_create_rule('drug_allergy', 'critical')
                     alert = CdsAlert(
                         encounter=encounter,
@@ -260,7 +265,7 @@ class RulesEngine:
                 for family, drugs in allergy_classes.items():
                     if allergy_name in family or family in allergy_name:
                         for drug in drugs:
-                            if drug in new_drug or new_drug in drug:
+                            if cls._drug_name_matches(drug, new_drug):
                                 rule = cls._get_or_create_rule('drug_allergy', 'critical')
                                 alert = CdsAlert(
                                     encounter=encounter,
@@ -306,7 +311,7 @@ class RulesEngine:
         # Check if drug requires renal dosing
         matching_drug = None
         for drug_name, dosing_info in renal_sensitive_drugs.items():
-            if drug_name in drug_lower or drug_lower in drug_name:
+            if cls._drug_name_matches(drug_name, drug_lower):
                 matching_drug = (drug_name, dosing_info)
                 break
         
@@ -407,7 +412,7 @@ class RulesEngine:
         new_drug_class = None
         for drug_class, drugs in drug_classes.items():
             for drug in drugs:
-                if drug in new_drug_lower or new_drug_lower in drug:
+                if cls._drug_name_matches(drug, new_drug_lower):
                     new_drug_class = drug_class
                     break
             if new_drug_class:
@@ -433,7 +438,7 @@ class RulesEngine:
             for drug_class, drugs in drug_classes.items():
                 if drug_class == new_drug_class:
                     for drug in drugs:
-                        if drug in existing_drug_lower or existing_drug_lower in drug:
+                        if cls._drug_name_matches(drug, existing_drug_lower):
                             rule = cls._get_or_create_rule('duplicate_therapy', 'info')
                             alert = CdsAlert(
                                 encounter=encounter,

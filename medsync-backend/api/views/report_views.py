@@ -11,7 +11,7 @@ from rest_framework.response import Response
 
 from patients.models import Invoice
 from core.models import AuditLog
-from api.utils import get_patient_queryset, get_effective_hospital, get_request_hospital
+from api.utils import get_patient_queryset, get_effective_hospital, get_request_hospital, audit_log
 
 
 @api_view(["GET"])
@@ -44,6 +44,15 @@ def export_patients_csv(request):
             p.national_id or "",
             p.registered_at.name if p.registered_at_id else "",
         ])
+    audit_log(
+        request.user,
+        "EXPORT_PHI",
+        resource_type="PatientBatch",
+        resource_id=None,
+        hospital=get_request_hospital(request),
+        request=request,
+        extra_data={"format": "csv", "count": len(qs)},
+    )
     resp = HttpResponse(buf.getvalue(), content_type="text/csv")
     resp["Content-Disposition"] = 'attachment; filename="patients_export.csv"'
     return resp
@@ -96,6 +105,15 @@ def export_audit_csv(request):
             extra,
         ])
         row_count += 1
+    audit_log(
+        request.user,
+        "EXPORT_AUDIT_LOG",
+        resource_type="AuditLogBatch",
+        resource_id=None,
+        hospital=req_hospital,
+        request=request,
+        extra_data={"format": "csv", "days": days, "count": row_count},
+    )
     resp = HttpResponse(buf.getvalue(), content_type="text/csv")
     resp["Content-Disposition"] = 'attachment; filename="audit_logs_export.csv"'
     resp["X-Export-Count"] = str(row_count)

@@ -54,10 +54,13 @@ def compute_audit_chain_status(
         .distinct()
         .order_by()[:max_users]
     )
-    try:
-        signing_key = getattr(settings, "AUDIT_LOG_SIGNING_KEY", "dev-key-change-in-production").encode()
-    except Exception:
-        signing_key = b"dev-key-change-in-production"
+    raw_key = getattr(settings, "AUDIT_LOG_SIGNING_KEY", None)
+    if not raw_key:
+        # settings.py enforces this in production; if we reach here in dev the chain
+        # will validate as unsigned (chain_hash check only, no HMAC).
+        signing_key = b""
+    else:
+        signing_key = raw_key.encode()
 
     checked = 0
     for uid in user_ids:

@@ -228,10 +228,10 @@ class Referral(models.Model):
         GlobalPatient, on_delete=models.CASCADE, related_name="referrals"
     )
     from_facility = models.ForeignKey(
-        Hospital, on_delete=models.CASCADE, related_name="referrals_sent"
+        Hospital, on_delete=models.PROTECT, related_name="referrals_sent"
     )
     to_facility = models.ForeignKey(
-        Hospital, on_delete=models.CASCADE, related_name="referrals_received"
+        Hospital, on_delete=models.PROTECT, related_name="referrals_received"
     )
     consent = models.ForeignKey(
         Consent,

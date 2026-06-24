@@ -148,9 +148,11 @@ class PatientSerializer(serializers.ModelSerializer):
             return None
 
     def get_allergies(self, obj):
-        return AllergySerializer(
-            obj.allergy_set.filter(is_active=True), many=True
-        ).data
+        # If the queryset was prefetched with a Prefetch(queryset=Allergy.objects.filter(is_active=True))
+        # the cache already contains only active allergies — calling .filter() on it again
+        # would still work (Django filters in Python on cached sets) but .all() is cleaner.
+        cache = obj.allergy_set.all()
+        return AllergySerializer(cache, many=True).data
 
 
 class PatientDemographicsOnlySerializer(serializers.ModelSerializer):

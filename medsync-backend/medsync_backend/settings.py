@@ -175,10 +175,25 @@ else:
         "DATABASE_URL is required in production. SQLite does not support pgcrypto, RLS, "
         "or safe concurrent writes. Use Neon (PostgreSQL) and set DATABASE_URL."
     )
-# Database-backed cache for MFA tokens and rate limiting.
-# Run once: python manage.py createcachetable
-# Vercel: no stable DB for cache table — use in-memory (MFA may not survive cold starts).
-if _VERCEL:
+# Cache: Redis preferred (survives cold starts, shared across workers).
+# Vercel: falls back to locmem if REDIS_URL is unset — MFA sessions will be lost on cold starts.
+# Set REDIS_URL (e.g. Upstash Redis free tier) to eliminate that risk.
+_REDIS_URL = _str_config("REDIS_URL")
+if _REDIS_URL:
+    CACHES = {
+        "default": {
+            "BACKEND": "django.core.cache.backends.redis.RedisCache",
+            "LOCATION": _REDIS_URL,
+        }
+    }
+elif _VERCEL:
+    import warnings
+    warnings.warn(
+        "REDIS_URL is not set on Vercel. Using in-memory cache: MFA sessions will be lost on "
+        "cold starts. Set REDIS_URL (e.g. Upstash) for production-safe MFA.",
+        RuntimeWarning,
+        stacklevel=2,
+    )
     CACHES = {
         "default": {
             "BACKEND": "django.core.cache.backends.locmem.LocMemCache",
@@ -434,12 +449,18 @@ CORS_ALLOWED_ORIGINS = [
     if o.strip()
 ]
 # Production: use explicit origins only. Wildcard (*) with credentials is insecure.
-# HIGH PRIORITY FIX #1: Prevent internal network exposure (192.168.x.x, 10.0.x.x, etc.)
+# Check ALL origins (http and https) for internal network addresses — an https://192.168.x.x
+# origin is just as dangerous as an http:// one because it bypasses the LAN-exposure guard.
 _internal_network_patterns = ['192.168.', '10.0.', '172.16.', 'localhost', '127.0.0.1', '::1']
+def _origin_host(origin: str) -> str:
+    """Strip scheme and port from an origin to get just the host."""
+    if '://' in origin:
+        host_port = origin.split('://')[1]
+        return host_port.split(':')[0]
+    return origin
 _has_internal_origin = any(
-    any(origin.startswith(pattern) for pattern in _internal_network_patterns)
+    any(_origin_host(origin).startswith(pattern) for pattern in _internal_network_patterns)
     for origin in CORS_ALLOWED_ORIGINS
-    if origin.startswith('http://')  # Only check unencrypted origins
 )
 if not DEBUG and (_has_internal_origin or "*" in CORS_ALLOWED_ORIGINS or not CORS_ALLOWED_ORIGINS):
     from django.core.exceptions import ImproperlyConfigured

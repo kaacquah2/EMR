@@ -616,6 +616,8 @@ def test_permission_fail_closed_setting_respects_env_value(monkeypatch):
     monkeypatch.setenv("DATABASE_URL", "postgresql://user:pass@localhost:5432/medsync")
     monkeypatch.setenv("WEBAUTHN_ORIGIN", "https://localhost:3000")
     monkeypatch.setenv("ADMIN_URL", "ms-admin-x7k2/")
+    # CORS must be set to a non-internal HTTPS origin in production mode.
+    monkeypatch.setenv("CORS_ALLOWED_ORIGINS", "https://app.medsync.gh")
 
     import importlib
     import medsync_backend.settings as settings_module
