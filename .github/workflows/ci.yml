@@ -32,7 +32,7 @@ jobs:
             'ci-test-encryption-key-32-chars-long-at-least'
           )
           for pat in "${patterns[@]}"; do
-            if git grep -n "$pat" -- ':!*.md' ':!.github/workflows/ci.yml' ':!MedSync_EMR_Master_Prompt.md' 2>/dev/null; then
+            if git grep -n "$pat" -- ':!*.md' ':!.github/workflows/ci.yml' ':!scripts/precommit_block_insecure_secrets.py' ':!MedSync_EMR_Master_Prompt.md' 2>/dev/null; then
               echo "ERROR: Insecure pattern found: $pat"
               exit 1
             fi
