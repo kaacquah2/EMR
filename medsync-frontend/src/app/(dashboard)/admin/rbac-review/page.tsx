@@ -6,7 +6,7 @@ import { useApi } from "@/hooks/use-api";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { useToast } from "@/lib/toast-context";
-import { hasRole, ALL_ADMIN_ROLES } from "@/lib/permissions";
+import { ALL_ADMIN_ROLES } from "@/lib/permissions";
 import { RequireRole } from "@/components/auth/RequireRole";
 
 type RbacRow = {

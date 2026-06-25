@@ -44,7 +44,7 @@ export default function ComingSoonPage() {
         </p>
 
         <p className="text-sm text-slate-500">
-          We're working hard to bring you this feature. Check back soon!
+          We&apos;re working hard to bring you this feature. Check back soon!
         </p>
       </div>
     </div>

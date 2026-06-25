@@ -29,7 +29,7 @@ const VIEW_AS_STORAGE_KEY = "medsync_view_as";
 
 interface AuthContextValue extends AuthState {
   hydrated: boolean;
-  login: (tokens: AuthTokens, options?: LoginOptions) => void;
+  login: (tokens: AuthTokens) => void;
   logout: () => void;
   setTokens: (tokens: Pick<AuthTokens, "access_token">) => void;
   getAccessToken: () => string | null;
@@ -191,7 +191,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       }
       setHydrated(true);
     })();
-  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   // If we have an access_token but no user profile, fetch it.
@@ -323,7 +322,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     return () => events.forEach((e) => window.removeEventListener(e, handler));
   }, [state.isAuthenticated, updateActivity]);
 
-  const login = useCallback((tokens: AuthTokens, _options?: LoginOptions) => {
+  const login = useCallback((tokens: AuthTokens) => {
     // Only store the access_token. The refresh credential is the HttpOnly cookie
     // set by the backend on /auth/login — never accessible to JavaScript.
     const next: AuthState = {

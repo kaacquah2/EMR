@@ -21,7 +21,7 @@ export function useAlerts(
 
   // Keep refetch stable for the WebSocket callback.
   const refetchRef = useRef(refetch);
-  refetchRef.current = refetch;
+  useEffect(() => { refetchRef.current = refetch; });
 
   // Real-time: subscribe to the hospital WebSocket; refetch on any message.
   useEffect(() => {

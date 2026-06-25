@@ -159,8 +159,8 @@ export default function PatientPage() {
   const api = useApi();
   const { encounters, loading: encountersLoading, fetch: fetchEncounters } = useEncounters(id);
   const { facilities, fetch: fetchFacilities } = useFacilities();
-  const { list: consents, fetchList: fetchConsents, grant: grantConsent, revoke: revokeConsent } = useConsents();
-  const { list: breakGlassList, fetchList: fetchBreakGlass } = useBreakGlassList();
+  const { fetchList: fetchConsents, grant: grantConsent, revoke: revokeConsent } = useConsents();
+  const { fetchList: fetchBreakGlass } = useBreakGlassList();
   const { create: createReferral } = useReferrals();
   const [tab, setTab] = useState<Tab>("overview");
   const [addOpen, setAddOpen] = useState(false);

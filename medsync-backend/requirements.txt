@@ -1,25 +1,35 @@
 # Production/runtime dependencies for the MedSync backend.
 # Run with gunicorn (WSGI):  gunicorn medsync_backend.wsgi --workers 4
+#
+# Pinned to known-good versions (local venv 2026-06-25).
+# Update by testing locally, bumping the version below, and verifying with
+# `python manage.py check` and the full pytest suite before committing.
 
-Django>=4.2,<5
-djangorestframework>=3.14
-djangorestframework-simplejwt>=5.3
-django-cors-headers>=4.3
-django-otp>=1.4
-pyotp>=2.9
-python-decouple>=3.8
-boto3>=1.34.0
-webauthn>=1.14
-fhir.resources>=8.2.0
-icd10-cm>=0.0.5
-psycopg[binary]>=3.1
-dj-database-url>=2.1
-redis>=5.0                    # required by django.core.cache.backends.redis.RedisCache
-whitenoise>=6.6               # serves staticfiles from Gunicorn in production (Django admin, DRF)
-Pillow>=10.0
-reportlab>=4.0
-django-cryptography>=1.1
-argon2-cffi>=23.1.0
-gunicorn>=21.0
-drf-spectacular>=0.27.0
-sentry-sdk[django]>=2.0.0
+Django==4.2.29
+djangorestframework==3.16.1
+djangorestframework-simplejwt==5.5.1
+django-cors-headers==4.9.0
+django-otp==1.7.0
+pyotp==2.9.0
+python-decouple==3.8
+boto3==1.43.14
+# WebAuthn/Passkey support
+webauthn==2.7.1
+# FHIR & ICD-10 Compliance Testing
+fhir.resources==8.2.0
+icd10-cm==0.0.5
+# Postgres (Neon / production): driver + DATABASE_URL parsing
+psycopg[binary]==3.3.3
+dj-database-url==3.1.2
+redis==7.2.1                    # required by django.core.cache.backends.redis.RedisCache
+whitenoise==6.12.0              # serves staticfiles from Gunicorn in production (Django admin, DRF)
+Pillow==12.1.1
+reportlab==4.4.10
+django-cryptography==1.1
+# cryptography>=47 breaks django-cryptography==1.1 at model-load time (AppRegistryNotReady).
+# Do not upgrade until django-cryptography is updated to support it.
+cryptography==46.0.6
+argon2-cffi==25.1.0
+gunicorn>=21.0,<27
+drf-spectacular==0.29.0
+sentry-sdk[django]>=2.0.0,<3
