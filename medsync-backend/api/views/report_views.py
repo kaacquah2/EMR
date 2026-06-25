@@ -190,29 +190,3 @@ def invoice_list_create(request):
     return Response(status=status.HTTP_405_METHOD_NOT_ALLOWED)
 
 
-@api_view(["POST"])
-@permission_classes([IsAuthenticated])
-def nhis_claim_submit(request):
-    """Stub for NHIS/payer claim submission. Returns placeholder claim_ref; real integration requires NHIS API."""
-    if request.user.role not in ("hospital_admin", "billing_staff"):
-        return Response(
-            {"message": "Permission denied"},
-            status=status.HTTP_403_FORBIDDEN,
-        )
-    hospital = get_request_hospital(request)
-    if not hospital:
-        return Response({"message": "No hospital assigned"}, status=status.HTTP_400_BAD_REQUEST)
-    encounter_id = request.data.get("encounter_id")
-    patient_id = request.data.get("patient_id")
-    if not encounter_id and not patient_id:
-        return Response(
-            {"message": "encounter_id or patient_id required"},
-            status=status.HTTP_400_BAD_REQUEST,
-        )
-    # Placeholder: in production this would call NHIS API and return real claim reference
-    import uuid
-    claim_ref = f"NHIS-STUB-{uuid.uuid4().hex[:12].upper()}"
-    return Response(
-        {"claim_ref": claim_ref, "message": "Claim submitted (stub). Configure NHIS_API_URL for live integration."},
-        status=status.HTTP_202_ACCEPTED,
-    )

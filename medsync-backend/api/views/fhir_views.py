@@ -900,9 +900,90 @@ def fhir_observation_list(request):
 _FHIR_WRITE_ROLES = ("doctor", "hospital_admin", "super_admin")
 
 
-@api_view(["POST"])
+def _observation_list_body(request):
+    """Return a FHIR Bundle searchset of observations for the current user."""
+    if request.user.role not in _FHIR_ALLOWED_ROLES:
+        return Response({"message": "Insufficient permissions"}, status=status.HTTP_403_FORBIDDEN)
+
+    patient_id = request.query_params.get("patient")
+    eff = get_effective_hospital(request)
+    vital_records = get_medical_record_queryset(request.user, effective_hospital=eff)
+    lab_records   = get_medical_record_queryset(request.user, effective_hospital=eff)
+    if patient_id:
+        vital_records = vital_records.filter(patient_id=patient_id)
+        lab_records   = lab_records.filter(patient_id=patient_id)
+
+    entries = []
+    for mr in vital_records[:50]:
+        vital = Vital.objects.filter(record=mr).first()
+        if vital:
+            entries.append({
+                "fullUrl": f"http://{request.get_host()}/api/v1/fhir/Observation/{vital.id}",
+                "resource": FHIRObservationSerializer.serialize_vital(vital),
+                "search": {"mode": "match"},
+            })
+    for mr in lab_records[:50]:
+        lab_result = LabResult.objects.filter(record=mr).first()
+        if lab_result:
+            entries.append({
+                "fullUrl": f"http://{request.get_host()}/api/v1/fhir/Observation/{lab_result.id}",
+                "resource": FHIRObservationSerializer.serialize_lab_result(lab_result),
+                "search": {"mode": "match"},
+            })
+    return Response({"resourceType": "Bundle", "type": "searchset",
+                     "total": len(entries), "entry": entries})
+
+
+def _medication_request_list_body(request):
+    """Return a FHIR Bundle searchset of prescriptions for the current user."""
+    if request.user.role not in _FHIR_ALLOWED_ROLES:
+        return Response({"message": "Insufficient permissions"}, status=status.HTTP_403_FORBIDDEN)
+
+    patient_id = request.query_params.get("patient")
+    eff = get_effective_hospital(request)
+    rx_records = get_medical_record_queryset(request.user, effective_hospital=eff)
+    if patient_id:
+        rx_records = rx_records.filter(patient_id=patient_id)
+
+    entries = []
+    for mr in rx_records[:100]:
+        rx = Prescription.objects.filter(record=mr).first()
+        if rx:
+            entries.append({
+                "fullUrl": f"http://{request.get_host()}/api/v1/fhir/MedicationRequest/{rx.id}",
+                "resource": FHIRMedicationRequestSerializer.serialize(rx),
+                "search": {"mode": "match"},
+            })
+    return Response({"resourceType": "Bundle", "type": "searchset",
+                     "total": rx_records.count(), "entry": entries})
+
+
+@api_view(["GET", "POST"])
 @permission_classes([IsAuthenticated])
-def fhir_observation_create(request):
+def fhir_observation_list_create(request):
+    """
+    GET  /fhir/Observation  — list observations as FHIR Bundle searchset
+    POST /fhir/Observation  — create a vital-signs Observation from FHIR R4
+    """
+    if request.method == "GET":
+        return _observation_list_body(request)
+    # POST: delegate to the standalone create handler (no double-wrap — same request object)
+    return _fhir_observation_create_body(request)
+
+
+@api_view(["GET", "POST"])
+@permission_classes([IsAuthenticated])
+def fhir_medication_request_list_create(request):
+    """
+    GET  /fhir/MedicationRequest  — list prescriptions as FHIR Bundle searchset
+    POST /fhir/MedicationRequest  — create a prescription from FHIR R4
+    """
+    if request.method == "GET":
+        return _medication_request_list_body(request)
+    return _fhir_medication_request_create_body(request)
+
+
+def _fhir_observation_create_body(request):
     """
     POST /fhir/Observation
 
@@ -1035,9 +1116,7 @@ def fhir_observation_create(request):
     return Response(resource, status=status.HTTP_201_CREATED)
 
 
-@api_view(["POST"])
-@permission_classes([IsAuthenticated])
-def fhir_medication_request_create(request):
+def _fhir_medication_request_create_body(request):
     """
     POST /fhir/MedicationRequest
 

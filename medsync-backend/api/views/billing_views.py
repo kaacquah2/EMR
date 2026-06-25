@@ -437,6 +437,120 @@ def submit_nhis_claim(request, invoice_id):
                         status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def check_nhis_eligibility(request):
+    """
+    GET /billing/nhis/eligibility?nhis_member_id=<id>
+
+    Verify a patient's NHIS membership before creating an invoice or submitting
+    a claim.  Falls back to mock result when NHIS_API_KEY is not configured.
+
+    Query params:
+      nhis_member_id — NHIS card number (required)
+    """
+    from api.integrations.nhis_client import (
+        get_nhis_client, NHISRetryableError, NHISClaimError, NHISCircuitOpenError,
+    )
+
+    if request.user.role not in ('billing_staff', 'receptionist', 'hospital_admin', 'super_admin'):
+        return Response({'error': 'Insufficient permissions'}, status=status.HTTP_403_FORBIDDEN)
+
+    nhis_member_id = (request.GET.get('nhis_member_id') or '').strip()
+    if not nhis_member_id:
+        return Response({'error': 'nhis_member_id query param is required'}, status=status.HTTP_400_BAD_REQUEST)
+
+    try:
+        result = get_nhis_client().check_eligibility(nhis_member_id)
+        return Response({
+            'nhis_member_id': nhis_member_id,
+            'is_eligible': result.is_eligible,
+            'member_name': result.member_name,
+            'card_status': result.card_status,
+            'card_expiry_date': result.card_expiry_date.isoformat() if result.card_expiry_date else None,
+            'benefit_package': result.benefit_package,
+            'exemption_category': result.exemption_category,
+            'exemption_message': result.exemption_message,
+            'facility_contracted': result.facility_contracted,
+        })
+    except NHISCircuitOpenError:
+        return Response(
+            {'error': 'NHIS API temporarily unavailable. Try again shortly.'},
+            status=status.HTTP_503_SERVICE_UNAVAILABLE,
+        )
+    except NHISRetryableError as e:
+        return Response({'error': f'NHIS service error: {e}'}, status=status.HTTP_503_SERVICE_UNAVAILABLE)
+    except NHISClaimError as e:
+        return Response({'error': f'NHIS eligibility check failed: {e}'}, status=status.HTTP_400_BAD_REQUEST)
+    except Exception as e:
+        logger.exception("NHIS eligibility check unexpected error: %s", e)
+        return Response({'error': 'Internal error during eligibility check.'}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def get_nhis_claim_status(request, invoice_id):
+    """
+    GET /billing/invoices/<id>/nhis-status
+
+    Poll the NHIA API for the current status of a submitted claim and update
+    the invoice record.  Returns the latest claim status without requiring
+    a full re-submission.
+    """
+    from api.integrations.nhis_client import (
+        get_nhis_client, NHISRetryableError, NHISClaimError, NHISCircuitOpenError,
+    )
+
+    if request.user.role not in ('billing_staff', 'hospital_admin', 'super_admin'):
+        return Response({'error': 'Insufficient permissions'}, status=status.HTTP_403_FORBIDDEN)
+
+    try:
+        invoice = Invoice.objects.select_related('patient', 'hospital').get(pk=invoice_id)
+    except Invoice.DoesNotExist:
+        return Response({'error': 'Invoice not found'}, status=status.HTTP_404_NOT_FOUND)
+
+    effective_hospital = get_request_hospital(request)
+    if effective_hospital and invoice.hospital_id != effective_hospital.id:
+        return Response({'error': 'Access denied'}, status=status.HTTP_403_FORBIDDEN)
+
+    claim_ref = getattr(invoice, 'nhis_claim_reference', None)
+    if not claim_ref:
+        return Response(
+            {'error': 'No NHIS claim reference on this invoice. Submit a claim first.'},
+            status=status.HTTP_400_BAD_REQUEST,
+        )
+
+    try:
+        result = get_nhis_client().get_claim_status(claim_ref)
+
+        # Persist updated status back to invoice
+        new_status = result.status.lower()
+        if hasattr(invoice, 'nhis_claim_status') and invoice.nhis_claim_status != new_status:
+            invoice.nhis_claim_status = new_status
+            invoice.save(update_fields=['nhis_claim_status'])
+
+        return Response({
+            'invoice_id': str(invoice.id),
+            'claim_reference': claim_ref,
+            'nhis_status': result.status,
+            'approved_amount_ghs': float(result.approved_amount_ghs) if result.approved_amount_ghs else None,
+            'rejected_reason': result.rejected_reason,
+            'queried_reason': result.queried_reason,
+            'is_approved': result.is_approved,
+            'requires_action': result.requires_action,
+        })
+    except NHISCircuitOpenError:
+        return Response(
+            {'error': 'NHIS API temporarily unavailable.', 'cached_status': getattr(invoice, 'nhis_claim_status', None)},
+            status=status.HTTP_503_SERVICE_UNAVAILABLE,
+        )
+    except NHISRetryableError as e:
+        return Response({'error': f'NHIS service error: {e}'}, status=status.HTTP_503_SERVICE_UNAVAILABLE)
+    except NHISClaimError as e:
+        return Response({'error': f'NHIS error: {e}'}, status=status.HTTP_400_BAD_REQUEST)
+    except Exception as e:
+        logger.exception("NHIS claim status check error: %s", e)
+        return Response({'error': 'Internal error checking claim status.'}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 
 @api_view(['GET'])

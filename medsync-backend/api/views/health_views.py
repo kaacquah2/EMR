@@ -2,7 +2,7 @@
 import time
 from rest_framework import status
 from rest_framework.decorators import api_view, permission_classes, throttle_classes
-from rest_framework.permissions import AllowAny
+from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.response import Response
 from django.db import connection
 from django.utils import timezone
@@ -115,3 +115,56 @@ def health(request):
     if not db_ok:
         return Response(payload, status=status.HTTP_503_SERVICE_UNAVAILABLE)
     return Response(payload)
+
+
+@api_view(["POST"])
+@permission_classes([IsAuthenticated])
+def test_smtp(request):
+    """
+    POST /api/v1/health/smtp-test
+
+    Send a test email to verify SMTP is correctly configured in this environment.
+    Only super_admin and hospital_admin may call this (prevents spam abuse).
+
+    Request body (optional):
+      { "to": "someone@example.com" }   — defaults to the requesting user's email.
+    """
+    if request.user.role not in ("super_admin", "hospital_admin"):
+        return Response({"error": "Permission denied"}, status=status.HTTP_403_FORBIDDEN)
+
+    from django.core.mail import send_mail
+    from django.conf import settings as django_settings
+
+    to_addr = (request.data.get("to") or "").strip() or request.user.email
+    from_addr = getattr(django_settings, "DEFAULT_FROM_EMAIL", "noreply@medsync.local")
+    backend = getattr(django_settings, "EMAIL_BACKEND", "unknown")
+
+    try:
+        send_mail(
+            subject="MedSync SMTP test",
+            message=(
+                f"This is a test email from MedSync.\n\n"
+                f"Sent by: {request.user.email}\n"
+                f"Backend: {backend}\n"
+                f"Time: {timezone.now().isoformat()}"
+            ),
+            from_email=from_addr,
+            recipient_list=[to_addr],
+            fail_silently=False,
+        )
+        return Response({
+            "ok": True,
+            "to": to_addr,
+            "backend": backend,
+            "message": f"Test email sent to {to_addr}.",
+        })
+    except Exception as exc:
+        return Response({
+            "ok": False,
+            "backend": backend,
+            "error": str(exc),
+            "hint": (
+                "Check EMAIL_HOST, EMAIL_PORT, EMAIL_USE_TLS, "
+                "EMAIL_HOST_USER, EMAIL_HOST_PASSWORD in your environment variables."
+            ),
+        }, status=status.HTTP_502_BAD_GATEWAY)

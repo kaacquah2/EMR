@@ -425,24 +425,32 @@ PERMISSION_MATRIX = {
         "super_admin": ["GET"],
     },
     "fhir/MedicationRequest": {
-        "doctor": ["GET"],
-        "hospital_admin": ["GET"],
-        "super_admin": ["GET"],
+        "doctor": ["GET", "POST"],
+        "hospital_admin": ["GET", "POST"],
+        "super_admin": ["GET", "POST"],
+        "nurse": ["GET"],
+        "receptionist": ["GET"],
     },
     "fhir/MedicationRequest/<pk>": {
         "doctor": ["GET"],
         "hospital_admin": ["GET"],
         "super_admin": ["GET"],
+        "nurse": ["GET"],
+        "receptionist": ["GET"],
     },
     "fhir/Observation": {
-        "doctor": ["GET"],
-        "hospital_admin": ["GET"],
-        "super_admin": ["GET"],
+        "doctor": ["GET", "POST"],
+        "hospital_admin": ["GET", "POST"],
+        "super_admin": ["GET", "POST"],
+        "nurse": ["GET"],
+        "receptionist": ["GET"],
     },
     "fhir/Observation/<pk>": {
         "doctor": ["GET"],
         "hospital_admin": ["GET"],
         "super_admin": ["GET"],
+        "nurse": ["GET"],
+        "receptionist": ["GET"],
     },
     "hl7/adt": {
         "hospital_admin": ["GET"],
@@ -740,9 +748,11 @@ PERMISSION_MATRIX = {
         "billing_staff": ["GET", "POST"],
         "super_admin": ["GET"],
     },
-    "billing/nhis-claim": {
-        "hospital_admin": ["POST"],
-        "billing_staff": ["POST"],
+    "billing/nhis/eligibility": {
+        "hospital_admin": ["GET"],
+        "billing_staff": ["GET"],
+        "receptionist": ["GET"],
+        "super_admin": ["GET"],
     },
     "billing/dashboard": {
         "hospital_admin": ["GET"],
@@ -765,10 +775,21 @@ PERMISSION_MATRIX = {
         "billing_staff": ["POST"],
         "super_admin": ["POST"],
     },
+    "billing/invoices/<pk>/nhis-status": {
+        "hospital_admin": ["GET"],
+        "billing_staff": ["GET"],
+        "super_admin": ["GET"],
+    },
     "patients/<pk>/billing-history": {
         "hospital_admin": ["GET"],
         "billing_staff": ["GET"],
         "super_admin": ["GET"],
+        "receptionist": ["GET"],
+        "doctor": ["GET"],
+    },
+    "health/smtp-test": {
+        "super_admin": ["POST"],
+        "hospital_admin": ["POST"],
     },
     # Interop / super-admin / nurse advanced / task endpoints
     "superadmin/dashboard-bundle": {"super_admin": ["GET"]},
