@@ -15,9 +15,6 @@ python-decouple==3.8
 boto3==1.43.14
 # WebAuthn/Passkey support
 webauthn==2.7.1
-# FHIR & ICD-10 Compliance Testing
-fhir.resources==8.2.0
-icd10-cm==0.0.5
 # Postgres (Neon / production): driver + DATABASE_URL parsing
 psycopg[binary]==3.3.3
 dj-database-url==3.1.2

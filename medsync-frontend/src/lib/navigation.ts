@@ -40,6 +40,12 @@ const COMMON_NAV = {
   superAdminFacilities: { href: "/superadmin/facilities", label: "Facilities" },
   superAdminBreakGlassReview: { href: "/superadmin/break-glass-review", label: "Break-glass review" },
   superAdminSystemHealth: { href: "/superadmin/system-health", label: "System health" },
+  // Staff-management pages (hospital_admin)
+  batchOperations: { href: "/admin/batch-operations", label: "Batch Operations" },
+  overtimeTracking: { href: "/admin/overtime-tracking", label: "Overtime Tracking" },
+  shiftManagement: { href: "/admin/shift-management", label: "Shift Management" },
+  // Lab technician
+  labResults: { href: "/lab/results", label: "Lab Results" },
 };
 
 export const navByRole: Record<string, NavItem[]> = {
@@ -71,6 +77,7 @@ export const navByRole: Record<string, NavItem[]> = {
   lab_technician: [
     COMMON_NAV.dashboard,
     { href: "/lab/orders", label: "Lab Orders" },
+    COMMON_NAV.labResults,
   ],
 
   pharmacy_technician: [
@@ -109,6 +116,9 @@ export const navByRole: Record<string, NavItem[]> = {
     COMMON_NAV.rbacReview,
     COMMON_NAV.auditLogs,
     COMMON_NAV.reports,
+    COMMON_NAV.batchOperations,
+    COMMON_NAV.overtimeTracking,
+    COMMON_NAV.shiftManagement,
     COMMON_NAV.interopHub,
   ],
 
@@ -211,6 +221,7 @@ function isNursePathnameAccessible(path: string): boolean {
 const LAB_TECH_EXACT_ALLOWED = new Set([
   "/dashboard",
   "/lab/orders",
+  "/lab/results",
   "/unauthorized",
 ]);
 
@@ -238,6 +249,8 @@ export function isPathnameAccessible(role: string, pathname: string, options?: N
   const path = pathname.replace(/\/$/, "") || "/";
   if (path === "/unauthorized") return true;
   if (path === "" || path === "/") return true;
+  // Security settings are available to all authenticated users.
+  if (path === "/settings/security/passkeys") return true;
   if (role === "doctor") return isDoctorPathnameAccessible(path);
   if (role === "nurse") return isNursePathnameAccessible(path);
   if (role === "lab_technician") return isLabTechnicianPathnameAccessible(path);
@@ -273,7 +286,14 @@ export function isPathnameAccessible(role: string, pathname: string, options?: N
     if (sub === "/admin/facilities") return role === ROLES.SUPER_ADMIN || role === ROLES.HOSPITAL_ADMIN;
     // RBAC-03: super_admin must be able to access rbac-review
     if (sub === "/admin/rbac-review") return role === ROLES.HOSPITAL_ADMIN || role === ROLES.SUPER_ADMIN;
-    if (sub === "/admin/users" || sub === "/admin/audit-logs") {
+    if (sub === "/admin/users" || sub === "/admin/audit-logs" || sub === "/admin/reports") {
+      return role === ROLES.HOSPITAL_ADMIN || role === ROLES.SUPER_ADMIN;
+    }
+    if (
+      sub === "/admin/batch-operations" ||
+      sub === "/admin/overtime-tracking" ||
+      sub === "/admin/shift-management"
+    ) {
       return role === ROLES.HOSPITAL_ADMIN || role === ROLES.SUPER_ADMIN;
     }
   }

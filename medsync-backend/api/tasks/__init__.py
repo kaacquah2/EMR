@@ -7,14 +7,13 @@ Async/background tasks for MedSync EMR.
 - fallback: Graceful fallback to synchronous execution when broker unavailable
 """
 from .export_tasks import export_patient_pdf_task, export_encounter_pdf_task
-from .appointment_tasks import mark_no_shows_task, send_no_show_notification_task
+from .appointment_tasks import mark_no_shows_task
 from .fallback import can_use_celery, execute_task_sync_or_async
 
 __all__ = [
     "export_patient_pdf_task",
     "export_encounter_pdf_task",
     "mark_no_shows_task",
-    "send_no_show_notification_task",
     "can_use_celery",
     "execute_task_sync_or_async",
 ]

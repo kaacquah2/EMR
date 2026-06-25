@@ -32,6 +32,8 @@ import {
   Heart,
   Stethoscope,
   LogOut,
+  Clock,
+  Key,
   type LucideIcon,
 } from "lucide-react";
 
@@ -74,6 +76,11 @@ const navIconMap: Record<string, LucideIcon> = {
   "RBAC Review": Shield,
   "Audit Logs": FileText,
   "Reports": ClipboardList,
+  "Batch Operations": Users,
+  "Overtime Tracking": Clock,
+  "Shift Management": Calendar,
+  // Lab Technician
+  "Lab Results": Beaker,
   
   // Super Admin
   "Hospitals": Building2,
@@ -521,24 +528,43 @@ export function Sidebar() {
         <div className="flex flex-col gap-1.5">
 
           {collapsed ? (
-            <Tooltip content="Log out" side="right">
+            <>
+              <Tooltip content="Security settings" side="right">
+                <Link
+                  href="/settings/security/passkeys"
+                  className="group relative flex items-center justify-center rounded-lg p-2 text-white/92 hover:bg-slate-800 hover:text-white transition-colors"
+                >
+                  <Key className="h-5 w-5" />
+                </Link>
+              </Tooltip>
+              <Tooltip content="Log out" side="right">
+                <button
+                  type="button"
+                  onClick={() => void logout()}
+                  className="group relative flex items-center justify-center rounded-lg p-2 text-white/92 hover:bg-slate-800 hover:text-white transition-colors"
+                >
+                  <LogOut className="h-5 w-5" />
+                </button>
+              </Tooltip>
+            </>
+          ) : (
+            <>
+              <Link
+                href="/settings/security/passkeys"
+                className="group relative flex w-full items-center rounded-lg px-3 py-2 text-left text-sm text-white/92 hover:bg-slate-800 hover:text-white transition-colors"
+              >
+                <Key className="mr-2 h-4 w-4" />
+                Security settings
+              </Link>
               <button
                 type="button"
                 onClick={() => void logout()}
-                className="group relative flex items-center justify-center rounded-lg p-2 text-white/92 hover:bg-slate-800 hover:text-white transition-colors"
+                className="group relative flex w-full items-center rounded-lg px-3 py-2 text-left text-sm text-white/92 hover:bg-slate-800 hover:text-white transition-colors"
               >
-                <LogOut className="h-5 w-5" />
+                <LogOut className="mr-2 h-4 w-4" />
+                Log out
               </button>
-            </Tooltip>
-          ) : (
-            <button
-              type="button"
-              onClick={() => void logout()}
-              className="group relative flex w-full items-center rounded-lg px-3 py-2 text-left text-sm text-white/92 hover:bg-slate-800 hover:text-white transition-colors"
-            >
-              <LogOut className="mr-2 h-4 w-4" />
-              Log out
-            </button>
+            </>
           )}
         </div>
       </div>

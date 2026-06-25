@@ -80,3 +80,36 @@ describe("receptionist route scope", () => {
     expect(isPathnameAccessible("receptionist", "/referrals")).toBe(false);
   });
 });
+
+describe("newly wired routes", () => {
+  it("allows lab_technician to access lab results page", () => {
+    expect(isPathnameAccessible("lab_technician", "/lab/results")).toBe(true);
+  });
+
+  it("blocks lab_technician from admin batch operations", () => {
+    expect(isPathnameAccessible("lab_technician", "/admin/batch-operations")).toBe(false);
+  });
+
+  it("allows hospital_admin on all three new admin pages", () => {
+    expect(isPathnameAccessible("hospital_admin", "/admin/batch-operations")).toBe(true);
+    expect(isPathnameAccessible("hospital_admin", "/admin/overtime-tracking")).toBe(true);
+    expect(isPathnameAccessible("hospital_admin", "/admin/shift-management")).toBe(true);
+  });
+
+  it("allows super_admin on all three new admin pages", () => {
+    expect(isPathnameAccessible("super_admin", "/admin/batch-operations")).toBe(true);
+    expect(isPathnameAccessible("super_admin", "/admin/overtime-tracking")).toBe(true);
+    expect(isPathnameAccessible("super_admin", "/admin/shift-management")).toBe(true);
+  });
+
+  it("blocks doctor from new admin pages", () => {
+    expect(isPathnameAccessible("doctor", "/admin/batch-operations")).toBe(false);
+    expect(isPathnameAccessible("doctor", "/admin/shift-management")).toBe(false);
+  });
+
+  it("allows all roles to access security settings page", () => {
+    for (const role of ["doctor", "nurse", "lab_technician", "receptionist", "hospital_admin", "super_admin", "pharmacy_technician", "ward_clerk"]) {
+      expect(isPathnameAccessible(role, "/settings/security/passkeys")).toBe(true);
+    }
+  });
+});

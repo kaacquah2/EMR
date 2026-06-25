@@ -167,45 +167,6 @@ class BreakGlassExpiryMiddleware:
         return self.get_response(request)
 
 
-class RequestLoggingMiddleware:
-    """
-    PHASE 1 AUDIT FIX: Capture API traffic for observability.
-    Logs method, path, status code, and duration for every request.
-    Excluded sensitive paths (login, password resets).
-    """
-
-    EXCLUDED_PATHS = [
-        "/api/v1/auth/login",
-        "/api/v1/auth/mfa-verify",
-        "/api/v1/auth/password-reset",
-    ]
-
-    def __init__(self, get_response):
-        self.get_response = get_response
-
-    def __call__(self, request):
-        import time
-
-        start_time = time.time()
-
-        response = self.get_response(request)
-
-        duration = time.time() - start_time
-
-        # Avoid logging sensitive payloads by only logging meta info
-        if not any(request.path.startswith(p) for p in self.EXCLUDED_PATHS):
-            import logging
-
-            logger = logging.getLogger("api.traffic")
-            user_id = request.user.id if request.user and request.user.is_authenticated else "anon"
-            logger.info(
-                f"API_REQUEST | {request.method} {request.path} | "
-                f"Status: {response.status_code} | Duration: {duration:.3f}s | User: {user_id}"
-            )
-
-        return response
-
-
 class CSPMiddleware:
     """
     Injects Content-Security-Policy header into every response.

@@ -2,5 +2,8 @@
 django-debug-toolbar==6.3.0
 pytest==9.0.2
 pytest-django==4.12.0
+# FHIR & ICD-10 used only in test_fhir_compliance.py; not needed in production.
+fhir.resources==8.2.0
+icd10-cm==0.0.5
 # crewai removed — was never imported. Orchestrator uses native
 # ThreadPoolExecutor-based parallel execution (see api/ai/agents/orchestrator.py).

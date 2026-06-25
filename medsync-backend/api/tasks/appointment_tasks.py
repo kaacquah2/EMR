@@ -68,19 +68,3 @@ def mark_no_shows_task():
     return run_mark_no_shows()
 
 
-def send_no_show_notification_task(appointment_id, provider_email):
-    """
-    Send notification to provider that appointment was marked as no-show.
-    """
-    from django.core.mail import send_mail
-    from django.conf import settings
-
-    logger.info("Sending no-show notification for appointment %s", appointment_id)
-    subject = "[MedSync] Appointment marked as no-show"
-    body = (
-        f"Appointment {appointment_id} was automatically marked as no-show.\n"
-        "To undo this, contact your administrator.\n"
-    )
-    send_mail(subject, body, settings.DEFAULT_FROM_EMAIL, [provider_email], fail_silently=True)
-    logger.info("Sent no-show notification to %s", provider_email)
-    return {"status": "success", "appointment_id": str(appointment_id)}

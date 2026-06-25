@@ -49,7 +49,6 @@ class Hospital(models.Model):
         default="HEALTH_CENTRE",
         help_text="Ghana referral hierarchy level"
     )
-    ai_enabled = models.BooleanField(default=True, help_text="Enable/disable AI features for this hospital")
     onboarded_at = models.DateTimeField(auto_now_add=True)
     onboarded_by = models.ForeignKey(
         "User", null=True, blank=True, on_delete=models.SET_NULL, related_name="+"
