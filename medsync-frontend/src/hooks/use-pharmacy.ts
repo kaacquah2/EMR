@@ -145,7 +145,7 @@ export function useDrugStock() {
         if (filters?.low_stock) params.append("low_stock", "true");
 
         const response = await api.get<{ data: StockListResponse }>(
-          `/pharmacy/stock/?${params.toString()}`
+          `/pharmacy/stock?${params.toString()}`
         );
         const data = response.data;
         setStock(data.results || []);
@@ -179,7 +179,7 @@ export function useDrugStock() {
     }) => {
       setError(null);
       try {
-        const response = await api.post<{ data: DrugStock }>("/pharmacy/stock/", stockData);
+        const response = await api.post<{ data: DrugStock }>("/pharmacy/stock", stockData);
         const data = response.data;
         setStock((prev) => [data, ...prev]);
         return data;
@@ -197,7 +197,7 @@ export function useDrugStock() {
       setError(null);
       try {
         const response = await api.get<{ data: DrugStockDetail }>(
-          `/pharmacy/stock/${stockId}/`
+          `/pharmacy/stock/${stockId}`
         );
         return response.data;
       } catch (err) {
@@ -221,7 +221,7 @@ export function useDrugStock() {
     ) => {
       setError(null);
       try {
-        const data = await api.post(`/pharmacy/stock/${stockId}/adjust/`, adjustment);
+        const data = await api.post(`/pharmacy/stock/${stockId}/adjust`, adjustment);
         // Refresh stock list after adjustment
         await getStock();
         return data;
@@ -364,7 +364,7 @@ export function usePharmacyReports() {
   const checkExpiryManually = useCallback(async () => {
     setError(null);
     try {
-      const data = await api.post("/pharmacy/tasks/check-expiry/", {});
+      const data = await api.post("/pharmacy/tasks/check-expiry", {});
       return data;
     } catch (err) {
       const message =

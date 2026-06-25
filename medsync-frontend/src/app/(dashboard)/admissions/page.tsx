@@ -5,10 +5,12 @@ import Link from "next/link";
 import { useAuth } from "@/lib/auth-context";
 import { useAdmissions } from "@/hooks/use-admissions";
 import { Card } from "@/components/ui/card";
+import { ErrorBanner } from "@/components/ui/error-banner";
+import { ListSkeleton } from "@/components/ui/skeleton";
 
 export default function AdmissionsListPage() {
   const { user } = useAuth();
-  const { admissions, loading } = useAdmissions();
+  const { admissions, loading, error } = useAdmissions();
 
   const allowed = ["doctor", "hospital_admin", "nurse", "super_admin"].includes(user?.role ?? "");
   if (!allowed) {
@@ -21,13 +23,17 @@ export default function AdmissionsListPage() {
 
   return (
     <div className="space-y-6">
-      <h1 className="font-sora text-2xl font-bold text-slate-900 dark:text-slate-100">
-        {user?.role === "nurse" ? "Ward Patients" : "Active Admissions"}
-      </h1>
+      <div className="page-header">
+        <h1 className="page-header-title">
+          {user?.role === "nurse" ? "Ward Patients" : "Active Admissions"}
+        </h1>
+      </div>
 
       <Card className="p-6">
-        {loading ? (
-          <p className="text-slate-500 dark:text-slate-500">Loading...</p>
+        {error ? (
+          <ErrorBanner message={error} onRetry={() => window.location.reload()} />
+        ) : loading ? (
+          <ListSkeleton rows={5} showAvatar={false} />
         ) : admissions.length === 0 ? (
           <p className="text-slate-500 dark:text-slate-500">No active admissions.</p>
         ) : (

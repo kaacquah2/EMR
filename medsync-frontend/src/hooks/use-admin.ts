@@ -1,38 +1,21 @@
 "use client";
 
-import { useState, useCallback, useEffect } from "react";
+import { useState, useCallback } from "react";
 import { useApi } from "./use-api";
+import { useResource } from "./use-resource";
 import type { User } from "@/lib/types";
 
+// ─── Auto-fetching hooks (migrated to useResource) ───────────────────────────
+
 export function useUsers(role?: string, status?: string) {
-  const api = useApi();
-  const [users, setUsers] = useState<User[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  const params = new URLSearchParams();
+  if (role) params.set("role", role);
+  if (status) params.set("account_status", status);
+  const paramsStr = params.toString();
+  const path = `/admin/users${paramsStr ? `?${paramsStr}` : ""}`;
 
-  const fetch = useCallback(async () => {
-    setLoading(true);
-    setError(null);
-    try {
-      const params = new URLSearchParams();
-      if (role) params.set("role", role);
-      if (status) params.set("account_status", status);
-      const data = await api.get<{ data: User[] }>(`/admin/users?${params}`);
-      setUsers(data.data || []);
-    } catch (err) {
-      const message = err instanceof Error ? err.message : "Failed to load users";
-      setError(message);
-      setUsers([]);
-    } finally {
-      setLoading(false);
-    }
-  }, [api, role, status]);
-
-  useEffect(() => {
-    fetch();
-  }, [fetch]);
-
-  return { users, loading, error, fetch };
+  const { data, loading, error, refetch } = useResource<{ data: User[] }>(path);
+  return { users: data?.data ?? [], loading, error, fetch: refetch };
 }
 
 export interface AuditLogFilters {
@@ -42,9 +25,15 @@ export interface AuditLogFilters {
 }
 
 export function useAuditLogs(filters?: AuditLogFilters) {
-  const api = useApi();
-  const [logs, setLogs] = useState<
-    Array<{
+  const params = new URLSearchParams();
+  if (filters?.action) params.set("action", filters.action);
+  if (filters?.date_from) params.set("date_from", filters.date_from);
+  if (filters?.date_to) params.set("date_to", filters.date_to);
+  const paramsStr = params.toString();
+  const path = paramsStr ? `/admin/audit-logs?${paramsStr}` : "/admin/audit-logs";
+
+  const { data, loading, error, refetch } = useResource<{
+    data: Array<{
       log_id: string;
       user: string;
       action: string;
@@ -52,48 +41,26 @@ export function useAuditLogs(filters?: AuditLogFilters) {
       timestamp: string;
       ip_address?: string;
       hospital?: string | null;
-    }>
-  >([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-
-  const fetch = useCallback(async () => {
-    setLoading(true);
-    setError(null);
-    try {
-      const params = new URLSearchParams();
-      if (filters?.action) params.set("action", filters.action);
-      if (filters?.date_from) params.set("date_from", filters.date_from);
-      if (filters?.date_to) params.set("date_to", filters.date_to);
-      const qs = params.toString();
-      const url = qs ? `/admin/audit-logs?${qs}` : "/admin/audit-logs";
-      const data = await api.get<{
-        data: Array<{
-          log_id: string;
-          user: string;
-          action: string;
-          resource_type?: string;
-          timestamp: string;
-          ip_address?: string;
-          hospital?: string | null;
-        }>;
-      }>(url);
-      setLogs(data.data || []);
-    } catch (err) {
-      const message = err instanceof Error ? err.message : "Failed to load audit logs";
-      setError(message);
-      setLogs([]);
-    } finally {
-      setLoading(false);
-    }
-  }, [api, filters?.action, filters?.date_from, filters?.date_to]);
-
-  useEffect(() => {
-    fetch();
-  }, [fetch]);
-
-  return { logs, loading, error, fetch };
+    }>;
+  }>(path);
+  return { logs: data?.data ?? [], loading, error, fetch: refetch };
 }
+
+export interface Bed {
+  id: string;
+  bed_code: string;
+  status: string;
+  ward_id: string;
+  ward_name: string;
+}
+
+export function useBedsByWard(wardId: string | null) {
+  const path = wardId ? `/admin/wards/${wardId}/beds?status=available` : null;
+  const { data, loading, error, refetch } = useResource<{ data: Bed[] }>(path);
+  return { beds: data?.data ?? [], loading, error, fetch: refetch };
+}
+
+// ─── On-demand hooks (manual fetch — no auto-fetch useEffect needed) ─────────
 
 export function useWards(hospitalId?: string | null) {
   const api = useApi();
@@ -109,8 +76,7 @@ export function useWards(hospitalId?: string | null) {
       const data = await api.get<{ data: Array<{ ward_id: string; ward_name: string; ward_type: string }> }>(`/admin/wards${params}`);
       setWards(data.data || []);
     } catch (err) {
-      const message = err instanceof Error ? err.message : "Failed to load wards";
-      setError(message);
+      setError(err instanceof Error ? err.message : "Failed to load wards");
       setWards([]);
     } finally {
       setLoading(false);
@@ -118,46 +84,6 @@ export function useWards(hospitalId?: string | null) {
   }, [api, hospitalId]);
 
   return { wards, error, loading, fetch };
-}
-
-export interface Bed {
-  id: string;
-  bed_code: string;
-  status: string;
-  ward_id: string;
-  ward_name: string;
-}
-
-export function useBedsByWard(wardId: string | null) {
-  const api = useApi();
-  const [beds, setBeds] = useState<Bed[]>([]);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-
-  const fetch = useCallback(async () => {
-    if (!wardId) {
-      setBeds([]);
-      return;
-    }
-    setLoading(true);
-    setError(null);
-    try {
-      const data = await api.get<{ data: Bed[] }>(`/admin/wards/${wardId}/beds?status=available`);
-      setBeds(data.data || []);
-    } catch (err) {
-      const message = err instanceof Error ? err.message : "Failed to load beds";
-      setError(message);
-      setBeds([]);
-    } finally {
-      setLoading(false);
-    }
-  }, [api, wardId]);
-
-  useEffect(() => {
-    fetch();
-  }, [fetch]);
-
-  return { beds, loading, error, fetch };
 }
 
 export function useDepartments(hospitalId?: string | null) {
@@ -174,8 +100,7 @@ export function useDepartments(hospitalId?: string | null) {
       const data = await api.get<{ data: Array<{ department_id: string; name: string }> }>(`/admin/departments${params}`);
       setDepartments(data.data || []);
     } catch (err) {
-      const message = err instanceof Error ? err.message : "Failed to load departments";
-      setError(message);
+      setError(err instanceof Error ? err.message : "Failed to load departments");
       setDepartments([]);
     } finally {
       setLoading(false);
@@ -199,8 +124,7 @@ export function useLabUnits(hospitalId?: string | null) {
       const data = await api.get<{ data: Array<{ lab_unit_id: string; name: string }> }>(`/admin/lab-units${params}`);
       setLabUnits(data.data || []);
     } catch (err) {
-      const message = err instanceof Error ? err.message : "Failed to load lab units";
-      setError(message);
+      setError(err instanceof Error ? err.message : "Failed to load lab units");
       setLabUnits([]);
     } finally {
       setLoading(false);
@@ -224,8 +148,7 @@ export function useLabTestTypes(hospitalId?: string | null) {
       const data = await api.get<{ data: Array<{ test_name: string; lab_unit_id: string; lab_unit_name: string; specimen: string }> }>(`/admin/lab-test-types${params}`);
       setLabTestTypes(data.data || []);
     } catch (err) {
-      const message = err instanceof Error ? err.message : "Failed to load lab test types";
-      setError(message);
+      setError(err instanceof Error ? err.message : "Failed to load lab test types");
       setLabTestTypes([]);
     } finally {
       setLoading(false);
@@ -252,8 +175,7 @@ export function useDoctors(departmentId?: string | null, hospitalId?: string | n
       const data = await api.get<{ data: Array<{ user_id: string; full_name: string; department_id: string | null; department_name: string | null }> }>(`/admin/doctors${q}`);
       setDoctors(data.data || []);
     } catch (err) {
-      const message = err instanceof Error ? err.message : "Failed to load doctors";
-      setError(message);
+      setError(err instanceof Error ? err.message : "Failed to load doctors");
       setDoctors([]);
     } finally {
       setLoading(false);

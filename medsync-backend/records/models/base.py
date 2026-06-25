@@ -7,6 +7,7 @@ from django.utils import timezone
 from core.models import Hospital, User, Department, LabUnit, Ward
 from patients.models import Patient
 from django_cryptography.fields import encrypt
+from api.tenancy import TenantManager
 
 class MedicalRecord(models.Model):
     RECORD_TYPES = [
@@ -38,6 +39,8 @@ class MedicalRecord(models.Model):
         "self", null=True, blank=True, on_delete=models.SET_NULL, related_name="amendments"
     )
     amendment_reason = models.TextField(blank=True, null=True)
+
+    tenant_objects = TenantManager()
 
     class Meta:
         indexes = [

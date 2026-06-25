@@ -65,11 +65,11 @@ export function BottomNav() {
             href={item.href}
             className={`flex flex-1 flex-col items-center justify-center gap-1 px-2 py-1 transition-colors ${
               isActive
-                ? "text-blue-600 dark:text-blue-400"
+                ? "text-[#0B8A96] dark:text-[#0EAFBE]"
                 : "text-slate-500 hover:text-slate-900 dark:text-slate-400 dark:hover:text-slate-100"
             }`}
           >
-            <item.icon className={`h-5 w-5 ${isActive ? "fill-blue-100/50 dark:fill-blue-900/50" : ""}`} />
+            <item.icon className={`h-5 w-5 ${isActive ? "fill-[#0B8A96]/10 dark:fill-[#0EAFBE]/10" : ""}`} />
             <span className="text-[10px] font-medium">{item.label}</span>
           </Link>
         );

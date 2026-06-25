@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { useToast } from "@/lib/toast-context";
 import { hasRole, ALL_ADMIN_ROLES } from "@/lib/permissions";
+import { RequireRole } from "@/components/auth/RequireRole";
 
 type RbacRow = {
   user_id: string;
@@ -16,7 +17,7 @@ type RbacRow = {
   last_role_reviewed_at: string | null;
 };
 
-export default function RbacReviewPage() {
+function RbacReviewContent() {
   const { user } = useAuth();
   const api = useApi();
   const toast = useToast();
@@ -55,19 +56,11 @@ export default function RbacReviewPage() {
     }
   };
 
-  // RBAC-03: both hospital_admin AND super_admin can access this page
-  if (!user || !hasRole(user.role, ALL_ADMIN_ROLES)) {
-    return (
-      <div className="p-8">
-        <p className="text-slate-500 dark:text-slate-500">Access denied.</p>
-      </div>
-    );
-  }
 
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="page-header-title">RBAC role review — {user.hospital_name ?? "Hospital"}</h1>
+        <h1 className="page-header-title">RBAC role review — {user?.hospital_name ?? "Hospital"}</h1>
         <p className="page-header-desc">
           Staff whose role has not been reviewed in 90+ days appear below. Mark each row after review.
         </p>
@@ -122,4 +115,8 @@ export default function RbacReviewPage() {
       </Card>
     </div>
   );
+}
+
+export default function RbacReviewPage() {
+  return <RequireRole roles={ALL_ADMIN_ROLES}><RbacReviewContent /></RequireRole>;
 }

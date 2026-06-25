@@ -221,21 +221,21 @@ def record_payment(request, invoice_id):
         if invoice.status == 'paid':
             return Response({'error': 'Invoice already fully paid'}, status=status.HTTP_400_BAD_REQUEST)
 
-        # Calculate new paid amount
-        current_paid = invoice.paid_amount if hasattr(invoice, 'paid_amount') and invoice.paid_amount else Decimal('0.00')
-        new_paid = current_paid + amount
-        
+        # Calculate new paid amount (all stored as integer cents)
+        current_paid_cents = invoice.paid_amount_cents
+        amount_cents = int(amount * 100)
+        new_paid_cents = current_paid_cents + amount_cents
+
         # Update invoice
-        if new_paid >= invoice.total_amount:
+        if new_paid_cents >= invoice.amount_cents:
             invoice.status = 'paid'
             invoice.paid_at = timezone.now()
         else:
             invoice.status = 'partially_paid'
-        
-        if hasattr(invoice, 'paid_amount'):
-            invoice.paid_amount = new_paid
-        
-        if payment_reference and hasattr(invoice, 'payment_reference'):
+
+        invoice.paid_amount_cents = new_paid_cents
+
+        if payment_reference:
             invoice.payment_reference = payment_reference
             
         invoice.save()

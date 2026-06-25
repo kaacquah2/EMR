@@ -1,3 +1,5 @@
+"use client";
+
 /**
  * useFhirExport Hook
  *
@@ -24,19 +26,43 @@ interface FhirExportOptions {
   onError?: (error: string) => void;
 }
 
+type FhirResourceType =
+  | 'Patient'
+  | 'Encounter'
+  | 'Condition'
+  | 'MedicationRequest'
+  | 'Observation'
+  | 'DiagnosticReport';
+
 /**
  * Hook for exporting patient FHIR data
  * @param patientId - UUID of patient to export
  * @returns Object with export state and trigger function
  */
 export function useFhirExport(patientId: string) {
-  useApi();
+  const api = useApi();
+
   const [state, setState] = useState<FhirExportState>({
     loading: false,
     error: null,
     consentScope: null,
     progress: 0,
   });
+
+  /** Trigger a file download from a JS object. */
+  function downloadJson(data: unknown, filename: string) {
+    const blob = new Blob([JSON.stringify(data, null, 2)], {
+      type: 'application/fhir+json',
+    });
+    const downloadUrl = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = downloadUrl;
+    link.download = filename;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(downloadUrl);
+  }
 
   /**
    * Trigger FHIR $everything export and download as JSON
@@ -58,71 +84,31 @@ export function useFhirExport(patientId: string) {
       }));
 
       try {
-        // Call GET /fhir/Patient/{id}/$everything
-        const response = await fetch(
-          `/api/v1/fhir/Patient/${patientId}/$everything`,
-          {
-            method: 'GET',
-            headers: {
-              Accept: 'application/fhir+json',
-              'Content-Type': 'application/fhir+json',
-            },
-            credentials: 'include',
-          }
+        // Call GET /fhir/Patient/{id}/$everything via the shared API client.
+        // API_BASE already includes /api/v1, so the path is relative to that.
+        // The client injects Authorization: Bearer automatically.
+        const bundle = await api.get<Record<string, unknown>>(
+          `/fhir/Patient/${patientId}/$everything`
         );
 
         setState((prev) => ({ ...prev, progress: 50 }));
 
-        if (!response.ok) {
-          let errorMsg = `Export failed (${response.status})`;
-
-          try {
-            const errorData = await response.json();
-            if (errorData.issue?.[0]?.diagnostics) {
-              errorMsg = errorData.issue[0].diagnostics;
-            }
-          } catch {
-            // Fallback to status text
-            errorMsg = response.statusText || errorMsg;
-          }
-
-          setState((prev) => ({
-            ...prev,
-            error: errorMsg,
-            loading: false,
-            progress: 0,
-          }));
-          options?.onError?.(errorMsg);
-          return;
-        }
-
-        const bundle = await response.json();
+        // Extract consent scope from metadata if available
+        const scope = (
+          bundle.meta as
+            | { extension?: Array<{ url: string; valueString?: string }> }
+            | undefined
+        )?.extension?.find(
+          (ext) => ext.url === 'http://medsync.org/fhir/consent-scope'
+        )?.valueString as 'SUMMARY' | 'FULL_RECORD' | undefined;
 
         setState((prev) => ({ ...prev, progress: 80 }));
-
-        // Extract consent scope from metadata if available
-        const scope = bundle.meta?.extension?.find(
-          (ext: { url: string }) =>
-            ext.url === 'http://medsync.org/fhir/consent-scope'
-        )?.valueString as 'SUMMARY' | 'FULL_RECORD' | undefined;
 
         // Generate filename with timestamp
         const timestamp = new Date().toISOString().split('T')[0];
         const filename = `patient-${patientId}-bundle-${timestamp}.json`;
 
-        // Create blob and trigger download
-        const blob = new Blob([JSON.stringify(bundle, null, 2)], {
-          type: 'application/fhir+json',
-        });
-
-        const downloadUrl = URL.createObjectURL(blob);
-        const link = document.createElement('a');
-        link.href = downloadUrl;
-        link.download = filename;
-        document.body.appendChild(link);
-        link.click();
-        document.body.removeChild(link);
-        URL.revokeObjectURL(downloadUrl);
+        downloadJson(bundle, filename);
 
         setState((prev) => ({
           ...prev,
@@ -151,7 +137,7 @@ export function useFhirExport(patientId: string) {
         options?.onError?.(error);
       }
     },
-    [patientId]
+    [api, patientId]
   );
 
   /**
@@ -161,7 +147,7 @@ export function useFhirExport(patientId: string) {
    */
   const exportResource = useCallback(
     async (
-      resourceType: 'Patient' | 'Encounter' | 'Condition' | 'MedicationRequest' | 'Observation' | 'DiagnosticReport',
+      resourceType: FhirResourceType,
       resourceId: string,
       options?: FhirExportOptions
     ) => {
@@ -173,49 +159,18 @@ export function useFhirExport(patientId: string) {
       }));
 
       try {
-        const response = await fetch(`/api/v1/fhir/${resourceType}/${resourceId}`, {
-          method: 'GET',
-          headers: {
-            Accept: 'application/fhir+json',
-            'Content-Type': 'application/fhir+json',
-          },
-          credentials: 'include',
-        });
+        // Route through shared API client (Bearer token + API_BASE).
+        const resource = await api.get<Record<string, unknown>>(
+          `/fhir/${resourceType}/${resourceId}`
+        );
 
-        setState((prev) => ({ ...prev, progress: 50 }));
-
-        if (!response.ok) {
-          const errorMsg = `Failed to export ${resourceType} (${response.status})`;
-          setState((prev) => ({
-            ...prev,
-            error: errorMsg,
-            loading: false,
-            progress: 0,
-          }));
-          options?.onError?.(errorMsg);
-          return;
-        }
-
-        const resource = await response.json();
         setState((prev) => ({ ...prev, progress: 80 }));
 
         // Generate filename
         const timestamp = new Date().toISOString().split('T')[0];
         const filename = `${resourceType.toLowerCase()}-${resourceId}-${timestamp}.json`;
 
-        // Download
-        const blob = new Blob([JSON.stringify(resource, null, 2)], {
-          type: 'application/fhir+json',
-        });
-
-        const downloadUrl = URL.createObjectURL(blob);
-        const link = document.createElement('a');
-        link.href = downloadUrl;
-        link.download = filename;
-        document.body.appendChild(link);
-        link.click();
-        document.body.removeChild(link);
-        URL.revokeObjectURL(downloadUrl);
+        downloadJson(resource, filename);
 
         setState((prev) => ({
           ...prev,
@@ -240,7 +195,7 @@ export function useFhirExport(patientId: string) {
         options?.onError?.(error);
       }
     },
-    []
+    [api]
   );
 
   /**

@@ -18,13 +18,13 @@ export interface BadgeProps extends React.HTMLAttributes<HTMLSpanElement> {
 const variantStyles: Record<BadgeVariant, string> = {
   active: "bg-[#D1FAE5] text-[#047857] dark:bg-[#047857]/20 dark:text-[#6EE7B7]",
   pending: "bg-[#FEF3C7] text-[#B45309] dark:bg-[#B45309]/20 dark:text-[#FDE68A]",
-  inactive: "bg-slate-100 dark:bg-slate-900 text-slate-500 dark:text-slate-500 dark:bg-[#334155] dark:text-[#94A3B8]",
+  inactive: "bg-slate-100 dark:bg-[#334155] text-slate-500 dark:text-[#94A3B8]",
   critical: "bg-[#FEE2E2] text-[#B91C1C] dark:bg-[#B91C1C]/20 dark:text-[#FCA5A5]",
   success: "bg-[#D1FAE5] text-[#047857] dark:bg-[#047857]/20 dark:text-[#6EE7B7]",
   outline: "border border-slate-200 text-slate-950 dark:border-slate-800 dark:text-slate-50",
   secondary: "bg-slate-100 text-slate-900 hover:bg-slate-100/80 dark:bg-slate-800 dark:text-slate-50 dark:hover:bg-slate-800/80",
   destructive: "bg-rose-500 text-white hover:bg-rose-500/80 dark:bg-rose-900 dark:text-slate-50 dark:hover:bg-rose-900/80",
-  default: "bg-slate-100 dark:bg-slate-900 text-[#334155] dark:bg-[#334155] dark:text-slate-300 dark:text-slate-700",
+  default: "bg-slate-100 dark:bg-[#334155] text-[#334155] dark:text-slate-300",
 };
 
 /** MedSync Role Specs accent colours for role badge (sidebar/topbar). */

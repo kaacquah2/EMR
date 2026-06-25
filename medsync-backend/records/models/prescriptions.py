@@ -7,6 +7,7 @@ from django.utils import timezone
 from core.models import Hospital, User, Department, LabUnit, Ward
 from patients.models import Patient
 from django_cryptography.fields import encrypt
+from api.tenancy import TenantManager
 
 from .base import MedicalRecord
 
@@ -64,6 +65,8 @@ class Prescription(models.Model):
     dispense_notes = models.TextField(blank=True, null=True, help_text='Pharmacy dispensing notes')
     drug_interaction_checked = models.BooleanField(default=False, help_text='Whether drug interactions were checked')
     drug_interactions = models.JSONField(null=True, blank=True, help_text='Detected drug-drug interactions')
+
+    tenant_objects = TenantManager()
 
     class Meta:
         indexes = [

@@ -9,6 +9,7 @@ import { usePollWhenVisible } from "@/hooks/use-poll-when-visible";
 import { useApi } from "@/hooks/use-api";
 import { Button } from "@/components/ui/button";
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
+import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { useNurseWorklist } from "@/hooks/use-nurse";
 import { QueueBoard } from "@/components/features/clinical/QueueBoard";
 
@@ -124,9 +125,11 @@ function NurseWardWorklist() {
   const [noteType, setNoteType] = React.useState<"observation" | "handover" | "incident">("observation");
   const [selectedPatientId, setSelectedPatientId] = React.useState<string>("");
   const [incomingNurseId, setIncomingNurseId] = React.useState<string>("");
+  const [dispenseConflictId, setDispenseConflictId] = React.useState<string | null>(null);
+  const [handoverAckId, setHandoverAckId] = React.useState<string | null>(null);
   const api = useApi();
 
-  if (loading || !data) return <div className="py-8 text-center text-slate-500 dark:text-slate-500">Loading...</div>;
+  if (loading || !data) return <div className="py-8 text-center text-slate-500 dark:text-slate-400">Loading worklist…</div>;
 
   const saveNote = async () => {
     if (!selectedPatientId || !noteContent.trim()) return;
@@ -195,11 +198,7 @@ function NurseWardWorklist() {
                 <div className="mt-2">
                   {/* UX-17: allergy-conflict requires explicit confirmation */}
                   {row.allergy_conflict ? (
-                    <Button size="sm" variant="danger" onClick={() => {
-                      if (window.confirm(
-                        `⚠ ALLERGY CONFLICT\n\nPatient: ${row.patient_name}\nDrug: ${row.drug_name}\nOverride reason: ${row.allergy_override_reason || "not provided"}\n\nAre you sure you want to dispense this medication?`
-                      )) { void dispense(row.record_id); }
-                    }}>
+                    <Button size="sm" variant="danger" onClick={() => setDispenseConflictId(row.record_id)}>
                       ⚠ Dispense (conflict)
                     </Button>
                   ) : (
@@ -211,6 +210,27 @@ function NurseWardWorklist() {
           </CardContent>
         </Card>
       )}
+
+      {/* Allergy-conflict dispense confirmation */}
+      <ConfirmDialog
+        open={!!dispenseConflictId}
+        onOpenChange={(open) => { if (!open) setDispenseConflictId(null); }}
+        title="⚠ Allergy conflict — confirm dispense"
+        message="This medication has a recorded allergy conflict. An override reason was provided. Are you sure you want to dispense?"
+        confirmLabel="Dispense with conflict"
+        variant="danger"
+        onConfirm={() => { if (dispenseConflictId) void dispense(dispenseConflictId); }}
+      />
+
+      {/* Handover acknowledgment confirmation */}
+      <ConfirmDialog
+        open={!!handoverAckId}
+        onOpenChange={(open) => { if (!open) setHandoverAckId(null); }}
+        title="Accept clinical responsibility?"
+        message="By acknowledging this handover you accept clinical responsibility for this patient for the remainder of your shift."
+        confirmLabel="Acknowledge & Accept"
+        onConfirm={() => { if (handoverAckId) void acknowledgeHandover(handoverAckId); }}
+      />
 
       {tab === "handover" && (
         <div className="grid gap-4 lg:grid-cols-2">
@@ -254,11 +274,9 @@ function NurseWardWorklist() {
                   <p className="text-xs text-slate-500 dark:text-slate-500">From: {h.outgoing_nurse_name} · {h.signed_at ? new Date(h.signed_at).toLocaleString() : ""}</p>
                   <p className="mt-2 text-sm whitespace-pre-wrap">{h.content}</p>
                   {/* UX-27: Confirm before accepting clinical responsibility */}
-                  <Button className="mt-2" size="sm" onClick={() => {
-                    if (window.confirm(
-                      `By accepting this handover from ${h.outgoing_nurse_name}, you take clinical responsibility for ${h.patient_name}.\n\nContinue?`
-                    )) { void acknowledgeHandover(h.note_id); }
-                  }}>Acknowledge &amp; Accept</Button>
+                  <Button className="mt-2" size="sm" onClick={() => setHandoverAckId(h.note_id)}>
+                    Acknowledge &amp; Accept
+                  </Button>
                 </div>
               ))}
             </CardContent>

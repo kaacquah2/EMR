@@ -1,7 +1,8 @@
 "use client";
 
-import { useState, useCallback, useEffect, useRef } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useApi } from "./use-api";
+import { useResource } from "./use-resource";
 import { getWebSocketBase } from "@/lib/api-base";
 import type { ClinicalAlert } from "@/lib/types";
 
@@ -10,33 +11,19 @@ export function useAlerts(
   severity?: string,
   hospitalId?: string | null
 ) {
-  const api = useApi();
-  const [alerts, setAlerts] = useState<ClinicalAlert[]>([]);
-  const [loading, setLoading] = useState(true);
-  const fetchRef = useRef<(() => Promise<void>) | null>(null);
+  const params = new URLSearchParams();
+  if (status) params.set("status", status);
+  if (severity) params.set("severity", severity);
+  const paramsStr = params.toString();
+  const path = `/alerts${paramsStr ? `?${paramsStr}` : ""}`;
 
-  const fetch = useCallback(async () => {
-    setLoading(true);
-    try {
-      const params = new URLSearchParams();
-      if (status) params.set("status", status);
-      if (severity) params.set("severity", severity);
-      const data = await api.get<{ data: ClinicalAlert[] }>(`/alerts?${params}`);
-      setAlerts(data.data || []);
-    } catch {
-      setAlerts([]);
-    } finally {
-      setLoading(false);
-    }
-  }, [api, status, severity]);
+  const { data, loading, error, refetch } = useResource<{ data: ClinicalAlert[] }>(path);
 
-  fetchRef.current = fetch;
+  // Keep refetch stable for the WebSocket callback.
+  const refetchRef = useRef(refetch);
+  refetchRef.current = refetch;
 
-  useEffect(() => {
-    fetch();
-  }, [fetch]);
-
-  // Real-time: subscribe to WebSocket for this hospital; on message refetch alerts.
+  // Real-time: subscribe to the hospital WebSocket; refetch on any message.
   useEffect(() => {
     if (!hospitalId || typeof window === "undefined") return;
     const wsBase = getWebSocketBase();
@@ -47,16 +34,12 @@ export function useAlerts(
     const connect = () => {
       try {
         ws = new WebSocket(wsUrl);
-        ws.onmessage = () => {
-          fetchRef.current?.();
-        };
+        ws.onmessage = () => { refetchRef.current?.(); };
         ws.onclose = () => {
           ws = null;
           reconnectTimeout = setTimeout(connect, 5000);
         };
-        ws.onerror = () => {
-          ws?.close();
-        };
+        ws.onerror = () => { ws?.close(); };
       } catch {
         reconnectTimeout = setTimeout(connect, 5000);
       }
@@ -68,7 +51,7 @@ export function useAlerts(
     };
   }, [hospitalId]);
 
-  return { alerts, loading, fetch };
+  return { alerts: data?.data ?? [], loading, error, fetch: refetch };
 }
 
 export function useResolveAlert() {

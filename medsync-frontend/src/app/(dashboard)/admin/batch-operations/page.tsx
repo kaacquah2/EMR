@@ -1,29 +1,14 @@
 'use client';
 
 import { useState } from 'react';
-import { useAuth } from '@/lib/auth-context';
-import { useRouter } from 'next/navigation';
-import { useEffect } from 'react';
 import { UserImportForm } from '@/components/features/UserImportForm';
 import { BulkInvitationDashboard } from '@/components/features/BulkInvitationDashboard';
 import { BatchOperationsDashboard } from '@/components/features/BatchOperationsDashboard';
-import { hasRole, ALL_ADMIN_ROLES } from '@/lib/permissions';
+import { ALL_ADMIN_ROLES } from '@/lib/permissions';
+import { RequireRole } from '@/components/auth/RequireRole';
 
-export default function BatchOperationsPage() {
-  const router = useRouter();
-  const { user } = useAuth();
+function BatchOperationsContent() {
   const [activeTab, setActiveTab] = useState<'overview' | 'import' | 'invitations'>('overview');
-
-  // RBAC-17: use centralised admin role check
-  useEffect(() => {
-    if (user && !hasRole(user.role, ALL_ADMIN_ROLES)) {
-      router.push('/unauthorized');
-    }
-  }, [user, router]);
-
-  if (!user || !hasRole(user.role, ALL_ADMIN_ROLES)) {
-    return null;
-  }
 
   return (
     <div className="space-y-6">
@@ -74,5 +59,13 @@ export default function BatchOperationsPage() {
         {activeTab === 'invitations' && <BulkInvitationDashboard />}
       </div>
     </div>
+  );
+}
+
+export default function BatchOperationsPage() {
+  return (
+    <RequireRole roles={ALL_ADMIN_ROLES}>
+      <BatchOperationsContent />
+    </RequireRole>
   );
 }

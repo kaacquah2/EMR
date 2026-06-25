@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Bell, MessageSquare, Mail, Clock, AlertCircle } from "lucide-react";
+import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 
 interface ReminderConfig {
   id: string;
@@ -35,6 +36,7 @@ export default function AppointmentReminderUI() {
   const [history, setHistory] = useState<ReminderHistory[]>([]);
   const [loading, setLoading] = useState(true);
   const [editing, setEditing] = useState<string | null>(null);
+  const [deleteId, setDeleteId] = useState<string | null>(null);
   const [showForm, setShowForm] = useState(false);
 
   const [newConfig, setNewConfig] = useState({
@@ -93,7 +95,6 @@ export default function AppointmentReminderUI() {
   };
 
   const handleDelete = async (id: string) => {
-    if (!window.confirm("Delete this reminder config?")) return;
     try {
       await api.delete(`/appointments/reminder-configs/${id}`);
       toast.success("Reminder config deleted");
@@ -258,7 +259,7 @@ export default function AppointmentReminderUI() {
                   </button>
                   <button
                     type="button"
-                    onClick={() => handleDelete(config.id)}
+                    onClick={() => setDeleteId(config.id)}
                     className="px-3 py-1 rounded border border-red-200 text-xs text-red-600 hover:bg-red-50"
                   >
                     Delete
@@ -325,6 +326,16 @@ export default function AppointmentReminderUI() {
           </div>
         </div>
       </Card>
+
+      <ConfirmDialog
+        open={!!deleteId}
+        onOpenChange={(open) => { if (!open) setDeleteId(null); }}
+        title="Delete reminder config?"
+        message="This will permanently remove this reminder configuration. Appointments will no longer receive these reminders."
+        confirmLabel="Delete"
+        variant="danger"
+        onConfirm={() => { if (deleteId) void handleDelete(deleteId); }}
+      />
     </div>
   );
 }

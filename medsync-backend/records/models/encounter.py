@@ -7,6 +7,7 @@ from django.utils import timezone
 from core.models import Hospital, User, Department, LabUnit, Ward
 from patients.models import Patient
 from django_cryptography.fields import encrypt
+from api.tenancy import TenantManager
 
 from .base import MedicalRecord
 
@@ -62,6 +63,8 @@ class Encounter(models.Model):
     version = models.IntegerField(default=1, help_text="Version for optimistic locking")
     updated_at = models.DateTimeField(auto_now=True)
 
+    tenant_objects = TenantManager()
+
     class Meta:
         db_table = 'encounter'
         ordering = ['-encounter_date']
@@ -92,6 +95,8 @@ class RadiologyOrder(models.Model):
     status = models.CharField(max_length=20, choices=STATUS, default="ordered")
     created_by = models.ForeignKey(User, on_delete=models.PROTECT)
     created_at = models.DateTimeField(auto_now_add=True)
+
+    tenant_objects = TenantManager()
 
     class Meta:
         indexes = [

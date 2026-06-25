@@ -6,8 +6,9 @@
 
 'use client';
 
-import { useState, useCallback, useEffect } from 'react';
+import { useState, useCallback } from 'react';
 import { useApi } from './use-api';
+import { useResource } from './use-resource';
 
 export interface CdsAlert {
   id: string;
@@ -115,17 +116,31 @@ export function useCdsAlerts(): UseCdsAlertsReturn {
 }
 
 /**
- * Hook for auto-fetching alerts on encounter change
+ * Hook for auto-fetching CDS alerts when an encounter is known.
+ * Migrated from manual useEffect pattern to useResource (SWR-backed).
  */
 export function useCdsAlertsForEncounter(encounterId?: string) {
-  const { alerts, loading, error, fetchAlerts, acknowledgeAlert, clearError } =
-    useCdsAlerts();
+  const api = useApi();
+  const path = encounterId ? `/encounters/${encounterId}/cds-alerts` : null;
+  const { data, loading, error, refetch } = useResource<{
+    data?: { alerts?: CdsAlert[] };
+    alerts?: CdsAlert[];
+  }>(path);
 
-  useEffect(() => {
-    if (encounterId) {
-      fetchAlerts(encounterId);
-    }
-  }, [encounterId, fetchAlerts]);
+  const alerts: CdsAlert[] = data?.data?.alerts ?? data?.alerts ?? [];
+
+  const acknowledgeAlert = useCallback(
+    async (alertId: string, notes = '') => {
+      await api.post(`/cds-alerts/${alertId}/acknowledge`, { notes });
+      await refetch();
+    },
+    [api, refetch]
+  );
+
+  const clearError = useCallback(() => {
+    // SWR manages error state; call refetch to retry.
+    refetch();
+  }, [refetch]);
 
   return {
     alerts,
@@ -134,12 +149,8 @@ export function useCdsAlertsForEncounter(encounterId?: string) {
     acknowledgeAlert,
     clearError,
     unacknowledgedCount: alerts.filter((a) => !a.acknowledged).length,
-    criticalCount: alerts.filter(
-      (a) => a.severity === 'critical' && !a.acknowledged
-    ).length,
-    warningCount: alerts.filter(
-      (a) => a.severity === 'warning' && !a.acknowledged
-    ).length,
+    criticalCount: alerts.filter((a) => a.severity === 'critical' && !a.acknowledged).length,
+    warningCount: alerts.filter((a) => a.severity === 'warning' && !a.acknowledged).length,
   };
 }
 

@@ -87,6 +87,8 @@ class PatientAdmission(models.Model):
     discharge_reason = models.TextField(blank=True, null=True)
     created_at = models.DateTimeField(auto_now_add=True)
 
+    tenant_objects = TenantManager()
+
     class Meta:
         indexes = [
             models.Index(fields=['ward', 'discharged_at'], name='adm_ward_discharged_idx'),
@@ -121,6 +123,8 @@ class ClinicalAlert(models.Model):
     )
     resource_type = models.CharField(max_length=50, blank=True, null=True)
     resource_id = models.UUIDField(null=True, blank=True)
+
+    tenant_objects = TenantManager()
 
     class Meta:
         indexes = [
@@ -188,8 +192,10 @@ class Invoice(models.Model):
         choices=[("cash", "Cash"), ("card", "Card"), ("nhis", "NHIS"), ("insurance", "Insurance")],
         default="cash"
     )
-    paid_amount = models.DecimalField(max_digits=10, decimal_places=2, default=0.00)
+    paid_amount_cents = models.IntegerField(default=0)
     payment_reference = models.CharField(max_length=100, blank=True, null=True)
+
+    tenant_objects = TenantManager()
     nhis_claim_status = models.CharField(max_length=20, blank=True, null=True)
     nhis_claim_reference = models.CharField(max_length=100, blank=True, null=True)
     nhis_submitted_at = models.DateTimeField(blank=True, null=True)
@@ -198,6 +204,11 @@ class Invoice(models.Model):
     def total_amount(self):
         from decimal import Decimal
         return Decimal(self.amount_cents) / 100
+
+    @property
+    def paid_amount(self):
+        from decimal import Decimal
+        return Decimal(self.paid_amount_cents) / 100
 
     class Meta:
         indexes = [
@@ -296,6 +307,8 @@ class Appointment(models.Model):
     )
     ed_arrival_time = models.DateTimeField(null=True, blank=True, help_text="Time patient arrived to Emergency Department")
     ed_room_assignment = models.CharField(max_length=50, blank=True, null=True, help_text="Assigned ED room/bed (e.g., 'ED-1', 'Trauma Bay 2')")
+
+    tenant_objects = TenantManager()
 
     class Meta:
         indexes = [

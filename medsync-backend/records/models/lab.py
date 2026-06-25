@@ -7,6 +7,7 @@ from django.utils import timezone
 from core.models import Hospital, User, Department, LabUnit, Ward
 from patients.models import Patient
 from django_cryptography.fields import encrypt
+from api.tenancy import TenantManager
 
 from .base import MedicalRecord
 
@@ -59,6 +60,8 @@ class LabOrder(models.Model):
     verified_at = models.DateTimeField(null=True, blank=True)
     version = models.IntegerField(default=1, help_text="Version for optimistic locking")
     created_at = models.DateTimeField(auto_now_add=True)
+
+    tenant_objects = TenantManager()
 
     class Meta:
         indexes = [

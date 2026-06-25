@@ -8,6 +8,7 @@ import { useAuth } from '@/lib/auth-context';
 import { useApi } from '@/hooks/use-api';
 import { AlertCircle, TrendingUp, ChevronLeft, ChevronRight, Download } from 'lucide-react';
 import { hasRole, ALL_ADMIN_ROLES } from '@/lib/permissions';
+import { RequireRole } from '@/components/auth/RequireRole';
 
 interface OvertimeStaff {
   staff_id: string;
@@ -18,7 +19,7 @@ interface OvertimeStaff {
   shifts_completed: number;
 }
 
-export default function OvertimeTrackingPage() {
+function OvertimeTrackingContent() {
   const router = useRouter();
   const { user } = useAuth();
   const api = useApi();
@@ -128,10 +129,6 @@ export default function OvertimeTrackingPage() {
     window.URL.revokeObjectURL(url);
     document.body.removeChild(a);
   }, [staffOvertime, currentMonth, thresholdHours]);
-
-  if (!user || !hasRole(user.role, ALL_ADMIN_ROLES)) {
-    return null;
-  }
 
   const filteredStaff = getFilteredStaff();
   const monthName = currentMonth.toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
@@ -361,4 +358,8 @@ export default function OvertimeTrackingPage() {
       </div>
     </div>
   );
+}
+
+export default function OvertimeTrackingPage() {
+  return <RequireRole roles={ALL_ADMIN_ROLES}><OvertimeTrackingContent /></RequireRole>;
 }

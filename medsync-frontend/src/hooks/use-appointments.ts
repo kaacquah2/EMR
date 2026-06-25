@@ -1,7 +1,8 @@
 "use client";
 
-import { useState, useCallback, useEffect } from "react";
+import { useState, useCallback } from "react";
 import { useApi } from "./use-api";
+import { useResource } from "./use-resource";
 
 export interface AppointmentItem {
   id: string;
@@ -21,32 +22,20 @@ export function useAppointments(
   statusFilter?: string,
   departmentId?: string
 ) {
-  const api = useApi();
-  const [appointments, setAppointments] = useState<AppointmentItem[]>([]);
-  const [loading, setLoading] = useState(true);
+  const params = new URLSearchParams();
+  if (date) params.set("date", date);
+  if (patientId) params.set("patient_id", patientId);
+  if (statusFilter) params.set("status", statusFilter);
+  if (departmentId) params.set("department_id", departmentId);
+  const paramsStr = params.toString();
+  const path = `/appointments${paramsStr ? `?${paramsStr}` : ""}`;
 
-  const fetch = useCallback(async () => {
-    setLoading(true);
-    try {
-      const params = new URLSearchParams();
-      if (date) params.set("date", date);
-      if (patientId) params.set("patient_id", patientId);
-      if (statusFilter) params.set("status", statusFilter);
-      if (departmentId) params.set("department_id", departmentId);
-      const data = await api.get<{ data: AppointmentItem[] }>(`/appointments?${params}`);
-      setAppointments(data.data || []);
-    } catch {
-      setAppointments([]);
-    } finally {
-      setLoading(false);
-    }
-  }, [api, date, patientId, statusFilter, departmentId]);
+  const { data, loading, refetch } = useResource<{ data: AppointmentItem[] }>(path);
 
-  useEffect(() => {
-    fetch();
-  }, [fetch]);
+  // Wrap to return void — some consumers (e.g. AppointmentBulkActions) expect () => Promise<void>.
+  const fetch = useCallback(async () => { await refetch(); }, [refetch]);
 
-  return { appointments, loading, fetch };
+  return { appointments: data?.data ?? [], loading, fetch };
 }
 
 export function useCreateAppointment() {

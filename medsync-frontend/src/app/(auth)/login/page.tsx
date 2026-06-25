@@ -97,12 +97,7 @@ export default function LoginPage() {
       } else if (data.access_token) {
         login(data as AuthTokens, { rememberMe });
         const role = (data as AuthTokens).user_profile?.role;
-       const unfilledRoles = ['pharmacy_technician', 'radiology_technician', 'billing_staff', 'ward_clerk'];
-       if (unfilledRoles.includes(role || '')) {
-         window.location.href = '/coming-soon';
-       } else {
-         window.location.href = role === "super_admin" ? "/superadmin" : "/dashboard";
-       }
+        window.location.href = role === "super_admin" ? "/superadmin" : "/dashboard";
       }
     } catch {
       setError("Login failed");
@@ -189,12 +184,7 @@ export default function LoginPage() {
       }
       login(data as AuthTokens, { rememberMe });
       const role = (data as AuthTokens).user_profile?.role;
-      const unfilledRoles = ['pharmacy_technician', 'radiology_technician', 'billing_staff', 'ward_clerk'];
-      if (unfilledRoles.includes(role || '')) {
-        window.location.href = '/coming-soon';
-      } else {
-        window.location.href = role === "super_admin" ? "/superadmin" : "/dashboard";
-      }
+      window.location.href = role === "super_admin" ? "/superadmin" : "/dashboard";
     } catch {
       //
     } finally {

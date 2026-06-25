@@ -286,3 +286,38 @@ export const referenceDataStore = {
 };
 
 export { openDB };
+
+/**
+ * Wipe all IndexedDB stores on logout to prevent PHI at rest on shared devices.
+ * Called by AuthProvider.logout().
+ */
+export async function clearAllOfflineStores(): Promise<void> {
+  try {
+    const db = await openDB();
+    const storeNames = [
+      'pending_actions',
+      'patients',
+      'ward_patients',
+      'draft_encounters',
+      'lab_orders',
+      'reference_data',
+    ];
+    await Promise.all(
+      storeNames.map(
+        (name) =>
+          new Promise<void>((resolve) => {
+            try {
+              const tx = db.transaction(name, 'readwrite');
+              tx.objectStore(name).clear();
+              tx.oncomplete = () => resolve();
+              tx.onerror = () => resolve(); // best-effort — never block logout
+            } catch {
+              resolve();
+            }
+          })
+      )
+    );
+  } catch {
+    // best-effort — never block logout
+  }
+}

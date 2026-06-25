@@ -214,7 +214,7 @@ class User(AbstractBaseUser, PermissionsMixin):
     ]
 
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
-    hospital = models.ForeignKey(Hospital, on_delete=models.CASCADE, null=True, blank=True)
+    hospital = models.ForeignKey(Hospital, on_delete=models.SET_NULL, null=True, blank=True)
     email = models.EmailField(unique=True)
     role = models.CharField(max_length=20, choices=ROLES)
     full_name = models.CharField(max_length=200)
@@ -541,7 +541,7 @@ class AuditLog(models.Model):
         ("AI_DRIFT_CRITICAL", "AI Drift Critical"),
         ("DATA_RESIDENCY_DENIED", "Data Residency Access Denied"),
     ]
-    user = models.ForeignKey(User, on_delete=models.CASCADE)
+    user = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True)
     action = models.CharField(max_length=50, choices=ACTIONS)
     resource_type = models.CharField(max_length=50, blank=True, null=True)
     resource_id = models.CharField(max_length=64, null=True, blank=True)
@@ -743,7 +743,7 @@ class PasswordResetAudit(models.Model):
     ]
     
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
-    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name="password_resets")
+    user = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True, related_name="password_resets")
     reset_type = models.CharField(max_length=20, choices=RESET_TYPES)
     initiated_by = models.ForeignKey(
         User, 

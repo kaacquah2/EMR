@@ -9,10 +9,12 @@ import { canResolveAlerts } from "@/lib/permissions";
 import { Button } from "@/components/ui/button";
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { ErrorBanner } from "@/components/ui/error-banner";
+import { ListSkeleton } from "@/components/ui/skeleton";
 
-const severityColor: Record<string, "default" | "active" | "pending"> = {
-  critical: "active",
-  high: "active",
+const severityColor: Record<string, "critical" | "pending" | "default"> = {
+  critical: "critical",
+  high: "critical",
   medium: "pending",
   low: "default",
 };
@@ -21,7 +23,7 @@ export default function AlertsPage() {
   const router = useRouter();
   const { user } = useAuth();
   const [statusFilter, setStatusFilter] = useState<string>("active");
-  const { alerts, loading, fetch } = useAlerts(statusFilter, undefined, user?.hospital_id ?? undefined);
+  const { alerts, loading, error, fetch } = useAlerts(statusFilter, undefined, user?.hospital_id ?? undefined);
   const { resolve, loading: resolving } = useResolveAlert();
 
   useEffect(() => {
@@ -64,8 +66,10 @@ export default function AlertsPage() {
           <CardTitle>Alerts</CardTitle>
         </CardHeader>
         <CardContent>
-          {loading ? (
-            <p className="text-slate-500 dark:text-slate-500">Loading...</p>
+          {error ? (
+            <ErrorBanner message={error} onRetry={fetch} />
+          ) : loading ? (
+            <ListSkeleton rows={4} />
           ) : alerts.length === 0 ? (
             <p className="text-slate-500 dark:text-slate-500">No alerts</p>
           ) : (

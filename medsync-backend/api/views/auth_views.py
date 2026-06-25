@@ -2080,20 +2080,14 @@ def setup_totp(request):
 # ============================================================================
 
 @api_view(["POST"])
-@permission_classes([IsAuthenticated])
+@permission_classes([AllowAny])
 def refresh_with_cookie(request):
     """
     POST /api/v1/auth/refresh-cookie/
-    
-    Refresh access token using HttpOnly cookie.
-    Returns new cookie with rotated token.
-    
-    Security:
-    - Extracts opaque cookie value from request (ClientCookie lookup)
-    - Decrypts stored JWT
-    - Validates refresh token
-    - Rotates cookie token on each refresh
-    - Sets new HttpOnly cookie on response
+
+    Refresh access token using the HttpOnly medsync_session cookie.
+    Does NOT require a valid Bearer token — the cookie is the credential.
+    Returns the new access_token in the JSON body plus a rotated cookie.
     """
     cookie_token = request.COOKIES.get('medsync_session')
     if not cookie_token:
@@ -2152,12 +2146,13 @@ def refresh_with_cookie(request):
         extra_data={'method': 'cookie', 'risk_tier': 2}
     )
     
-    # Return response with new cookie
+    # Return new access token in body so the frontend can use it for Bearer auth,
+    # and rotate the HttpOnly cookie in the Set-Cookie header.
     response = Response({
-        "message": "Token refreshed",
-        "expires_in": getattr(settings, 'JWT_ACCESS_MINUTES', 15) * 60
+        "access_token": new_access_jwt,
+        "expires_in": getattr(settings, 'JWT_ACCESS_MINUTES', 15) * 60,
     })
-    
+
     return _set_httponly_cookie(response, new_cookie_token)
 
 

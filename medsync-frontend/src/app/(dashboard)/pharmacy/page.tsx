@@ -15,7 +15,7 @@ export default function PharmacyPage() {
   }, [user, router])
 
   if (!user) {
-    return <div>Loading...</div>
+    return <div className="p-6 text-slate-500 dark:text-slate-400">Loading…</div>
   }
 
   return (

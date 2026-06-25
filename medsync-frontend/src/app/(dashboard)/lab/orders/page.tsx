@@ -8,6 +8,7 @@ import { Badge } from "@/components/ui/badge";
 import { Card } from "@/components/ui/card";
 import { LabBulkResultForm } from "@/components/features/LabBulkResultForm";
 import { EmptyState } from "@/components/ui/empty-state";
+import { TableSkeleton } from "@/components/ui/skeleton";
 import { Beaker } from "lucide-react";
 
 export default function LabOrdersPage() {
@@ -92,7 +93,7 @@ export default function LabOrdersPage() {
       ) : (
         <Card className="p-6">
           {loading ? (
-            <p className="text-slate-500 dark:text-slate-500">Loading...</p>
+            <TableSkeleton rows={5} cols={5} />
           ) : rows.length === 0 ? (
             <EmptyState
               icon={<Beaker className="h-12 w-12" />}

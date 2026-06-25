@@ -2,12 +2,14 @@
 
 import { useEffect, useState, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
+import { RequireRole } from '@/components/auth/RequireRole';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { useAuth } from '@/lib/auth-context';
 import { useApi } from '@/hooks/use-api';
 import { AlertCircle, Calendar, Plus, ChevronLeft, ChevronRight } from 'lucide-react';
 import { ConflictDetectionModal } from '@/components/features/ConflictDetectionModal';
+import { ConfirmDialog } from '@/components/ui/confirm-dialog';
 import { hasRole, ALL_ADMIN_ROLES } from '@/lib/permissions';
 
 interface Shift {
@@ -60,7 +62,7 @@ interface ConflictCheckResponse {
   conflicts?: ShiftConflict[];
 }
 
-export default function ShiftManagementPage() {
+function ShiftManagementContent() {
   const router = useRouter();
   const { user } = useAuth();
   const api = useApi();
@@ -85,6 +87,7 @@ export default function ShiftManagementPage() {
   const [showConflictModal, setShowConflictModal] = useState(false);
   const [detectedConflicts, setDetectedConflicts] = useState<ShiftConflict[]>([]);
   const [, setPendingFormSubmit] = useState(false);
+  const [deleteShiftId, setDeleteShiftId] = useState<string | null>(null);
 
   // RBAC-17: use centralised admin role check
   useEffect(() => {
@@ -233,7 +236,6 @@ export default function ShiftManagementPage() {
   // Handle deleting shift
   const handleDeleteShift = useCallback(
     async (shiftId: string) => {
-      if (!confirm('Are you sure you want to delete this shift?')) return;
 
       try {
         setLoading(true);
@@ -276,10 +278,6 @@ export default function ShiftManagementPage() {
     return shifts.filter((shift) => shift.shift_start.split('T')[0] === dateStr);
   };
 
-  if (!user || !hasRole(user.role, ALL_ADMIN_ROLES)) {
-    return null;
-  }
-
   if (loading && shifts.length === 0) {
     return (
       <div className="flex h-screen items-center justify-center">
@@ -307,7 +305,7 @@ export default function ShiftManagementPage() {
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-3xl font-bold">Shift Management</h1>
-          <p className="text-gray-600">Create and manage staff shifts for {user.hospital_name || 'your facility'}</p>
+          <p className="text-gray-600">Create and manage staff shifts for {user?.hospital_name || 'your facility'}</p>
         </div>
         <Button onClick={() => setShowCreateForm(!showCreateForm)} className="gap-2">
           <Plus className="h-4 w-4" />
@@ -556,7 +554,7 @@ export default function ShiftManagementPage() {
                           <Button
                             variant="ghost"
                             size="sm"
-                            onClick={() => handleDeleteShift(shift.shift_id)}
+                            onClick={() => setDeleteShiftId(shift.shift_id)}
                             className="text-red-600 hover:text-red-700"
                           >
                             Delete
@@ -571,6 +569,17 @@ export default function ShiftManagementPage() {
           </div>
         </CardContent>
       </Card>
+
+      {/* Delete Shift Confirmation */}
+      <ConfirmDialog
+        open={!!deleteShiftId}
+        onOpenChange={(open) => { if (!open) setDeleteShiftId(null); }}
+        title="Delete shift?"
+        message="This will permanently remove the scheduled shift. This action cannot be undone."
+        confirmLabel="Delete shift"
+        variant="danger"
+        onConfirm={() => { if (deleteShiftId) void handleDeleteShift(deleteShiftId); }}
+      />
 
       {/* Conflict Detection Modal */}
       <ConflictDetectionModal
@@ -595,4 +604,8 @@ export default function ShiftManagementPage() {
       />
     </div>
   );
+}
+
+export default function ShiftManagementPage() {
+  return <RequireRole roles={ALL_ADMIN_ROLES}><ShiftManagementContent /></RequireRole>;
 }

@@ -6,7 +6,7 @@ from .models import (
     Referral,
     SharedRecordAccess,
     BreakGlassLog,
-    Encounter,
+    FacilityEncounter,
 )
 
 
@@ -45,6 +45,6 @@ class BreakGlassLogAdmin(admin.ModelAdmin):
     list_display = ("id", "global_patient", "facility", "accessed_by", "created_at")
 
 
-@admin.register(Encounter)
-class EncounterAdmin(admin.ModelAdmin):
+@admin.register(FacilityEncounter)
+class FacilityEncounterAdmin(admin.ModelAdmin):
     list_display = ("id", "facility_patient", "facility", "created_at")

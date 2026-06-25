@@ -30,6 +30,7 @@ import {
 import { Input } from "@/components/ui/input";
 import { useAppointments } from "@/hooks/use-appointments";
 import { usePollWhenVisible } from "@/hooks/use-poll-when-visible";
+import { useFhirExport } from "@/hooks/use-fhir-export";
 import type { Patient, Consent } from "@/lib/types";
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
@@ -180,6 +181,7 @@ export default function PatientPage() {
   const [revokeConsentLoading, setRevokeConsentLoading] = useState(false);
   const [closeEncounterConfirmOpen, setCloseEncounterConfirmOpen] = useState(false);
   const [closeEncounterLoading, setCloseEncounterLoading] = useState(false);
+  const { exportFhirBundle, loading: fhirExportLoading } = useFhirExport(id);
 
   const handleExportPdf = async () => {
     if (!id) return;
@@ -316,6 +318,11 @@ export default function PatientPage() {
           {canExportPdf && (
             <Button variant="secondary" size="sm" onClick={handleExportPdf} disabled={exportPdfLoading}>
               {exportPdfLoading ? "Exporting..." : "Export PDF"}
+            </Button>
+          )}
+          {canExportPdf && (
+            <Button variant="secondary" size="sm" onClick={() => exportFhirBundle()} disabled={fhirExportLoading}>
+              {fhirExportLoading ? "Exporting..." : "Export FHIR"}
             </Button>
           )}
           {canAddEncounter && (

@@ -17,6 +17,7 @@ from django.utils import timezone
 
 from core.models import Hospital, User
 from records.models import Encounter, Prescription, Diagnosis
+from .tenancy import TenantManager
 
 
 def _default_list():
@@ -104,7 +105,7 @@ class CdsAlert(models.Model):
 
     # Link to encounter and triggered rule
     encounter = models.ForeignKey(
-        Encounter, on_delete=models.CASCADE, related_name="cds_alerts"
+        Encounter, on_delete=models.PROTECT, related_name="cds_alerts"
     )
     rule = models.ForeignKey(
         ClinicalRule, on_delete=models.PROTECT, related_name="alerts"
@@ -201,6 +202,8 @@ class DrugStock(models.Model):
     reorder_level = models.PositiveIntegerField(help_text="Minimum quantity before alert")
     expiry_date = models.DateField(help_text="Expiration date of batch")
     created_at = models.DateTimeField(auto_now_add=True)
+
+    tenant_objects = TenantManager()
 
     class Meta:
         db_table = 'pharmacy_drug_stock'
@@ -335,6 +338,8 @@ class StockAlert(models.Model):
     acknowledged_at = models.DateTimeField(null=True, blank=True)
     resolved_at = models.DateTimeField(null=True, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
+
+    tenant_objects = TenantManager()
 
     class Meta:
         db_table = 'pharmacy_stock_alert'

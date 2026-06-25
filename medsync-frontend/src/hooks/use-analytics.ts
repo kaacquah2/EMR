@@ -1,7 +1,6 @@
 "use client";
 
-import { useState, useCallback, useEffect } from "react";
-import { useApi } from "./use-api";
+import { useResource } from "./use-resource";
 
 export interface AnalyticsData {
   from: string;
@@ -22,30 +21,16 @@ export function useDashboardAnalytics(
   groupBy?: string,
   enabled: boolean = true
 ) {
-  const api = useApi();
-  const [data, setData] = useState<AnalyticsData | null>(null);
-  const [loading, setLoading] = useState(false);
+  const params = new URLSearchParams();
+  if (from) params.set("from", from);
+  if (to) params.set("to", to);
+  if (groupBy) params.set("group_by", groupBy);
+  const paramsStr = params.toString();
+  const path = `/dashboard/analytics${paramsStr ? `?${paramsStr}` : ""}`;
 
-  const fetch = useCallback(async () => {
-    if (!enabled) return;
-    setLoading(true);
-    try {
-      const params = new URLSearchParams();
-      if (from) params.set("from", from);
-      if (to) params.set("to", to);
-      if (groupBy) params.set("group_by", groupBy);
-      const result = await api.get<AnalyticsData>(`/dashboard/analytics?${params}`);
-      setData(result);
-    } catch {
-      setData(null);
-    } finally {
-      setLoading(false);
-    }
-  }, [api, from, to, groupBy, enabled]);
+  const { data, loading, refetch } = useResource<AnalyticsData>(
+    enabled ? path : null
+  );
 
-  useEffect(() => {
-    if (enabled) fetch();
-  }, [enabled, fetch]);
-
-  return { data, loading, fetch };
+  return { data: data ?? null, loading, fetch: refetch };
 }

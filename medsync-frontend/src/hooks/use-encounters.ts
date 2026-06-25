@@ -1,35 +1,19 @@
 "use client";
 
-import { useState, useCallback, useEffect } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { useApi } from "./use-api";
+import { useResource } from "./use-resource";
 import type { Encounter } from "@/lib/types";
 
 export function useEncounters(patientId: string | null) {
-  const api = useApi();
-  const [encounters, setEncounters] = useState<Encounter[]>([]);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-
-  const fetch = useCallback(async () => {
-    if (!patientId) return;
-    setLoading(true);
-    setError(null);
-    try {
-      const data = await api.get<{ data: Encounter[] }>(`/patients/${patientId}/encounters`);
-      setEncounters(data.data || []);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to load encounters");
-      setEncounters([]);
-    } finally {
-      setLoading(false);
-    }
-  }, [api, patientId]);
-
-  useEffect(() => {
-    if (patientId) fetch();
-  }, [patientId, fetch]);
-
-  return { encounters, loading, error, fetch };
+  const path = patientId ? `/patients/${patientId}/encounters` : null;
+  const { data, loading, error, refetch } = useResource<{ data: Encounter[] }>(path);
+  return {
+    encounters: data?.data ?? [],
+    loading,
+    error,
+    fetch: refetch,
+  };
 }
 
 export function useCreateEncounter(patientId: string | null) {
@@ -117,43 +101,50 @@ export interface WorklistSummary {
   referrals: number;
 }
 
+const DEFAULT_SUMMARY: WorklistSummary = {
+  queue_count: 0,
+  pending_labs: 0,
+  pending_prescriptions: 0,
+  alerts: 0,
+  referrals: 0,
+};
+
 export function useWorklistEncounters() {
   const api = useApi();
   const [encounters, setEncounters] = useState<WorklistEncounter[]>([]);
-  const [summary, setSummary] = useState<WorklistSummary>({
-    queue_count: 0,
-    pending_labs: 0,
-    pending_prescriptions: 0,
-    alerts: 0,
-    referrals: 0,
-  });
+  const [summary, setSummary] = useState<WorklistSummary>(DEFAULT_SUMMARY);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  const fetch = useCallback(async (silent = false, filters?: { department_id?: string; encounter_type?: string }) => {
-    if (!silent) {
-      setLoading(true);
-      setError(null);
-    }
-    try {
-      const params = new URLSearchParams();
-      if (filters?.department_id) params.set("department_id", filters.department_id);
-      if (filters?.encounter_type) params.set("encounter_type", filters.encounter_type);
-      const suffix = params.toString() ? `?${params.toString()}` : "";
-      const data = await api.get<{ data: WorklistEncounter[]; summary?: WorklistSummary }>(`/worklist/encounters${suffix}`);
-      setEncounters(data.data || []);
-      if (data.summary) setSummary(data.summary);
-    } catch (err) {
-      if (!silent) setError(err instanceof Error ? err.message : "Failed to load worklist encounters");
-      setEncounters([]);
-      setSummary({ queue_count: 0, pending_labs: 0, pending_prescriptions: 0, alerts: 0, referrals: 0 });
-    } finally {
-      if (!silent) setLoading(false);
-    }
-  }, [api]);
+  const fetch = useCallback(
+    async (silent = false, filters?: { department_id?: string; encounter_type?: string }) => {
+      if (!silent) {
+        setLoading(true);
+        setError(null);
+      }
+      try {
+        const params = new URLSearchParams();
+        if (filters?.department_id) params.set("department_id", filters.department_id);
+        if (filters?.encounter_type) params.set("encounter_type", filters.encounter_type);
+        const suffix = params.toString() ? `?${params.toString()}` : "";
+        const data = await api.get<{ data: WorklistEncounter[]; summary?: WorklistSummary }>(
+          `/worklist/encounters${suffix}`
+        );
+        setEncounters(data.data || []);
+        if (data.summary) setSummary(data.summary);
+      } catch (err) {
+        if (!silent) setError(err instanceof Error ? err.message : "Failed to load worklist");
+        setEncounters([]);
+        setSummary(DEFAULT_SUMMARY);
+      } finally {
+        if (!silent) setLoading(false);
+      }
+    },
+    [api]
+  );
 
   useEffect(() => {
-    fetch();
+    void fetch();
   }, [fetch]);
 
   return { encounters, summary, loading, error, fetch };

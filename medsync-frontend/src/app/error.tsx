@@ -3,6 +3,7 @@
 import { useEffect } from "react";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
+import * as Sentry from "@sentry/nextjs";
 
 export default function Error({
   error,
@@ -12,6 +13,8 @@ export default function Error({
   reset: () => void;
 }) {
   useEffect(() => {
+    // Always capture in Sentry; also log locally in dev
+    Sentry.captureException(error);
     if (process.env.NODE_ENV === "development") {
       console.error("Route error:", error);
     }

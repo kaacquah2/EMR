@@ -7,6 +7,7 @@ from django.utils import timezone
 from core.models import Hospital, User, Department, LabUnit, Ward
 from patients.models import Patient
 from django_cryptography.fields import encrypt
+from api.tenancy import TenantManager
 
 from .base import MedicalRecord
 
@@ -85,7 +86,9 @@ class Incident(models.Model):
     updated_at = models.DateTimeField(auto_now=True)
     resolved_at = models.DateTimeField(null=True, blank=True)
     resolution_notes = models.TextField(blank=True)
-    
+
+    tenant_objects = TenantManager()
+
     class Meta:
         ordering = ['-created_at']
         indexes = [
@@ -145,6 +148,8 @@ class ChronicDiseaseProgram(models.Model):
     last_review_date = models.DateField(null=True, blank=True)
     next_review_date = models.DateField(null=True, blank=True)
     notes = models.TextField(blank=True, null=True)
+
+    tenant_objects = TenantManager()
 
     def __str__(self):
         return f"{self.disease_name} - {self.patient}"
@@ -323,6 +328,8 @@ class DHIMS2Report(models.Model):
     response_metadata = models.JSONField(default=dict, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
+
+    tenant_objects = TenantManager()
 
     class Meta:
         unique_together = ("hospital", "month")

@@ -21,6 +21,12 @@ export default function RootLayout({
         <link rel="manifest" href="/manifest.json" />
         <meta name="theme-color" content="#0f6e56" />
         <link rel="apple-touch-icon" href="/icons/icon-192x192.png" />
+        {/* Prevents dark-mode FOUC: apply class before first paint */}
+        <script
+          dangerouslySetInnerHTML={{
+            __html: `(function(){try{var t=localStorage.getItem('medsync_theme');if(t==='dark'||(t==='system'&&matchMedia('(prefers-color-scheme:dark)').matches)){document.documentElement.classList.add('dark')}}catch(e){}})()`,
+          }}
+        />
       </head>
       <body
         className="font-sans antialiased"

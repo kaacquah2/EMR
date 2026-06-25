@@ -4,6 +4,7 @@ from django.utils import timezone
 from core.models import Hospital, User
 from patients.models import Patient
 from django_cryptography.fields import encrypt
+from api.tenancy import TenantManager
 
 
 class GlobalPatient(models.Model):
@@ -338,8 +339,11 @@ class BreakGlassLog(models.Model):
         return timezone.now() > self.expires_at
 
 
-class Encounter(models.Model):
-    """Facility-owned encounter; can be linked to MedicalRecord later."""
+class FacilityEncounter(models.Model):
+    """Cross-facility encounter linked to a global patient record (HIE layer)."""
+
+    tenant_field = "facility"
+    tenant_objects = TenantManager()
 
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     facility_patient = models.ForeignKey(
@@ -354,4 +358,5 @@ class Encounter(models.Model):
     deleted_at = models.DateTimeField(null=True, blank=True)
 
     class Meta:
+        db_table = "interop_encounter"
         indexes = [models.Index(fields=["facility_patient", "-created_at"])]

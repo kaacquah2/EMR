@@ -10,6 +10,7 @@ import { Select } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { DatePicker } from "@/components/ui/DatePicker";
 import { AllergyConflictModal } from "@/components/features/AllergyConflictModal";
+import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { useToast } from "@/lib/toast-context";
 import { ROLES } from "@/lib/permissions";
 
@@ -85,6 +86,7 @@ export function AddRecordForm({ patientId, onSuccess, onClose, initialType }: Ad
   const [overrideReason, setOverrideReason] = useState("");
   const [icdSuggestions, setIcdSuggestions] = useState<Array<{ code: string; description: string }>>([]);
   const [drugSuggestions, setDrugSuggestions] = useState<Array<{ name: string; allergy_flag?: boolean }>>([]);
+  const [discardOpen, setDiscardOpen] = useState(false);
 
   const [form, setForm] = useState({
     icd10_code: "",
@@ -622,19 +624,37 @@ export function AddRecordForm({ patientId, onSuccess, onClose, initialType }: Ad
       {error && <p className="text-sm text-[var(--red-600)]" role="alert">{error}</p>}
       <div className="flex gap-2">
         {!initialType && (
-          <Button
-            type="button"
-            variant="secondary"
-            onClick={() => {
-              // UX-11: unsaved changes guard
-              const dirty = Object.values(form).some((v) => (typeof v === "string" ? v.trim() !== "" : false));
-              if (dirty && !window.confirm("You have unsaved changes. Discard them?")) return;
-              setSelectedType(null);
-              setAllergyConflict(null);
-            }}
-          >
-            ← Back
-          </Button>
+          <>
+            <Button
+              type="button"
+              variant="secondary"
+              onClick={() => {
+                // UX-11: unsaved changes guard
+                const dirty = Object.values(form).some((v) => (typeof v === "string" ? v.trim() !== "" : false));
+                if (dirty) {
+                  setDiscardOpen(true);
+                } else {
+                  setSelectedType(null);
+                  setAllergyConflict(null);
+                }
+              }}
+            >
+              ← Back
+            </Button>
+            <ConfirmDialog
+              open={discardOpen}
+              onOpenChange={setDiscardOpen}
+              title="Discard changes?"
+              message="You have unsaved changes. Going back will discard them."
+              confirmLabel="Discard"
+              cancelLabel="Keep editing"
+              variant="danger"
+              onConfirm={() => {
+                setSelectedType(null);
+                setAllergyConflict(null);
+              }}
+            />
+          </>
         )}
         <Button type="submit" loading={loading}>
           {SAVE_LABELS[selectedType ?? ""] ?? "Save"}

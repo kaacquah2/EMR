@@ -25,6 +25,7 @@ const COMMON_NAV = {
   emergencyQueue: { href: "/emergency", label: "Emergency Queue" },
   userManagement: { href: "/admin/users", label: "User Management" },
   auditLogs: { href: "/admin/audit-logs", label: "Audit Logs" },
+  reports: { href: "/admin/reports", label: "Reports" },
   facilities: { href: "/admin/facilities", label: "Facility config" },
   rbacReview: { href: "/admin/rbac-review", label: "RBAC review" },
   superAdminDashboard: { href: "/superadmin", label: "Dashboard" },
@@ -74,12 +75,25 @@ export const navByRole: Record<string, NavItem[]> = {
 
   pharmacy_technician: [
     COMMON_NAV.dashboard,
+    { href: "/pharmacy/inventory", label: "Pharmacy Inventory" },
+  ],
+
+  radiology_technician: [
+    COMMON_NAV.dashboard,
+    COMMON_NAV.patientSearch,
+    { href: "/worklist", label: "Worklist" },
   ],
 
   billing_staff: [
     COMMON_NAV.dashboard,
     COMMON_NAV.patientSearch,
     COMMON_NAV.appointments,
+  ],
+
+  ward_clerk: [
+    COMMON_NAV.dashboard,
+    COMMON_NAV.patientSearch,
+    COMMON_NAV.admissions,
   ],
 
   hospital_admin: [
@@ -94,6 +108,7 @@ export const navByRole: Record<string, NavItem[]> = {
     COMMON_NAV.facilities,
     COMMON_NAV.rbacReview,
     COMMON_NAV.auditLogs,
+    COMMON_NAV.reports,
     COMMON_NAV.interopHub,
   ],
 
@@ -250,6 +265,8 @@ export function isPathnameAccessible(role: string, pathname: string, options?: N
   if (segments[0] === "cross-facility-records" && segments.length >= 2 && pathSegmentIsUuid(segments[1])) {
     return nav.some((item) => item.href === "/referrals");
   }
+
+  if (segments[0] === "pharmacy" && role === "pharmacy_technician") return true;
 
   if (segments[0] === "admin" && segments.length >= 2) {
     const sub = `/${segments[0]}/${segments[1]}`;
